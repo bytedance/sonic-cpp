@@ -54,7 +54,7 @@ enum SonicError {
   kErrorNums,
 };
 
-static const char* ErrorMsg(SonicError error) noexcept {
+inline const char* ErrorMsg(SonicError error) noexcept {
   struct SonicErrorInfo {
     SonicError err;
     const char* msg;
