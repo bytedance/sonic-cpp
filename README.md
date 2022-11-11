@@ -176,6 +176,20 @@ The following Is\*, Get\* and Set\* methods are supported:
 ----
 More [usage](docs/usage.md).
 
+## Benchmark
+
+- use CMake
+```
+cmake -S . -B build -DBUILD_BENCH=ON
+cmake --build build --target bench -j
+./build/benchmark/bench
+```
+
+- use bazel
+```
+bazel run :benchmark
+```
+
 ## RoadMap
 * [ ] Support `RawNumber` for JSON parsing.
 * [ ] Support [`JSON Path`](https://datatracker.ietf.org/wg/jsonpath/about/).
