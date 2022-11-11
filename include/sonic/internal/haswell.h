@@ -30,7 +30,7 @@ using namespace simd;
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 
-sonic_force_inline __attribute__((no_sanitize("undefined"))) int
+sonic_force_inline int
 trailing_zeroes(uint64_t input_num) {
   ////////
   // You might expect the next line to be equivalent to

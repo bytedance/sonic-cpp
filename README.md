@@ -75,7 +75,7 @@ int main()
   doc.Serialize(wb);
   std::cout << wb.ToString() << std::endl;
 }
-// g++ -I../include/ -march=haswell --std=c++14 parse_and_serialize.cpp -o parse_and_serialize
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/parse_and_serialize.cpp -o example/parse_and_serialize
 ```
 
 ### Checking parse result
@@ -103,7 +103,7 @@ int main()
   }
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 check_parse_result.cpp -o check_parse_result
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/check_parse_result.cpp -o example/check_parse_result
 ```
 
 #### Getting and Setting
@@ -173,7 +173,7 @@ int main()
   }
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 get_and_set.cpp -o get_and_set
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/get_and_set.cpp -o example/get_and_set
 ```
 The following Is\*, Get\* and Set\* methods are supported:
 - IsNull(), SetNull()
