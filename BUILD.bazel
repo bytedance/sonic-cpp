@@ -25,7 +25,7 @@ cc_binary(
     ]),
     data = glob(["testdata/*.json"]),
     deps = common_deps + [":sonic-cpp"] + ["@rapidjson", "@cJSON", "@yyjson", "@simdjson",],
-    copts = common_copts + ['-DNDEBUG'],
+    copts = common_copts + ['-DNDEBUG', '-std=c++17'],
     linkopts = ['-lstdc++fs'],
 )
 

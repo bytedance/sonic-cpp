@@ -234,18 +234,6 @@ int main(int argc, char **argv) {
     }                                  
   } while (0);
 
-  /*================= Register quote benchmark ====================*/
-  for (int i = 1; i < 64; ++i) {
-    std::string all_ascii =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*"
-        "()-_=+:;<>,.?/";
-    std::string bench_name = std::string("quote/") + std::to_string(i);
-    benchmark::RegisterBenchmark(bench_name.c_str(),  // name
-                                 BM_Quote,            // func
-                                 all_ascii, i         // args
-    );
-  }
-
   benchmark::RunSpecifiedBenchmarks();
   benchmark::Shutdown();
   return 0;
