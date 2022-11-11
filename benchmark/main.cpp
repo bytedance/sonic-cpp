@@ -37,13 +37,6 @@ static std::string get_json(const std::string_view file) {
   return ss.str();
 }
 
-static void BM_Quote(benchmark::State &state, const std::string &src, int len) {
-  char dst[1024];
-  for (auto _ : state) {
-    sonic_json::internal::Quote(src.data(), len, dst);
-  }
-}
-
 template <typename Json, typename PR, typename SR>
 static void BM_Encode(benchmark::State &state, std::string_view filename,
                       std::string_view data) {

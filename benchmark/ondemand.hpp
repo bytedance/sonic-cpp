@@ -23,10 +23,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#if __has_include(<rapidjson/document_lite.h>)
-#include <rapidjson/document_lite.h>
-#define HAS_RAPIDJSON_DOCUMENT_LITE 1
-#endif
+
 
 struct OnDemand {
   std::string file;
@@ -58,31 +55,5 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
   state.SetBytesProcessed(int64_t(state.iterations()) *
                           int64_t(data.json.size()));
 }
-
-#ifdef HAS_RAPIDJSON_DOCUMENT_LITE
-static void BM_RapidjsonOnDemand(benchmark::State& state,
-                                 const OnDemand& data) {
-  rapidjson::DocumentLite lite(data.path);
-  lite.Parse(data.json.data());
-  bool found = !lite.HasParseError();
-  bool ok = (found && lite.GetUint64() == data.value) ||
-            (!found && data.value == ~0ull);
-  if (!ok) {
-    state.SkipWithError("Verify failed");
-    return;
-  }
-
-  uint64_t get;
-  for (auto _ : state) {
-    rapidjson::DocumentLite lite(data.path);
-    lite.Parse(data.json.data());
-    get = lite.GetUint64();
-  }
-
-  state.SetLabel(data.name);
-  state.SetBytesProcessed(int64_t(state.iterations()) *
-                          int64_t(data.json.size()));
-}
-#endif
 
 #endif
