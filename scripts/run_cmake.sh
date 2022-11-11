@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 CMAKE=cmake
 function install_cmake()
@@ -22,7 +23,7 @@ if ! [ "$(printf '%s\n' "${require_mini_version}" "${cur_version}" | sort -V | h
     install_cmake
 fi
 
-rm ./build/tests/unittest
+rm -rf ./build/tests/unittest
 $CMAKE -S . -B build
 $CMAKE --build build --target unittest -j
 

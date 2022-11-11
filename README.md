@@ -12,6 +12,20 @@ A fast JSON serializing & deserializing library, accelerated by SIMD.
 - Support parse ondemand
 
 ## Benchmarks
+
+
+- use CMake
+```
+cmake -S . -B build -DBUILD_BENCH=ON
+cmake --build build --target bench -j
+./build/benchmark/bench
+```
+
+- use bazel
+```
+bazel run :benchmark
+```
+
 Parsing Performance
 ![image](docs/images/parse.png)
 
