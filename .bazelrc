@@ -1,0 +1,3 @@
+build --cxxopt='-std=c++17'
+build --cxxopt='-g'
+build --compilation_mode=opt
