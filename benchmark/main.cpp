@@ -37,13 +37,6 @@ static std::string get_json(const std::string_view file) {
   return ss.str();
 }
 
-static void BM_Quote(benchmark::State &state, const std::string &src, int len) {
-  char dst[1024];
-  for (auto _ : state) {
-    sonic_json::internal::Quote(src.data(), len, dst);
-  }
-}
-
 template <typename Json, typename PR, typename SR>
 static void BM_Encode(benchmark::State &state, std::string_view filename,
                       std::string_view data) {
@@ -240,18 +233,6 @@ int main(int argc, char **argv) {
       ADD_JSON_BMK(Rapidjson, Find); 
     }                                  
   } while (0);
-
-  /*================= Register quote benchmark ====================*/
-  for (int i = 1; i < 64; ++i) {
-    std::string all_ascii =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*"
-        "()-_=+:;<>,.?/";
-    std::string bench_name = std::string("quote/") + std::to_string(i);
-    benchmark::RegisterBenchmark(bench_name.c_str(),  // name
-                                 BM_Quote,            // func
-                                 all_ascii, i         // args
-    );
-  }
 
   benchmark::RunSpecifiedBenchmarks();
   benchmark::Shutdown();
