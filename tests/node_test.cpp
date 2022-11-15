@@ -34,6 +34,54 @@ class NodeTest : public testing::Test {
   void CreateNode(NodeType& node, Allocator& a) {
     node.SetObject();
     {
+      /*
+       {
+        "String":"Hello World!",
+        "Double":1.0,
+        "Int":1,
+        "True":true,
+        "False":false,
+        "Null":null,
+        "Object":{
+            "New_object":{
+                "String":"Hello World!",
+                "Double":1.0,
+                "Int":1,
+                "True":true,
+                "False":false,
+                "Null":null,
+                "Object":{},
+                "Array":[]
+            }
+        },
+        "Array":[
+            {
+                "String":"Hello World!",
+                "Double":1.0,
+                "Int":1,
+                "True":true,
+                "False":false,
+                "Null":null,
+                "Object":{
+                    "New_object":{
+                        "String":"Hello World!",
+                        "Double":1.0,
+                        "Int":1,
+                        "True":true,
+                        "False":false,
+                        "Null":null,
+                        "Object":{},
+                        "Array":[]
+                    }
+                },
+                "Array":[]
+            }
+            ],
+            "EString":"",
+            "EObject":{},
+            "EArray":[]
+        }
+       */
       NodeType node_obj(kObject);
       node_obj.AddMember("String", NodeType("Hello World!", a), a);
       node_obj.AddMember("Double", NodeType(1.0), a);
@@ -269,6 +317,46 @@ TYPED_TEST(NodeTest, FindMember) {
     EXPECT_TRUE(obj[NodeType("Unknown")].IsNull());
     EXPECT_TRUE(obj[std::string("False")].IsFalse());
   }
+}
+
+template <typename StringType, typename NodeType>
+void AtPointerHelper(const NodeType& obj) {
+  EXPECT_TRUE(
+      obj.template AtPointer<StringType>({"Object", "New_object", "Double"})
+          ->IsDouble());
+  EXPECT_TRUE(
+      obj.template AtPointer<StringType>({"Array", 0, "String"})->IsString());
+  EXPECT_TRUE(obj.template AtPointer<StringType>({0}) == nullptr);
+  EXPECT_TRUE(obj.template AtPointer<StringType>({"Unknown"}) == nullptr);
+  EXPECT_TRUE(obj.template AtPointer<StringType>(
+                  {"Object", "Array", 1, "Double"}) == nullptr);
+  EXPECT_TRUE(obj.template AtPointer<StringType>({"EArray", 0}) == nullptr);
+  EXPECT_TRUE(obj.template AtPointer<StringType>({"EArray", -1}) == nullptr);
+  EXPECT_TRUE(obj.template AtPointer<StringType>({"Object", 0}) == nullptr);
+}
+
+TYPED_TEST(NodeTest, AtPointer) {
+  using NodeType = TypeParam;
+  using Allocator = typename NodeType::alloc_type;
+  NodeType obj;
+  Allocator alloc;
+  TestFixture::CreateNode(obj, alloc);
+
+  using JsonPointerType = sonic_json::GenericJsonPointer<std::string>;
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({"Object", "New_object", "Double"}))
+                  ->IsDouble());
+  EXPECT_TRUE(
+      obj.AtPointer(JsonPointerType({"Array", 0, "String"}))->IsString());
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({0})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({"Unknown"})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType(
+                  {"Object", "Array", 1, "Double"})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({"EArray", 0})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({"EArray", -1})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType({"Object", 0})) == nullptr);
+
+  AtPointerHelper<std::string>(obj);
+  AtPointerHelper<sonic_json::StringView>(obj);
 }
 
 TYPED_TEST(NodeTest, AddMember) {
