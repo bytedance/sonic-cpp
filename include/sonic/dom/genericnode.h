@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "sonic/dom/handler.h"
+#include "sonic/dom/json_pointer.h"
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
@@ -744,6 +745,33 @@ class GenericNode {
   }
 
   /**
+   * @brief get specific node by json pointer(RFC 6901)
+   * @tparam StringType json pointer string type, can use StringView to aovid
+   *                    copying string.
+   * @param pointer json pointer
+   * @retval nullptr get node failed
+   * @retval others success
+   */
+  template <typename StringType>
+  NodeType* AtPointer(const GenericJsonPointer<StringType>& pointer) {
+    return atPointerImpl(pointer);
+  }
+
+  /**
+   * @brief get specific node by json pointer(RFC 6901)
+   * @tparam StringType json pointer string type, can use StringView to aovid
+   *                    copying string.
+   * @param pointer json pointer
+   * @retval nullptr get node failed
+   * @retval others success
+   */
+  template <typename StringType>
+  const NodeType* AtPointer(
+      const GenericJsonPointer<StringType>& pointer) const {
+    return atPointerImpl(pointer);
+  }
+
+  /**
    * @brief Add a new member for this object.
    * @tparam ValueType the type of member's value
    * @param key new member's name, must be string
@@ -1089,6 +1117,33 @@ class GenericNode {
     return static_cast<const NodeType*>(this);
   }
   NodeType* downCast() noexcept { return static_cast<NodeType*>(this); }
+
+  template <typename StringType>
+  NodeType* atPointerImpl(const GenericJsonPointer<StringType>& pointer) const {
+    const NodeType* re = downCast();
+    for (auto& node : pointer) {
+      if (node.IsStr()) {
+        if (re->IsObject()) {
+          auto m = re->FindMember(node.GetStr());
+          if (m != re->MemberEnd()) {
+            re = &(m->value);
+            continue;
+          }
+        }
+        return nullptr;
+      } else {  // Json Pointer node is number
+        if (re->IsArray()) {
+          int idx = node.GetNum();
+          if (idx >= 0 && idx < re->Size()) {
+            re = &(re->operator[]((size_t)idx));
+            continue;
+          }
+        }
+        return nullptr;
+      }
+    }
+    return const_cast<NodeType*>(re);
+  }
 };
 
 }  // namespace sonic_json
