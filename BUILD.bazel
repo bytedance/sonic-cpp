@@ -12,6 +12,7 @@ cc_library(
     name = "sonic-cpp",
     hdrs = glob([
         "include/sonic/**/*.h",
+        "include/thirdparty/**/*.h",
     ]),
     includes = ["include"],
 )
@@ -25,7 +26,7 @@ cc_binary(
     ]),
     data = glob(["testdata/*.json"]),
     deps = common_deps + [":sonic-cpp"] + ["@rapidjson", "@cJSON", "@yyjson", "@simdjson",],
-    copts = common_copts + ['-DNDEBUG'],
+    copts = common_copts + ['-DNDEBUG', '-std=c++17'],
     linkopts = ['-lstdc++fs'],
 )
 
@@ -64,11 +65,10 @@ cc_test(
     srcs = glob([
         "tests/*.cpp",
         "tests/*.h",
-        "include/sonic/*",
-        "include/sonic/**/*",
     ]),
     includes = ["include"],
     deps = [
+        ":sonic-cpp",
         "@gtest//:gtest_main",
     ] + common_deps,
     data = glob([
@@ -80,7 +80,7 @@ cc_test(
                    '-fstack-protector-all',
                ],
     copts = common_copts + sanitize_copts +
-            [
+            [ 
                 '-O1', '-g', '-UNDEBUG',
                 '-fstack-protector-all',
                 '-Iinclude',
@@ -93,10 +93,9 @@ cc_test(
     srcs = glob([
         "tests/*.cpp",
         "tests/*.h",
-        "include/sonic/*",
-        "include/sonic/**/*",
     ]),
     deps = [
+        ":sonic-cpp",
         "@gtest//:gtest_main",
     ] + common_deps,
     data = glob(["testdata/*.json",

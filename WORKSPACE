@@ -7,9 +7,10 @@ git_repository(
     remote = "https://github.com/google/benchmark.git",
 )
 
-git_repository(
+new_git_repository(
     name = "gtest",
     branch = "main",
+    build_file = "//:bazel/gtest.BUILD",
     remote = "https://github.com/google/googletest.git",
 )
 

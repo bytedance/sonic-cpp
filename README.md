@@ -23,7 +23,7 @@ cmake --build build --target bench -j
 
 - use bazel
 ```
-bazel run :benchmark
+bazel run :benchmark --compilation_mode=opt
 ```
 
 Parsing Performance
@@ -42,7 +42,7 @@ There are many optimizations in parsing as follows:
 - using SIMD to find escaped chars when parsing strings.
 - using the STOA float pointing algorithm.
 
-Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for long JSON string(length > 32 or length > 16). Besides, we use loop unrolling for short JSON strings.
+Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for long JSON string.
 
 Sonic-cpp also supports ParseOnDemand if the user knows the target key at compile time. ParseOndemand also used SIMD and bit manipulation to skip the unwanted values fastly.
 
