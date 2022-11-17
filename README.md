@@ -35,7 +35,8 @@ Serializing Performance
 ## Design
 
 Sonic-cpp parses JSON into a compact document tree. The document structure is as follows:
-![image](docs/images/dom.jpg)
+
+![image](docs/images/dom.png)
 
 There are many optimizations in parsing as follows:
 - using SIMD to accelerate skipping white space.
