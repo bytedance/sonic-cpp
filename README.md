@@ -23,7 +23,7 @@ cmake --build build --target bench -j
 
 - use bazel
 ```
-bazel run :benchmark
+bazel run :benchmark --compilation_mode=opt
 ```
 
 Parsing Performance
@@ -35,14 +35,15 @@ Serializing Performance
 ## Design
 
 Sonic-cpp parses JSON into a compact document tree. The document structure is as follows:
-![image](docs/images/dom.jpg)
+
+![image](docs/images/dom.png)
 
 There are many optimizations in parsing as follows:
 - using SIMD to accelerate skipping white space.
 - using SIMD to find escaped chars when parsing strings.
 - using the STOA float pointing algorithm.
 
-Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for long JSON string(length > 32 or length > 16). Besides, we use loop unrolling for short JSON strings.
+Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for long JSON string.
 
 Sonic-cpp also supports ParseOnDemand if the user knows the target key at compile time. ParseOndemand also used SIMD and bit manipulation to skip the unwanted values fastly.
 
@@ -75,7 +76,7 @@ int main()
   doc.Serialize(wb);
   std::cout << wb.ToString() << std::endl;
 }
-// g++ -I../include/ -march=haswell --std=c++14 parse_and_serialize.cpp -o parse_and_serialize
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/parse_and_serialize.cpp -o example/parse_and_serialize
 ```
 
 ### Checking parse result
@@ -103,7 +104,7 @@ int main()
   }
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 check_parse_result.cpp -o check_parse_result
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/check_parse_result.cpp -o example/check_parse_result
 ```
 
 #### Getting and Setting
@@ -173,7 +174,7 @@ int main()
   }
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 get_and_set.cpp -o get_and_set
+// g++ -I./include/ -march=haswell --std=c++11 -O3 example/get_and_set.cpp -o example/get_and_set
 ```
 The following Is\*, Get\* and Set\* methods are supported:
 - IsNull(), SetNull()

@@ -2,14 +2,15 @@ load("@bazel_tools//tools/build_defs/repo:git.bzl", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
 git_repository(
-    name = "com_github_google_benchmark",
+    name = "google_benchmark",
     branch = "main",
     remote = "https://github.com/google/benchmark.git",
 )
 
-git_repository(
+new_git_repository(
     name = "gtest",
     branch = "main",
+    build_file = "//:bazel/gtest.BUILD",
     remote = "https://github.com/google/googletest.git",
 )
 

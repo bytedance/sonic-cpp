@@ -6,11 +6,10 @@
 using member_itr_type = typename sonic_json::Document::MemberIterator;
 
 void print_member(member_itr_type m) {
-  sonic_json::Node& key = m->name;
+  const sonic_json::Node& key = m->name;
   sonic_json::Node& value = m->value;
   if (key.IsString()) {
-    std::cout << "Key is: " << key.GetString();
-    << std::endl;
+    std::cout << "Key is: " << key.GetString() << std::endl;
   } else {
     std::cout << "Incoreect key type!\n";
     return;
@@ -24,7 +23,7 @@ void print_member(member_itr_type m) {
 
 void set_new_value(member_itr_type m) {
   sonic_json::Node& value = m->value;
-  value.SetInt(2);
+  value.SetInt64(2);
   return;
 }
 
