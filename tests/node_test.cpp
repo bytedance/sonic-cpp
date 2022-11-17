@@ -111,7 +111,7 @@ class NodeTest : public testing::Test {
     for (int i = 0; i < 100; ++i) {
       std::string key = "key" + std::to_string(i);
       auto iter = node.AddMember(key, NodeType(i), a);
-      EXPECT_TRUE(iter->name.StringEqual(key));
+      EXPECT_TRUE(iter->name == key);
     }
     EXPECT_EQ(100, node.Size());
   }
@@ -299,7 +299,6 @@ TYPED_TEST(NodeTest, FindMember) {
   TestFixture::CreateNode(obj, alloc);
   // Find with map
   EXPECT_TRUE(obj.FindMember("Array")->name == "Array");
-  EXPECT_TRUE(obj.FindMember("Array", 5)->value.IsArray());
   EXPECT_TRUE(obj.FindMember(std::string("Unknwon")) == obj.MemberEnd());
   EXPECT_TRUE(obj["Object"].IsObject());
   EXPECT_TRUE(obj["String"] == "Hello World!");
@@ -309,12 +308,10 @@ TYPED_TEST(NodeTest, FindMember) {
     NodeType obj1;
     obj1.CopyFrom(obj, alloc);
     EXPECT_TRUE(obj.FindMember("Array")->name == "Array");
-    EXPECT_TRUE(obj.FindMember("Array", 5)->value.IsArray());
     EXPECT_TRUE(obj.FindMember(std::string("Unknwon")) == obj.MemberEnd());
     EXPECT_TRUE(obj["Object"].IsObject());
     EXPECT_TRUE(obj["String"] == "Hello World!");
     EXPECT_TRUE(obj["Unknown"].IsNull());
-    EXPECT_TRUE(obj[NodeType("Unknown")].IsNull());
     EXPECT_TRUE(obj[std::string("False")].IsFalse());
   }
 }
@@ -400,23 +397,6 @@ TYPED_TEST(NodeTest, RemoveMember) {
     node2.SetObject();
     EXPECT_FALSE(node2.RemoveMember("Unkown"));
   }
-  {
-    NodeType node3;
-    node1.SetObject();
-    TestFixture::Add100Nodes(node1, a);
-    node3.CopyFrom(node1, a);
-    EXPECT_FALSE(node3.RemoveMember(NodeType("Unkown")));
-    for (int i = 99; i >= 0; --i) {
-      std::string key = "key" + std::to_string(i);
-      EXPECT_TRUE(node3.RemoveMember(NodeType(key)));
-      EXPECT_FALSE(node3.RemoveMember(NodeType("Unkown")));
-    }
-    EXPECT_TRUE(node3.Empty());
-    EXPECT_FALSE(node3.RemoveMember(NodeType("Unkown")));
-
-    node3.SetObject();
-    EXPECT_FALSE(node3.RemoveMember(NodeType("Unkown")));
-  }
 }
 
 TYPED_TEST(NodeTest, HasMember) {
@@ -439,11 +419,6 @@ TYPED_TEST(NodeTest, HasMember) {
     EXPECT_FALSE(node1.HasMember(hey));
     EXPECT_FALSE(node1.HasMember(ley));
     EXPECT_FALSE(node1.HasMember(ey));
-    EXPECT_TRUE(node1.HasMember(key.data(), key.size()));
-    EXPECT_FALSE(node1.HasMember(NonExistKey.data(), NonExistKey.size()));
-    EXPECT_FALSE(node1.HasMember(hey.data(), hey.size()));
-    EXPECT_FALSE(node1.HasMember(ley.data(), ley.size()));
-    EXPECT_FALSE(node1.HasMember(ey.data(), ey.size()));
   }
 }
 
@@ -765,7 +740,7 @@ TYPED_TEST(NodeTest, SourceAllocator) {
   NodeType c(a, alloc);
   EXPECT_EQ(c, a);
   EXPECT_NE(c, b);
-  EXPECT_TRUE(c.StringEqual(a));
+  EXPECT_TRUE(c.GetStringView() == a.GetStringView());
 }
 
 }  // namespace
