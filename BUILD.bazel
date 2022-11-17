@@ -1,9 +1,5 @@
 package(default_visibility = ["//visibility:public"])
 
-common_deps = [
-    "@com_github_google_benchmark//:benchmark",
-]
-
 noavx_opts = ['-O3', '-msse4', '-Wall', '-Wextra',]
 common_copts = noavx_opts + ["-mavx2", '-mbmi', '-mpclmul', '-mlzcnt']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
@@ -25,7 +21,14 @@ cc_binary(
             "benchmark/*.hpp",
     ]),
     data = glob(["testdata/*.json"]),
-    deps = common_deps + [":sonic-cpp"] + ["@rapidjson", "@cJSON", "@yyjson", "@simdjson",],
+    deps = [
+        ":sonic-cpp",
+        "@google_benchmark//:benchmark",
+        "@rapidjson",
+        "@cJSON",
+        "@yyjson",
+        "@simdjson",
+    ],
     copts = common_copts + ['-DNDEBUG', '-std=c++17'],
     linkopts = ['-lstdc++fs'],
 )
@@ -35,29 +38,24 @@ cc_test(
     srcs = glob([
         "tests/*.cpp",
         "tests/*.h",
-        "include/sonic/*",
-        "include/sonic/**/*",
     ]),
     includes = ["include"],
-    deps = [
-        "@gtest//:gtest_main",
-    ] + common_deps,
-    data = glob([
-            "testdata/*.json",
-    ]),
-    linkopts = sanitize_copts +
-               [
-                   '-lstdc++fs',
-                   '-lasan',
-                   '-fstack-protector-all',
-               ],
-    copts = common_copts + sanitize_copts +
-            [
-                '-O1', '-g', '-UNDEBUG',
-                '-fstack-protector-all',
-                '-Iinclude',
-                '-Wall -Wextra -Werror',
-            ],
+    deps = [ 
+        ":sonic-cpp",
+        "@gtest//:gtest_main" 
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-lasan'
+    ],
+    copts = common_copts + sanitize_copts + [
+        '-O0', '-g', '-UNDEBUG', '-std=c++14',
+        '-fstack-protector-all',
+        '-Iinclude',
+        '-Wall -Wextra -Werror',
+    ],
 )
 
 cc_test(
@@ -67,25 +65,22 @@ cc_test(
         "tests/*.h",
     ]),
     includes = ["include"],
-    deps = [
+    deps = [ 
         ":sonic-cpp",
-        "@gtest//:gtest_main",
-    ] + common_deps,
-    data = glob([
-            "testdata/*.json",
-    ]),
-    linkopts = sanitize_copts +
-               [
-                   '-lstdc++fs', '-fsanitize-link-c++-runtime',
-                   '-fstack-protector-all',
-               ],
-    copts = common_copts + sanitize_copts +
-            [ 
-                '-O1', '-g', '-UNDEBUG',
-                '-fstack-protector-all',
-                '-Iinclude',
-                '-Wall -Wextra -Werror',
-            ],
+        "@gtest//:gtest_main" 
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-fsanitize-link-c++-runtime'
+    ],
+    copts = common_copts + sanitize_copts + [
+        '-O0', '-g', '-UNDEBUG', '-std=c++14',
+        '-fstack-protector-all',
+        '-Iinclude',
+        '-Wall -Wextra -Werror',
+    ],
 )
 
 cc_test(
@@ -93,23 +88,24 @@ cc_test(
     srcs = glob([
         "tests/*.cpp",
         "tests/*.h",
+        "include/sonic/*",
+        "include/sonic/**/*",
     ]),
     deps = [
-        ":sonic-cpp",
         "@gtest//:gtest_main",
-    ] + common_deps,
-    data = glob(["testdata/*.json",
-                 "testdata/num/*",
+    ],
+    data = glob([
+        "testdata/*.json",
+        "testdata/num/*",
     ]),
     linkopts = [
-                '-lstdc++fs',
-                '-lgcov', '-fprofile-arcs', '-ftest-coverage',
-               ],
-    copts = common_copts +
-            [
-                '-O0', '-g', '-UNDEBUG',
-                '-Iinclude',
-                '-fprofile-arcs', '-ftest-coverage',
-            ],
+        '-lstdc++fs', '-lgcov',
+        '-fprofile-arcs', '-ftest-coverage',
+    ],
+    copts = common_copts + [
+        '-O0', '-g', '-UNDEBUG', '-std=c++17',
+        '-Iinclude',
+        '-fprofile-arcs', '-ftest-coverage',
+    ],
 )
 
