@@ -154,19 +154,6 @@ class DNode : public GenericNode<DNode, Allocator> {
     return *this;
   }
 
-  using BaseNode::StringEqual;
-  /**
-   * @brief compare this node with another as string
-   * @tparam SourceAllocator Allocator type of rhs
-   * @param rhs another node
-   * @retval true equals to
-   * @retval false not equals to
-   */
-  template <typename SourceAllocator>
-  bool StringEqual(const DNode<SourceAllocator>& rhs) const noexcept {
-    return StringEqual(rhs.GetStringView().data(), rhs.Size());
-  }
-
   using BaseNode::operator==;
   /**
    * @brief compare with another node
@@ -213,7 +200,7 @@ class DNode : public GenericNode<DNode, Allocator> {
       case kStringCopy:
       case kStringFree:
       case kStringConst:
-        return StringEqual(rhs);
+        return this->GetStringView() == rhs.GetStringView();
 
       case kReal:
       case kSint:
@@ -241,31 +228,8 @@ class DNode : public GenericNode<DNode, Allocator> {
   // Object APIs
 
   using BaseNode::operator[];
-  /**
-   * @brief Get specific node in object by key that stored in another node.
-   * @tparam SourceAllocator key-node's allocator type
-   * @param key node that store key string
-   * @return DNode& return this node reference to support streaming APIs
-   */
-  template <typename SourceAllocator>
-  sonic_force_inline const DNode& operator[](
-      const DNode<SourceAllocator>& key) const noexcept {
-    return (*this)[key.GetStringView()];
-  }
-
-  /**
-   * @brief Get specific node in object by key that stored in another node.
-   * @tparam SourceAllocator key-node's allocator type
-   * @param key node that store key string
-   * @return DNode& return this node reference to support streaming APIs
-   */
-  template <typename SourceAllocator>
-  sonic_force_inline DNode& operator[](
-      const DNode<SourceAllocator>& key) noexcept {
-    return (*this)[key.GetStringView()];
-  }
-
   using BaseNode::FindMember;
+  using BaseNode::HasMember;
 
   /**
    * @brief Create a map to trace all members of this object.
@@ -287,7 +251,7 @@ class DNode : public GenericNode<DNode, Allocator> {
     // SetMap(map);
     MemberNode* m = (MemberNode*)getObjChildrenFirstUnsafe();
     for (size_t i = 0; i < this->Size(); ++i) {
-      map->emplace(std::make_pair(stringViewKey((m + i)->name), i));
+      map->emplace(std::make_pair((m + i)->name.GetStringView(), i));
     }
     setMap(map);
     return true;
@@ -307,18 +271,6 @@ class DNode : public GenericNode<DNode, Allocator> {
   }
 
   using BaseNode::RemoveMember;
-  /**
-   * @brief Remove specific Member(key-value pair) in object by key that stored
-   * in another node.
-   * @tparam SourceAllocator key-node's allocator type
-   * @param key node that store key string
-   * @retval true successful
-   * @retval false cannot found such key
-   */
-  template <typename SourceAllocator>
-  bool RemoveMember(const DNode<SourceAllocator>& key) {
-    return removeMemberImpl(key.GetStringView().data(), key.Size());
-  }
 
   /**
    * @brief Copy another node depthly.
@@ -603,15 +555,9 @@ class DNode : public GenericNode<DNode, Allocator> {
     return ((MetaNode*)(this->o.next.children))->map;
   }
 
-  template <typename SourceAllocator>
-  sonic_force_inline StringView
-  stringViewKey(const DNode<SourceAllocator>& name) const {
-    return name.GetStringView();
-  }
-
-  MemberIterator findMemberImpl(const char* name, size_t len) const {
+  sonic_force_inline MemberIterator findMemberImpl(StringView key) const {
     if (nullptr != getMap()) {
-      auto it = getMap()->find(MSType(name, len));
+      auto it = getMap()->find(MSType(key.data(), key.size()));
       if (it != getMap()->end()) {
         return memberBeginUnsafe() + it->second;
       }
@@ -619,15 +565,15 @@ class DNode : public GenericNode<DNode, Allocator> {
     }
     auto it = this->MemberBegin();
     for (auto e = this->MemberEnd(); it != e; ++it) {
-      if (it->name.StringEqual(name, len)) {
+      if (it->name.GetStringView() == key) {
         break;
       }
     }
     return const_cast<MemberIterator>(it);
   }
 
-  DNode& findValueImpl(const char* key, size_t len) const noexcept {
-    auto m = findMemberImpl(key, len);
+  sonic_force_inline DNode &findValueImpl(StringView key) const noexcept {
+    auto m = findMemberImpl(key);
     if (m != this->MemberEnd()) {
       return m->value;
     }
@@ -670,18 +616,18 @@ class DNode : public GenericNode<DNode, Allocator> {
     // maintain map
     if (nullptr != getMap()) {
       // If key exists, it will be still keeped in vector but replaced in map.
-      getMap()->emplace(std::make_pair(stringViewKey(*last), count));
+      getMap()->emplace(std::make_pair(last->GetStringView(), count));
     }
     return (MemberIterator)last;
   }
 
-  bool removeMemberImpl(const char* name, size_t len) {
+  sonic_force_inline bool removeMemberImpl(StringView key) {
     MemberIterator m;
     if (nullptr == children()) {
       goto not_find;
     }
     if (getMapUnsfe()) {
-      auto it = getMapUnsfe()->find(MSType(name, len));
+      auto it = getMapUnsfe()->find(MSType(key.data(), key.size()));
       if (it != getMapUnsfe()->end()) {
         m = memberBeginUnsafe() + it->second;
         getMapUnsfe()->erase(it);
@@ -692,7 +638,8 @@ class DNode : public GenericNode<DNode, Allocator> {
     } else {
       m = memberBeginUnsafe();
       for (; m != memberEndUnsafe(); ++m)  // {
-        if (m->name.StringEqual(name, len)) goto find;
+        if (m->name.GetStringView() == key)
+          goto find;
 
       goto not_find;
     }
@@ -710,14 +657,14 @@ class DNode : public GenericNode<DNode, Allocator> {
         size_t pos = m - memberBeginUnsafe();
         // erase tail
         auto range =
-            map->equal_range(stringViewKey(m->name));  // already moved.
+            map->equal_range(m->name.GetStringView()); // already moved.
         for (auto i = range.first; i != range.second; ++i) {
           if (i->second == this->Size() - 1) {
             map->erase(i);
             break;  // only one erase.
           }
         }
-        map->emplace(std::make_pair(stringViewKey(m->name), pos));
+        map->emplace(std::make_pair(m->name.GetStringView(), pos));
       }
     } else {
       m->name.~DNode();

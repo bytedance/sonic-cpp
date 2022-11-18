@@ -169,7 +169,7 @@ class GenericNode {
    * @brief Constructor for creating string node. Doesn't COPY string.
    * @param s string_view that contain string pointer and length.
    */
-  explicit GenericNode(const StringView& s) noexcept {
+  explicit GenericNode(StringView s) noexcept {
     setLength(s.size(), kStringConst);
     sv.p = s.data();
   }
@@ -189,7 +189,7 @@ class GenericNode {
    * @param s     string_view that contina string pointer and length.
    * @param alloc Allocator
    */
-  GenericNode(const StringView& s, alloc_type& alloc) {
+  GenericNode(StringView s, alloc_type &alloc) {
     StringCopy(s.data(), s.size(), alloc);
   }
 
@@ -390,28 +390,6 @@ class GenericNode {
     return static_cast<double>(
         n.i64);  // int64_t -> double (may lose precision))
   }
-  /**
-   * @brief Compared with a string.
-   * @param name string pointer
-   * @param len  string length
-   * @retval true The string sotre in this node is equals to \a name
-   * @retval false NOT euqals to
-   */
-  sonic_force_inline bool StringEqual(const char* name,
-                                      size_t len) const noexcept {
-    return (Size() == len && !std::memcmp(name, sv.p, len));
-  }
-  /**
-   * @brief Compared with a string_view.
-   * @param name string view of name.
-   * @param len  string length.
-   * @retval true The string sotre in this node is equals to \a name
-   * @retval false NOT euqals to
-   */
-  sonic_force_inline bool StringEqual(StringView name) const noexcept {
-    return (Size() == name.size() &&
-            !std::memcmp(name.data(), sv.p, name.size()));
-  }
 
   // Set APIs
   /**
@@ -473,7 +451,7 @@ class GenericNode {
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
-  NodeType& SetString(const StringView& s, alloc_type& alloc) {
+  NodeType &SetString(StringView s, alloc_type &alloc) {
     return SetString(s.data(), s.size(), alloc);
   }
   /**
@@ -495,9 +473,7 @@ class GenericNode {
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
-  NodeType& SetString(const StringView& s) {
-    return SetString(s.data(), s.size());
-  }
+  NodeType &SetString(StringView s) { return SetString(s.data(), s.size()); }
   /**
    * @brief Set this node as string type. Only copy string pointer.
    * @param s char array pointer
@@ -527,7 +503,9 @@ class GenericNode {
    * @retval true equals to
    * @retval false not equals to
    */
-  bool operator==(const StringView& s) const noexcept { return StringEqual(s); }
+  sonic_force_inline bool operator==(StringView s) const noexcept {
+    return GetStringView() == s;
+  }
 
   /**
    * @brief Compare with boolean, int, uint32_t, int64_t, uint64_t, float and
@@ -557,8 +535,8 @@ class GenericNode {
    * @retval true not equals to
    * @retval false equals to
    */
-  bool operator!=(const StringView& s) const noexcept {
-    return !StringEqual(s);
+  sonic_force_inline bool operator!=(StringView s) const noexcept {
+    return !(*this == s);
   }
   /**
    * @brief operator!= with boolean, int, uint32_t, int64_t, uint64_t, float and
@@ -670,9 +648,9 @@ class GenericNode {
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
-  NodeType& operator[](const StringView& key) noexcept {
+  sonic_force_inline NodeType &operator[](StringView key) noexcept {
     sonic_assert(this->IsObject());
-    return downCast()->findValueImpl(key.data(), key.size());
+    return downCast()->findValueImpl(key);
   }
 
   /**
@@ -681,9 +659,9 @@ class GenericNode {
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
-  const NodeType& operator[](const StringView& key) const noexcept {
+  sonic_force_inline const NodeType &operator[](StringView key) const noexcept {
     sonic_assert(this->IsObject());
-    return downCast()->findValueImpl(key.data(), key.size());
+    return downCast()->findValueImpl(key);
   }
 
   /**
@@ -691,17 +669,18 @@ class GenericNode {
    * @param key string view that contain key's pointer and size.
    * @return bool
    */
-  bool HasMember(const StringView& key) const noexcept {
+  sonic_force_inline bool HasMember(StringView key) const noexcept {
     return FindMember(key) != MemberEnd();
   }
+
   /**
-   * @brief Check object has specific key.
-   * @param key string pointer
-   * @param len string len
-   * @return bool
+   * @brief Find specific member in object
+   * @param key string view that contain key's pointer and size
+   * @retval MemberEnd() not found
+   * @retval others iterator for found member
    */
-  bool HasMember(const char* key, size_t len) const noexcept {
-    return FindMember(key, len) != MemberEnd();
+  sonic_force_inline MemberIterator FindMember(StringView key) noexcept {
+    return downCast()->findMemberImpl(key);
   }
 
   /**
@@ -710,38 +689,9 @@ class GenericNode {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    */
-  MemberIterator FindMember(const StringView& key) noexcept {
-    return FindMember(key.data(), key.size());
-  }
-  /**
-   * @brief Find specific member in object
-   * @param key key's pointer
-   * @param len key's size
-   * @retval MemberEnd() not found
-   * @retval others iterator for found member
-   */
-  MemberIterator FindMember(const char* key, size_t len) noexcept {
-    return downCast()->findMemberImpl(key, len);
-  }
-
-  /**
-   * @brief Find specific member in object
-   * @param key string view that contain key's pointer and size
-   * @retval MemberEnd() not found
-   * @retval others iterator for found member
-   */
-  ConstMemberIterator FindMember(const StringView& key) const noexcept {
-    return FindMember(key.data(), key.size());
-  }
-  /**
-   * @brief Find specific member in object
-   * @param key key's pointer
-   * @param len key's size
-   * @retval MemberEnd() not found
-   * @retval others iterator for found member
-   */
-  ConstMemberIterator FindMember(const char* key, size_t len) const noexcept {
-    return downCast()->findMemberImpl(key, len);
+  sonic_force_inline ConstMemberIterator
+  FindMember(StringView key) const noexcept {
+    return downCast()->findMemberImpl(key);
   }
 
   /**
@@ -766,8 +716,8 @@ class GenericNode {
    * @retval others success
    */
   template <typename StringType>
-  const NodeType* AtPointer(
-      const GenericJsonPointer<StringType>& pointer) const {
+  sonic_force_inline const NodeType *
+  AtPointer(const GenericJsonPointer<StringType> &pointer) const {
     return atPointerImpl(pointer);
   }
 
@@ -805,18 +755,8 @@ class GenericNode {
    * @retval true success
    * @retval false failed
    */
-  bool RemoveMember(const StringView& key) noexcept {
-    return RemoveMember(key.data(), key.size());
-  }
-  /**
-   * @brief Remove specific member in object by key.
-   * @param key key's pointer
-   * @param len key's size
-   * @retval true success
-   * @retval false failed
-   */
-  bool RemoveMember(const char* key, size_t len) noexcept {
-    return downCast()->removeMemberImpl(key, len);
+  sonic_force_inline bool RemoveMember(StringView key) noexcept {
+    return downCast()->removeMemberImpl(key);
   }
 
   // Array APIs
@@ -1134,7 +1074,7 @@ class GenericNode {
       } else {  // Json Pointer node is number
         if (re->IsArray()) {
           int idx = node.GetNum();
-          if (idx >= 0 && idx < re->Size()) {
+          if (idx >= 0 && idx < static_cast<int>(re->Size())) {
             re = &(re->operator[]((size_t)idx));
             continue;
           }
