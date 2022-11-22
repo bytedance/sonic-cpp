@@ -23,6 +23,10 @@
 #include "sonic/internal/simd.h"
 #include "sonic/macro.h"
 
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
 namespace sonic_json {
 namespace internal {
 
@@ -280,7 +284,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
     if (0) {
 #else
     /* This code would cause address sanitizer report heap-buffer-overflow. */
-    if (((size_t)(src)&4095) <= (4096 - 64)) {
+    if (((size_t)(src)&(PAGE_SIZE - 1)) <= (PAGE_SIZE - 64)) {
       src_r = src;
 #endif
     } else {
