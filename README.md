@@ -26,6 +26,26 @@ cmake --build build --target bench -j
 bazel run :benchmark --compilation_mode=opt
 ```
 
+### Performance by sonic benchmark
+
+- Run
+
+```shell
+# build by bazel
+python3 ./scripts/tools/draw-decode-encode.py
+```
+- Result
+
+Parsing Performance
+![image](docs/images/compare_Decode.png)
+
+Serializing performance
+![image](docs/images/compare_Encode.png)
+
+### Performance by third-party benchmark
+
+Below data is test by https://github.com/miloyip/nativejson-benchmark:
+
 Parsing Performance
 ![image](docs/images/parse.png)
 
