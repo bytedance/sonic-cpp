@@ -174,21 +174,23 @@ static void BM_Decode(benchmark::State &state, std::string filename,
 
 static void regitser_OnDemand() {
   std::vector<OnDemand> tests = {
-      {"twitter", "Normal", {"search_metadata", "count"}, 100},
-      {"citm_catalog", "Fronter", {"events", "342742596", "id"}, 342742596},
+      {"twitter", "Normal", {"search_metadata", "count"}, 100, true},
+      {"citm_catalog", "Fronter", {"events", "342742596", "id"}, 342742596, true},
       {"twitter", "NotFound", {"NotFound"}},
   };
 
   for (auto &t : tests) {
-    std::string json = get_json(std::string("testdata/") + t.file + ".json");
-    t.json = json;
-    auto sname = std::string(t.file) + "/SonicOnDemand" + "_" + t.name.c_str();
-    benchmark::RegisterBenchmark(sname.c_str(), BM_SonicOnDemand, t);
-#ifdef HAS_RAPIDJSON_DOCUMENT_LITE
-    auto rname =
-        std::string(t.file) + "/RapidJsonOnDemand" + "_" + t.name.c_str();
-    benchmark::RegisterBenchmark(rname.c_str(), BM_RapidjsonOnDemand, t);
-#endif
+    auto file_path = std::string("testdata/") + t.file + ".json";
+    t.json = get_json(file_path);
+
+#define REG_ONDEMAND(JSON) \
+{ \
+  auto name = std::string(t.file) + ("/" #JSON "OnDemand") + "_" + t.name.c_str(); \
+  benchmark::RegisterBenchmark(name.c_str(), BM_##JSON##OnDemand, t); \
+}
+    REG_ONDEMAND(Sonic);
+    REG_ONDEMAND(RapidjsonSax);
+    REG_ONDEMAND(SIMDjson);
   }
 }
 

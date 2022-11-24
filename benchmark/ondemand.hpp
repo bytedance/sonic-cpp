@@ -17,8 +17,11 @@
 #ifndef _ONDEMAND_H_
 #define _ONDEMAND_H_
 
+#include "rapidjson_sax.hpp"
+
 #include <benchmark/benchmark.h>
 #include <sonic/sonic.h>
+#include <simdjson.h>
 
 #include <string>
 #include <string_view>
@@ -28,18 +31,18 @@
 struct OnDemand {
   std::string file;
   std::string name;
-  std::vector<std::string> path;
-  uint64_t value = {~0ull};
-  std::string json = {};
+  std::vector<std::string_view> path;
+  uint64_t value = {0};
+  bool existed = {false};
+  std::string json;
 };
 
 static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
   sonic_json::Document lite;
-  sonic_json::JsonPointer path(data.path);
+  sonic_json::GenericJsonPointer<std::string_view> path(data.path);
   lite.ParseOnDemand(data.json.data(), data.json.size(), path);
-  bool found = !lite.HasParseError();
-  bool ok = (found && lite.GetUint64() == data.value) ||
-            (!found && data.value == ~0ull);
+  bool existed = !lite.HasParseError();
+  bool ok = existed == data.existed && lite.GetUint64() == data.value;
   if (!ok) {
     state.SkipWithError("Verify failed");
     return;
@@ -51,9 +54,57 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
     lite.ParseOnDemand(data.json.data(), data.json.size(), path);
     get = lite.GetUint64();
   }
+  
   state.SetLabel(data.name);
   state.SetBytesProcessed(int64_t(state.iterations()) *
                           int64_t(data.json.size()));
 }
 
+
+static void BM_SIMDjsonOnDemand(benchmark::State& state, const OnDemand& data) {
+  using namespace simdjson;
+  ondemand::parser parser;
+  uint64_t u = 0;
+  error_code err = SUCCESS;
+
+  auto json_pad = padded_string(data.json);
+  auto dom = parser.iterate(json_pad);
+  auto value = dom.get_value();
+  for (const auto key : data.path) {
+    value = value[key];
+  }
+  err = value.get(u);
+  bool ok = (!err) == data.existed && u == data.value;
+  if (!ok) {
+    state.SkipWithError("Verify failed");
+    return;
+  }
+
+  for (auto _ : state) {
+    auto value = parser.iterate(json_pad).get_value();
+    for (const auto key : data.path) {
+      value = value[key];
+    }
+    err = value.get(u);
+  }
+  state.SetLabel(data.name);
+  state.SetBytesProcessed(int64_t(state.iterations()) *
+                          int64_t(data.json.size()));
+}
+
+static void BM_RapidjsonSaxOnDemand(benchmark::State& state, const OnDemand& data) {
+  uint64_t get = 0;
+  bool existed = RapidjsonSaxOnDemand(data.json, data.path, get);
+  bool ok = existed == data.existed && get == data.value;
+  if (!ok) {
+    state.SkipWithError("Verify failed");
+    return;
+  }
+  for (auto _ : state) {
+    RapidjsonSaxOnDemand(data.json, data.path, get);
+  }
+  state.SetLabel(data.name);
+  state.SetBytesProcessed(int64_t(state.iterations()) *
+                          int64_t(data.json.size()));
+}
 #endif

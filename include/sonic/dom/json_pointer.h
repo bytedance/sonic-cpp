@@ -35,12 +35,11 @@ class GenericJsonPointerNode {
   GenericJsonPointerNode() = delete;
   GenericJsonPointerNode(const std::string& str)
       : str_(str), num_(0), is_number_(false) {}
+  GenericJsonPointerNode(StringView str)
+      : str_(str), num_(0), is_number_(false) {}
   GenericJsonPointerNode(const char* str, size_t len)
       : str_(str, len), num_(0), is_number_(false) {}
   GenericJsonPointerNode(int i) : str_(), num_(i), is_number_(true) {}
-  template <size_t N>
-  GenericJsonPointerNode(const char (&str)[N])
-      : str_(str, N - 1), num_(0), is_number_(false) {}
 
   GenericJsonPointerNode(const GenericJsonPointerNode& rhs) = default;
   GenericJsonPointerNode(GenericJsonPointerNode&& rhs) = default;
