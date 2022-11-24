@@ -68,7 +68,8 @@ public:
     if (cap < 16)
       cap = 16;
     if (!st_ || cap_ < cap) {
-      st_ = static_cast<NodeType *>(std::realloc(st_, sizeof(NodeType) * cap));
+      st_ = static_cast<NodeType *>(
+          std::realloc((void *)(st_), sizeof(NodeType) * cap));
       if (!st_)
         return false;
       cap_ = cap;
@@ -155,7 +156,8 @@ public:
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy(obj.getObjChildrenFirstUnsafe(), &obj + 1, size);
+      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+                  size);
     } else {
       obj.setChildren(nullptr);
     }
@@ -172,7 +174,8 @@ public:
       // As above note.
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy(arr.getArrChildrenFirstUnsafe(), &arr + 1, size);
+      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+                  size);
     } else {
       arr.setChildren(nullptr);
     }
@@ -240,7 +243,8 @@ public:
     if (count) {
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy(arr.getArrChildrenFirstUnsafe(), &arr + 1, size);
+      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+                  size);
       stack_.Pop<NodeType>(count);
     } else {
       arr.setChildren(nullptr);
@@ -250,14 +254,14 @@ public:
 
   sonic_force_inline bool EndObject(size_t pairs) {
     NodeType &obj = *stack_.template Begin<NodeType>();
-    size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
       size_t size = pairs * 2 * sizeof(NodeType);
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy(obj.getObjChildrenFirstUnsafe(), &obj + 1, size);
+      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+                  size);
       stack_.Pop<NodeType>(pairs * 2);
     } else {
       obj.setChildren(nullptr);
