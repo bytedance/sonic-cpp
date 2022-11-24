@@ -108,9 +108,15 @@ class WriteBuffer {
     top_ += sizeof(T);
   }
 
-  template <typename T>
-  sonic_force_inline void PushSize(size_t n) {
+  template <typename T> sonic_force_inline T *PushSize(size_t n) {
+    Grow(n * sizeof(T));
+    return PushSizeUnsafe<T>(n);
+  }
+
+  template <typename T> sonic_force_inline T *PushSizeUnsafe(size_t n) {
+    T *ret = reinterpret_cast<T *>(top_);
     top_ += n * sizeof(T);
+    return ret;
   }
 
   // faster api for push 5 ~ 8 bytes.
@@ -150,7 +156,7 @@ class WriteBuffer {
     if (sonic_unlikely(top_ + cnt >= buf_ + cap_)) {
       if (sonic_unlikely((top_ + cnt) > buf_ + 2 * cap_)) {
         cap_ = top_ - buf_ + cnt;
-        Reserve(cap_ * 3 / 2);
+        Reserve(cap_ + cap_ / 2);
       } else {
         Reserve(cap_ * 2);
       }
@@ -172,7 +178,18 @@ class WriteBuffer {
     return reinterpret_cast<T*>(top_);
   }
 
- private:
+  /**
+   * @brief Get the begin of the buffer.
+   * @return the value pointer into the begin.
+   */
+  template <typename T> sonic_force_inline T *Begin() {
+    return reinterpret_cast<T *>(buf_);
+  }
+  template <typename T> sonic_force_inline const T *Begin() const {
+    return reinterpret_cast<T *>(buf_);
+  }
+
+private:
   void setZero() {
     buf_ = nullptr;
     top_ = nullptr;
