@@ -38,13 +38,16 @@ class DNode : public GenericNode<DNode, Allocator> {
  public:
   using NodeType = DNode;
   using BaseNode = GenericNode<DNode, Allocator>;
+  using AllocatorType = Allocator;
   using MemberNode = typename NodeTraits<DNode>::MemberNode;
   using MemberIterator = typename NodeTraits<DNode>::MemberIterator;
   using ConstMemberIterator = typename NodeTraits<DNode>::ConstMemberIterator;
   using ValueIterator = typename NodeTraits<DNode>::ValueIterator;
   using ConstValueIterator = typename NodeTraits<DNode>::ConstValueIterator;
 
-  friend class JsonHandler<DNode>;
+  friend class SAXHandler<DNode>;
+  friend class LazySAXHandler<DNode>;
+
   friend BaseNode;
   template <typename>
   friend class DNode;
@@ -381,6 +384,13 @@ class DNode : public GenericNode<DNode, Allocator> {
   DNode& setStringImpl(const char* s, size_t len, Allocator& alloc) {
     this->destroy();
     new (this) BaseNode(s, len, alloc);
+    return *this;
+  }
+
+  DNode &setRawImpl(const char *s, size_t len) {
+    this->destroy();
+    this->raw.p = s;
+    this->setLength(len, kRaw);
     return *this;
   }
 

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "sonic/internal/haswell.h"
+
 #include <cstdint>
 
 namespace sonic_json {

@@ -235,6 +235,13 @@ class GenericNode {
     return getBasicType() == kString;
   }
   /**
+   * @brief         Check this node is raw json.
+   * @return bool   is raw json.
+   */
+  sonic_force_inline bool IsRaw() const noexcept {
+    return getBasicType() == kRaw;
+  }
+  /**
    * @brief         Check this node is number.
    * @return bool   is number.
    */
@@ -345,6 +352,14 @@ class GenericNode {
    */
   sonic_force_inline StringView GetStringView() const noexcept {
     return StringView(sv.p, Size());
+  }
+
+  /**
+   * @brief                 Get string view of this node, won't copy string.
+   * @return StringView     string view
+   */
+  sonic_force_inline StringView GetRaw() const noexcept {
+    return StringView(raw.p, Size());
   }
 
   /**
@@ -560,11 +575,11 @@ class GenericNode {
   }
 
   /**
-   * @brief  Get size for string, object or array.
+   * @brief  Get size for string, object, array or raw json.
    * @return size_t
    */
   size_t Size() const noexcept {
-    sonic_assert(this->IsContainer() || this->IsString());
+    sonic_assert(this->IsContainer() || this->IsString() || this->IsRaw());
     return sv.len >> kInfoBits;
   }
 
@@ -988,6 +1003,9 @@ class GenericNode {
       setEmptyString();
     }
   }
+  NodeType &setRaw(StringView s) {
+    return downCast()->setRawImpl(s.data(), s.size());
+  }
   void setEmptyString() noexcept {
     sv.p = "";
     setLength(0, kStringConst);
@@ -1006,9 +1024,10 @@ class GenericNode {
     return std::numeric_limits<uint>::max();
   }
 
- private:
+private:
   friend NodeType;
-  friend class JsonHandler<NodeType>;
+  friend class SAXHandler<NodeType>;
+  friend class LazySAXHandler<NodeType>;
 
   struct Object {
     uint64_t len;
@@ -1031,6 +1050,10 @@ class GenericNode {
     char _ptr[8];
   };  // 16 bytes
 
+  struct Raw {
+    uint64_t len;
+    const char *p;
+  }; // 16 bytes
   struct Number {
     uint64_t t;
     union {
@@ -1050,6 +1073,7 @@ class GenericNode {
     Object o;
     Array a;
     String sv;
+    Raw raw;
     Data data = {};
   };  // anonymous member
 
