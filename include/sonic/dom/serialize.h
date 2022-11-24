@@ -76,7 +76,7 @@ val_begin:
       wb.Grow(inc_len);
       str_ptr = node->GetStringView().data();
       rn = internal::Quote(str_ptr, str_len, wb.End<char>()) - wb.End<char>();
-      wb.PushSize<char>(rn);
+      wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(is_key ? ':' : ',');
       member_cnt -= is_key;
       break;
@@ -102,7 +102,7 @@ val_begin:
         }
       }
       sonic_assert(rn > 0 && rn <= 32);
-      wb.PushSize<char>(rn);
+      wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(',');
       break;
     };
@@ -142,6 +142,13 @@ val_begin:
                       : node->getArrChildrenFirstUnsafe();
         goto val_begin;
       }
+      break;
+    }
+    case kRaw: {
+      str_len = node->Size();
+      wb.Grow(str_len + 1);
+      wb.PushUnsafe(node->GetStringView().data(), str_len);
+      wb.PushUnsafe<char>(',');
       break;
     }
     default:

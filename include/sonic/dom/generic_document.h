@@ -27,8 +27,6 @@ class GenericDocument : public NodeType {
   using node_traits = NodeTraits<NodeType>;
   using Allocator = typename node_traits::alloc_type;
 
-  friend class Parser<NodeType>;
-
   /**
    * @brief Default GenericDocument constructor.
    * @param allocator Allocator pointer to maintain all nodes memory. If is not
@@ -46,14 +44,11 @@ class GenericDocument : public NodeType {
   /**
    * @brief Move constructor
    */
-  GenericDocument(GenericDocument&& rhs)
+  GenericDocument(GenericDocument &&rhs)
       : NodeType(std::forward<NodeType>(rhs)),
-        own_alloc_(rhs.own_alloc_.release()),
-        alloc_(rhs.alloc_),
-        pparse_result_(rhs.pparse_result_),
-        str_(rhs.str_),
-        str_cap_(rhs.str_cap_),
-        strp_(rhs.strp_) {
+        own_alloc_(rhs.own_alloc_.release()), alloc_(rhs.alloc_),
+        parse_result_(rhs.parse_result_), str_(rhs.str_),
+        str_cap_(rhs.str_cap_), strp_(rhs.strp_) {
     rhs.clear();
   }
 
@@ -70,7 +65,7 @@ class GenericDocument : public NodeType {
     }
 
     // Step2: assignment data member
-    pparse_result_ = rhs.pparse_result_;
+    parse_result_ = rhs.parse_result_;
     alloc_ = rhs.alloc_;
     own_alloc_ = std::move(rhs.own_alloc_);
     str_ = rhs.str_;
@@ -87,7 +82,7 @@ class GenericDocument : public NodeType {
    */
   GenericDocument& Swap(GenericDocument& rhs) {
     NodeType::Swap(rhs);
-    std::swap(pparse_result_, rhs.pparse_result_);
+    std::swap(parse_result_, rhs.parse_result_);
     own_alloc_.swap(rhs.own_alloc_);
     std::swap(alloc_, rhs.alloc_);
     std::swap(str_, rhs.str_);
@@ -116,21 +111,14 @@ class GenericDocument : public NodeType {
    * before parsing to avoid memory overuse.
    */
   template <unsigned parseFlags = kParseDefault>
-  GenericDocument& Parse(const std::string& json) {
-    return parseImpl<parseFlags>(json.c_str(), json.size());
+  GenericDocument &Parse(StringView json) {
+    return Parse<parseFlags>(json.data(), json.size());
   }
 
-  /**
-   * @brief Parse by std::string
-   * @param parseFlags combination of different ParseFlag.
-   * @param json json string pointer
-   * @param len json string size
-   * @note If using memorypool allocator, memory will be cleared every time
-   * before parsing to avoid memory overuse.
-   */
   template <unsigned parseFlags = kParseDefault>
-  GenericDocument& Parse(const char* json, size_t len) {
-    return parseImpl<parseFlags>(json, len);
+  GenericDocument &Parse(const char *data, size_t len) {
+    destroyDom();
+    return parseImpl<parseFlags>(data, len);
   }
 
   /**
@@ -144,41 +132,40 @@ class GenericDocument : public NodeType {
    */
   template <unsigned parseFlags = kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
-  GenericDocument& ParseOnDemand(const char* json, size_t len,
-                                 const GenericJsonPointer<JPStringType>& path) {
-    return parseOnDemandImpl<parseFlags, JPStringType>(json, len, path);
+  GenericDocument &ParseOnDemand(StringView json,
+                                 const GenericJsonPointer<JPStringType> &path) {
+    return ParseOnDemand(json.data(), json.size(), path);
   }
 
   template <unsigned parseFlags = kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
-  GenericDocument& ParseOnDemand(const std::string json,
-                                 const GenericJsonPointer<JPStringType>& path) {
-    return parseOnDemandImpl<parseFlags, JPStringType>(json.data(), json.size(),
-                                                       path);
+  GenericDocument &ParseOnDemand(const char *data, size_t len,
+                                 const GenericJsonPointer<JPStringType> &path) {
+    destroyDom();
+    return parseOnDemandImpl<parseFlags, JPStringType>(data, len, path);
   }
-
   /**
    * @brief Check parse has error
    */
-  bool HasParseError() const { return pparse_result_.Error() != kErrorNone; }
+  bool HasParseError() const { return parse_result_.Error() != kErrorNone; }
 
   /*
    * @brief Get parse error no.
    */
   sonic_force_inline SonicError GetParseError() const {
-    return pparse_result_.Error();
+    return parse_result_.Error();
   }
 
   /*
    * @brief Get where has parse error
    */
   sonic_force_inline size_t GetErrorOffset() const {
-    return pparse_result_.Offset();
+    return parse_result_.Offset();
   }
 
  private:
   sonic_force_inline void clear() {
-    pparse_result_ = ParseResult();
+    parse_result_ = ParseResult();
     own_alloc_ = nullptr;
     alloc_ = nullptr;
     str_ = nullptr;
@@ -186,6 +173,7 @@ class GenericDocument : public NodeType {
 
   void destroyDom() {
     if (!Allocator::kNeedFree) {
+      this->setType(kNull);
       return;
     }
     // NOTE: must free dynamic nodes at first
@@ -198,13 +186,21 @@ class GenericDocument : public NodeType {
 
   template <unsigned parseFlags>
   GenericDocument& parseImpl(const char* json, size_t len) {
-    Parser<DNode<Allocator>> p;
-    // NOTE: free the current memory
-    destroyDom();
-    pparse_result_ = p.template Parse<parseFlags>(json, len, *this);
+    Parser p;
+    SAXHandler<NodeType> sax(*alloc_);
+    parse_result_ = allocateStringBuffer(json, len);
     if (sonic_unlikely(HasParseError())) {
-      new (this) DNode<Allocator>(kNull);
+      return *this;
     }
+    if (!sax.SetUp(StringView(json, len))) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    parse_result_ = p.template Parse<parseFlags>(str_, len, sax);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
+    NodeType::operator=(std::move(sax.st_[0]));
     return *this;
   }
 
@@ -212,16 +208,31 @@ class GenericDocument : public NodeType {
   GenericDocument& parseOnDemandImpl(
       const char* json, size_t len,
       const GenericJsonPointer<JPStringType>& path) {
-    Parser<DNode<Allocator>> p;
-    // NOTE: free the current memory
-    destroyDom();
-    pparse_result_ = p.template ParseOnDemand<parseFlags, JPStringType>(
-        json, len, *this, path);
+    // get the target json field
+    StringView target;
+    parse_result_ = internal::GetOnDemand(StringView(json, len), path, target);
     if (sonic_unlikely(HasParseError())) {
-      new (this) DNode<Allocator>(kNull);
+      return *this;
     }
-    return *this;
+    // parse the target field
+    return parseImpl<parseFlags>(target.data(), target.size());
   }
+
+  SonicError allocateStringBuffer(const char *json, size_t len) {
+    size_t pad_len = len + 64;
+    str_ = (char *)(alloc_->Malloc(pad_len));
+    if (str_ == nullptr) {
+      return kErrorNoMem;
+    }
+    std::memcpy(str_, json, len);
+    // Add ending mask to support parsing invalid json
+    str_[len] = 'x';
+    str_[len + 1] = '"';
+    str_[len + 2] = 'x';
+    return kErrorNone;
+  }
+
+  friend class Parser;
 
   // Note: it is a callback function in parse.parse_impl
   void copyToRoot(DNode<Allocator>& node) {
@@ -231,7 +242,7 @@ class GenericDocument : public NodeType {
 
   std::unique_ptr<Allocator> own_alloc_{nullptr};
   Allocator* alloc_{nullptr};  // maybe external allocator
-  ParseResult pparse_result_{};
+  ParseResult parse_result_{};
 
   // Node Buffer for internal stack
   DNode<Allocator>* st_{nullptr};
@@ -245,92 +256,5 @@ class GenericDocument : public NodeType {
 };
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
-
-template <typename Allocator>
-class JsonHandler<DNode<Allocator>> {
- public:
-  using NodeType = DNode<Allocator>;
-  using DomType = GenericDocument<NodeType>;
-
-  sonic_force_inline static bool UseStringView() { return true; }
-
-  sonic_force_inline static bool UseStackDirect() { return false; }
-
-  sonic_force_inline static void SetNull(DNode<Allocator>& node) {
-    new (&node) NodeType(kNull);
-  };
-
-  sonic_force_inline static void SetBool(DNode<Allocator>& node, bool val) {
-    new (&node) NodeType(val);
-  };
-
-  sonic_force_inline static void SetDouble(DNode<Allocator>& node, double val) {
-    new (&node) NodeType(val);
-  };
-
-  sonic_force_inline static void SetDoubleU64(DNode<Allocator>& node,
-                                              uint64_t val) {
-    union {
-      uint64_t uval;
-      double dval;
-    } d;
-    d.uval = val;
-    new (&node) NodeType(d.dval);
-  };
-
-  sonic_force_inline static void SetSint(DNode<Allocator>& node, int64_t val) {
-    new (&node) NodeType(val);
-  };
-
-  sonic_force_inline static void SetUint(DNode<Allocator>& node, uint64_t val) {
-    new (&node) NodeType(val);
-  };
-
-  sonic_force_inline static void SetString(DNode<Allocator>& node,
-                                           const char* data, size_t len) {
-    node.setLength(len, kStringCopy);
-    node.sv.p = data;
-  };
-
-  sonic_force_inline static DNode<Allocator>* SetObject(DNode<Allocator>& node,
-                                                        DNode<Allocator>* begin,
-                                                        size_t pairs,
-                                                        DomType& dom) {
-    node.setLength(pairs, kObject);
-    if (pairs) {
-      // Note: shallow copy here, because resource pointer is owned by the node
-      // itself, likely move. But the node from begin to end will never call
-      // dctor, so, we don't need to set null at here. And this is diffrent from
-      // move.
-      size_t size = pairs * 2 * sizeof(NodeType);
-      void* mem = node.template containerMalloc<typename NodeType::MemberNode>(
-          pairs, dom.GetAllocator());
-      node.setChildren(mem);
-      std::memcpy(static_cast<void*>(node.getObjChildrenFirstUnsafe()),
-                  static_cast<void*>(begin), size);
-    } else {
-      node.setChildren(nullptr);
-    }
-    return &node + 1;
-  }
-
-  sonic_force_inline static DNode<Allocator>* SetArray(DNode<Allocator>& node,
-                                                       DNode<Allocator>* begin,
-                                                       size_t count,
-                                                       DomType& dom) {
-    node.setLength(count, kArray);
-    if (count) {
-      // As above note.
-      size_t size = count * sizeof(NodeType);
-      node.setChildren(
-          node.template containerMalloc<NodeType>(count, dom.GetAllocator()));
-      std::memcpy(static_cast<void*>(node.getArrChildrenFirstUnsafe()),
-                  static_cast<void*>(begin), size);
-    } else {
-      node.setChildren(nullptr);
-    }
-    return &node + 1;
-  }
-};
 
 }  // namespace sonic_json
