@@ -127,8 +127,7 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
       break;
     }
   };
-  if (pos >= len)
-    return kUnclosed;
+  if (pos >= len) return kUnclosed;
   return found ? kEscaped : kNormal;
 }
 
@@ -140,26 +139,26 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
   const uint8_t *p;
   while (pos + 64 <= len) {
     p = data + pos;
-#define SKIP_LOOP()                                                            \
-  {                                                                            \
-    instring = GetStringBits(p, prev_instring, prev_escaped);                  \
-    simd::simd8x64<uint8_t> v(p);                                              \
-    last_lbrace_num = lbrace_num;                                              \
-    uint64_t rbrace = v.eq(right) & ~instring;                                 \
-    uint64_t lbrace = v.eq(left) & ~instring;                                  \
-    /* traverse each '}' */                                                    \
-    while (rbrace > 0) {                                                       \
-      rbrace_num++;                                                            \
-      lbrace_num = last_lbrace_num + count_ones((rbrace - 1) & lbrace);        \
-      bool is_closed = lbrace_num < rbrace_num;                                \
-      if (is_closed) {                                                         \
-        sonic_assert(rbrace_num == lbrace_num + 1);                            \
-        pos += trailing_zeroes(rbrace) + 1;                                    \
-        return true;                                                           \
-      }                                                                        \
-      rbrace &= (rbrace - 1);                                                  \
-    }                                                                          \
-    lbrace_num = last_lbrace_num + count_ones(lbrace);                         \
+#define SKIP_LOOP()                                                     \
+  {                                                                     \
+    instring = GetStringBits(p, prev_instring, prev_escaped);           \
+    simd::simd8x64<uint8_t> v(p);                                       \
+    last_lbrace_num = lbrace_num;                                       \
+    uint64_t rbrace = v.eq(right) & ~instring;                          \
+    uint64_t lbrace = v.eq(left) & ~instring;                           \
+    /* traverse each '}' */                                             \
+    while (rbrace > 0) {                                                \
+      rbrace_num++;                                                     \
+      lbrace_num = last_lbrace_num + count_ones((rbrace - 1) & lbrace); \
+      bool is_closed = lbrace_num < rbrace_num;                         \
+      if (is_closed) {                                                  \
+        sonic_assert(rbrace_num == lbrace_num + 1);                     \
+        pos += trailing_zeroes(rbrace) + 1;                             \
+        return true;                                                    \
+      }                                                                 \
+      rbrace &= (rbrace - 1);                                           \
+    }                                                                   \
+    lbrace_num = last_lbrace_num + count_ones(lbrace);                  \
   }
     SKIP_LOOP();
     pos += 64;
@@ -186,27 +185,27 @@ sonic_force_inline bool SkipLiteral(const uint8_t *data, size_t &pos,
   static constexpr uint32_t kNullBin = 0x6c6c756e;
   static constexpr uint32_t kTrueBin = 0x65757274;
   static constexpr uint32_t kFalseBin =
-      0x65736c61; // the binary of 'alse' in false
+      0x65736c61;  // the binary of 'alse' in false
   auto start = data + pos - 1;
   auto end = data + len;
   switch (token) {
-  case 't':
-    if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
-      pos += 3;
-      return true;
-    };
-    break;
-  case 'n':
-    if (start + 4 <= end && EqBytes4(start, kNullBin)) {
-      pos += 3;
-      return true;
-    };
-    break;
-  case 'f':
-    if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {
-      pos += 4;
-      return true;
-    }
+    case 't':
+      if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
+        pos += 3;
+        return true;
+      };
+      break;
+    case 'n':
+      if (start + 4 <= end && EqBytes4(start, kNullBin)) {
+        pos += 3;
+        return true;
+      };
+      break;
+    case 'f':
+      if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {
+        pos += 4;
+        return true;
+      }
   }
   return false;
 }
@@ -264,10 +263,8 @@ class SkipScanner {
       goto tail;
     }
     // fast path for single space
-    if (!IsSpace(data[pos++]))
-      return data[pos - 1];
-    if (!IsSpace(data[pos++]))
-      return data[pos - 1];
+    if (!IsSpace(data[pos++])) return data[pos - 1];
+    if (!IsSpace(data[pos++])) return data[pos - 1];
 
     uint64_t nonspace;
     // current pos is out of block
@@ -316,24 +313,24 @@ class SkipScanner {
       index--;
       char c = SkipSpaceSafe(data, pos, len);
       switch (c) {
-      case '{': {
-        if (!SkipObject(data, pos, len)) {
-          return kParseErrorInvalidChar;
+        case '{': {
+          if (!SkipObject(data, pos, len)) {
+            return kParseErrorInvalidChar;
+          }
+          break;
         }
-        break;
-      }
-      case '[': {
-        if (!SkipArray(data, pos, len)) {
-          return kParseErrorInvalidChar;
+        case '[': {
+          if (!SkipArray(data, pos, len)) {
+            return kParseErrorInvalidChar;
+          }
+          break;
         }
-        break;
-      }
-      case '"': {
-        if (!SkipString(data, pos, len)) {
-          return kParseErrorInvalidChar;
+        case '"': {
+          if (!SkipString(data, pos, len)) {
+            return kParseErrorInvalidChar;
+          }
+          break;
         }
-        break;
-      }
       }
       // skip space and primitives
       // TODO (liuq): fast path for compat json.
@@ -354,44 +351,40 @@ class SkipScanner {
     long err = -kParseErrorInvalidChar;
 
     switch (c) {
-    case '"': {
-      if (!SkipString(data, pos, len))
+      case '"': {
+        if (!SkipString(data, pos, len)) return err;
+        break;
+      }
+      case '{': {
+        if (!SkipObject(data, pos, len)) return err;
+        break;
+      }
+      case '[': {
+        if (!SkipArray(data, pos, len)) return err;
+        break;
+      }
+      case 't':
+      case 'n':
+      case 'f': {
+        if (!SkipLiteral(data, pos, len, c)) return err;
+        break;
+      }
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case '-': {
+        SkipNumber(data, pos, len);
+        break;
+      }
+      default:
         return err;
-      break;
-    }
-    case '{': {
-      if (!SkipObject(data, pos, len))
-        return err;
-      break;
-    }
-    case '[': {
-      if (!SkipArray(data, pos, len))
-        return err;
-      break;
-    }
-    case 't':
-    case 'n':
-    case 'f': {
-      if (!SkipLiteral(data, pos, len, c))
-        return err;
-      break;
-    }
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-    case '-': {
-      SkipNumber(data, pos, len);
-      break;
-    }
-    default:
-      return err;
     }
     return start;
   }
@@ -409,7 +402,7 @@ class SkipScanner {
     StringView key;
     int skips;
     // TODO: use stack smallvector here.
-    std::vector<uint8_t> kbuf(32); // key buffer for parsed keys
+    std::vector<uint8_t> kbuf(32);  // key buffer for parsed keys
     const uint8_t *data = reinterpret_cast<const uint8_t *>(json.data());
     size_t len = json.size();
     SonicError err = kErrorNone;
@@ -418,19 +411,15 @@ class SkipScanner {
     if (i++ != path.size()) {
       c = SkipSpaceSafe(data, pos, len);
       if (path[i - 1].IsStr()) {
-        if (c != '{')
-          goto err_mismatch_type;
+        if (c != '{') goto err_mismatch_type;
         c = GetNextToken(data, pos, len, "\"}");
-        if (c != '"')
-          goto err_unknown_key;
+        if (c != '"') goto err_unknown_key;
         key = StringView(path[i - 1].GetStr());
         goto obj_key;
       } else {
-        if (c != '[')
-          goto err_mismatch_type;
+        if (c != '[') goto err_mismatch_type;
         err = GetArrayElem(data, pos, len, path[i - 1].GetNum());
-        if (err)
-          return -err;
+        if (err) return -err;
         goto query;
       }
     }
@@ -442,8 +431,7 @@ class SkipScanner {
     sp = data + pos;
     skips = SkipString(data, pos, len);
     sn = data + pos - 1 - sp;
-    if (!skips)
-      goto err_invalid_char;
+    if (!skips) goto err_invalid_char;
     if (skips == 2) {
       // parse escaped key
       kbuf.resize(sn + 32);
@@ -467,24 +455,24 @@ class SkipScanner {
     } else {
       c = SkipSpaceSafe(data, pos, len);
       switch (c) {
-      case '{': {
-        if (!SkipObject(data, pos, len)) {
-          goto err_invalid_char;
+        case '{': {
+          if (!SkipObject(data, pos, len)) {
+            goto err_invalid_char;
+          }
+          break;
         }
-        break;
-      }
-      case '[': {
-        if (!SkipArray(data, pos, len)) {
-          goto err_invalid_char;
+        case '[': {
+          if (!SkipArray(data, pos, len)) {
+            goto err_invalid_char;
+          }
+          break;
         }
-        break;
-      }
-      case '"': {
-        if (!SkipString(data, pos, len)) {
-          goto err_invalid_char;
+        case '"': {
+          if (!SkipString(data, pos, len)) {
+            goto err_invalid_char;
+          }
+          break;
         }
-        break;
-      }
       }
       // skip space and , find next " or }
       c = GetNextToken(data, pos, len, "\"}");

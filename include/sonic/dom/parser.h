@@ -38,10 +38,10 @@ class Parser {
  public:
   explicit Parser() noexcept = default;
   // sonic_force_inline Parser(JsonInput& input) : input_(input) {}
-  Parser(Parser&& other) noexcept = default;
-  sonic_force_inline Parser(const Parser& other) = delete;
-  sonic_force_inline Parser& operator=(const Parser& other) = delete;
-  sonic_force_inline Parser& operator=(Parser&& other) noexcept = default;
+  Parser(Parser &&other) noexcept = default;
+  sonic_force_inline Parser(const Parser &other) = delete;
+  sonic_force_inline Parser &operator=(const Parser &other) = delete;
+  sonic_force_inline Parser &operator=(Parser &&other) noexcept = default;
   ~Parser() noexcept = default;
 
   template <unsigned parseFlags = kParseDefault, typename SAX>
@@ -65,18 +65,18 @@ class Parser {
   }
 
  private:
-   sonic_force_inline bool hasTrailingChars() {
-     while (pos_ < len_) {
-       if (!internal::IsSpace(json_buf_[pos_]))
-         return true;
-       pos_++;
-     }
-     return false;
-   }
+  sonic_force_inline bool hasTrailingChars() {
+    while (pos_ < len_) {
+      if (!internal::IsSpace(json_buf_[pos_])) return true;
+      pos_++;
+    }
+    return false;
+  }
 
   sonic_force_inline void setParseError(SonicError err) { err_ = err; }
 
-  template <typename SAX> sonic_force_inline void parseNull(SAX &sax) {
+  template <typename SAX>
+  sonic_force_inline void parseNull(SAX &sax) {
     const static uint32_t kNullBin = 0x6c6c756e;
     if (internal::EqBytes4(json_buf_ + pos_ - 1, kNullBin) && sax.Null()) {
       pos_ += 3;
@@ -85,7 +85,8 @@ class Parser {
     setParseError(kParseErrorInvalidChar);
   }
 
-  template <typename SAX> sonic_force_inline void parseFalse(SAX &sax) {
+  template <typename SAX>
+  sonic_force_inline void parseFalse(SAX &sax) {
     const static uint32_t kFalseBin =
         0x65736c61;  // the binary of 'alse' in false
     if (internal::EqBytes4(json_buf_ + pos_, kFalseBin) && sax.Bool(false)) {
@@ -95,7 +96,8 @@ class Parser {
     setParseError(kParseErrorInvalidChar);
   }
 
-  template <typename SAX> sonic_force_inline void parseTrue(SAX &sax) {
+  template <typename SAX>
+  sonic_force_inline void parseTrue(SAX &sax) {
     constexpr static uint32_t kTrueBin = 0x65757274;
     if (internal::EqBytes4(json_buf_ + pos_ - 1, kTrueBin) && sax.Bool(true)) {
       pos_ += 3;
@@ -104,8 +106,9 @@ class Parser {
     setParseError(kParseErrorInvalidChar);
   }
 
-  template <typename SAX> sonic_force_inline void parseStrInPlace(SAX &sax) {
-    uint8_t* src = json_buf_ + pos_;
+  template <typename SAX>
+  sonic_force_inline void parseStrInPlace(SAX &sax) {
+    uint8_t *src = json_buf_ + pos_;
     uint8_t *sdst = src;
     size_t n = internal::parseStringInplace(src, err_);
     pos_ = src - json_buf_;
@@ -116,7 +119,7 @@ class Parser {
     return;
   }
 
-  sonic_force_inline bool carry_one(char c, uint64_t& sum) const {
+  sonic_force_inline bool carry_one(char c, uint64_t &sum) const {
     uint8_t d = static_cast<uint8_t>(c - '0');
     if (d > 9) {
       return false;
@@ -125,7 +128,7 @@ class Parser {
     return true;
   }
 
-  sonic_force_inline uint64_t str2int(const char* s, size_t& i) const {
+  sonic_force_inline uint64_t str2int(const char *s, size_t &i) const {
     uint64_t sum = 0;
     while (carry_one(s[i], sum)) {
       i++;
@@ -133,7 +136,7 @@ class Parser {
     return sum;
   }
 
-  sonic_force_inline bool parseFloatingFast(double& d, int exp10,
+  sonic_force_inline bool parseFloatingFast(double &d, int exp10,
                                             uint64_t man) const {
     d = (double)man;
     // if man is small, but exp is large, also can parse excactly
@@ -156,8 +159,8 @@ class Parser {
     return false;
   }
 
-  SonicError parseFloatEiselLemire64(double& dbl, int exp10, uint64_t man,
-                                     int sgn, bool trunc, const char* s) const {
+  SonicError parseFloatEiselLemire64(double &dbl, int exp10, uint64_t man,
+                                     int sgn, bool trunc, const char *s) const {
     union {
       double val = 0;
       uint64_t uval;
@@ -185,7 +188,8 @@ class Parser {
     }
   }
 
-  template <typename SAX> sonic_force_inline void parseNumber(SAX &sax) {
+  template <typename SAX>
+  sonic_force_inline void parseNumber(SAX &sax) {
 #define FLOATING_LONGEST_DIGITS 17
 #define RETURN_SET_ERROR_CODE(error_code) \
   {                                       \
@@ -198,35 +202,31 @@ class Parser {
     RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
   }
 
-#define SET_INT_AND_RETURN(int_val)                                            \
-  {                                                                            \
-    if (!sax.Int(int_val))                                                     \
-      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);                           \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                         \
+#define SET_INT_AND_RETURN(int_val)                                       \
+  {                                                                       \
+    if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                                    \
   }
 
-#define SET_UINT_AND_RETURN(int_val)                                           \
-  {                                                                            \
-    if (!sax.Uint(int_val))                                                    \
-      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);                           \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                         \
+#define SET_UINT_AND_RETURN(int_val)                                       \
+  {                                                                        \
+    if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                                     \
   }
-#define SET_DOUBLE_AND_RETURN(dbl)                                             \
-  {                                                                            \
-    if (!sax.Double(dbl))                                                      \
-      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);                           \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                         \
+#define SET_DOUBLE_AND_RETURN(dbl)                                       \
+  {                                                                      \
+    if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                                   \
   }
-#define SET_U64_AS_DOUBLE_AND_RETURN(int_val)                                  \
-  {                                                                            \
-    union {                                                                    \
-      double d;                                                                \
-      uint64_t u;                                                              \
-    } du;                                                                      \
-    du.u = int_val;                                                            \
-    if (!sax.Double(du.d))                                                     \
-      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);                           \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                         \
+#define SET_U64_AS_DOUBLE_AND_RETURN(int_val)                             \
+  {                                                                       \
+    union {                                                               \
+      double d;                                                           \
+      uint64_t u;                                                         \
+    } du;                                                                 \
+    du.u = int_val;                                                       \
+    if (!sax.Double(du.d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                                    \
   }
 
     static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
@@ -237,7 +237,7 @@ class Parser {
     uint64_t man = 0;  // mantissa of float point number
     size_t i = pos_ - 1;
     size_t exp10_s = i;
-    const char* s = reinterpret_cast<const char*>(json_buf_);
+    const char *s = reinterpret_cast<const char *>(json_buf_);
     using internal::is_digit;
 
     /* check sign */
@@ -349,8 +349,7 @@ class Parser {
     // Is error when run here
     // TODO: Assert
 
-  double_fract:
-    {
+  double_fract : {
     int fract_len = FLOATING_LONGEST_DIGITS - man_nd;
     if (fract_len > 0) {
       uint64_t sum = internal::simd_str2int_sse(s + i, fract_len);
@@ -380,7 +379,7 @@ class Parser {
         i++;
       }
     }
-    }
+  }
 
     exp10 -= (i - exp10_s);
 
@@ -420,7 +419,7 @@ class Parser {
     if ((man >> 52) == 0 && exp10 <= (22 + 15) && exp10 >= -22) {
       if (parseFloatingFast(dbl, exp10, man)) {
         SET_DOUBLE_AND_RETURN(dbl * sgn);
-      } // else goto double_fasax.st_normal;
+      }  // else goto double_fasax.st_normal;
     }
   }
 
@@ -434,8 +433,7 @@ class Parser {
       double d;
       SonicError error_code =
           parseFloatEiselLemire64(d, exp10, man, sgn, trunc, s);
-      if (!sax.Double(d))
-        RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+      if (!sax.Double(d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
       ;
       RETURN_SET_ERROR_CODE(error_code);
     }
@@ -445,7 +443,8 @@ class Parser {
 #undef CHECK_DIGIT
   }
 
-  template <typename SAX> void parsePrimitives(SAX &sax) {
+  template <typename SAX>
+  void parsePrimitives(SAX &sax) {
     switch (json_buf_[pos_ - 1]) {
       case '0':
       case '1':
@@ -479,9 +478,9 @@ class Parser {
 
   template <unsigned parseFlags, typename SAX>
   sonic_force_inline void parseImpl(SAX &sax) {
-#define sonic_check_err()                                                      \
-  if (err_ != kErrorNone) {                                                    \
-    goto err_invalid_char;                                                     \
+#define sonic_check_err()   \
+  if (err_ != kErrorNone) { \
+    goto err_invalid_char;  \
   }
 
     using namespace sonic_json::internal;
@@ -492,16 +491,16 @@ class Parser {
 
     uint8_t c = scan.SkipSpace(json_buf_, pos_);
     switch (c) {
-    case '[': {
-      sax.StartArray();
-      depth.push_back(kArrMask);
-      c = scan.SkipSpace(json_buf_, pos_);
-      if (c == ']') {
-        sax.EndArray(0);
-        goto scope_end;
-      }
-      goto arr_val;
-    };
+      case '[': {
+        sax.StartArray();
+        depth.push_back(kArrMask);
+        c = scan.SkipSpace(json_buf_, pos_);
+        if (c == ']') {
+          sax.EndArray(0);
+          goto scope_end;
+        }
+        goto arr_val;
+      };
       case '{': {
         sax.StartObject();
         depth.push_back(kObjMask);
@@ -515,7 +514,7 @@ class Parser {
       default:
         parsePrimitives(sax);
         goto doc_end;
-      };
+    };
 
   obj_key:
     if (sonic_unlikely(c != '"')) goto err_invalid_char;
@@ -526,16 +525,16 @@ class Parser {
 
     c = scan.SkipSpace(json_buf_, pos_);
     switch (c) {
-    case '{': {
-      sax.StartObject();
-      depth.push_back(kObjMask);
-      c = scan.SkipSpace(json_buf_, pos_);
-      if (c == '}') {
-        sax.EndObject(0);
-        goto scope_end;
+      case '{': {
+        sax.StartObject();
+        depth.push_back(kObjMask);
+        c = scan.SkipSpace(json_buf_, pos_);
+        if (c == '}') {
+          sax.EndObject(0);
+          goto scope_end;
+        }
+        goto obj_key;
       }
-      goto obj_key;
-    }
       case '[': {
         sax.StartArray();
         depth.push_back(kArrMask);
@@ -578,7 +577,7 @@ class Parser {
         break;
       default:
         goto err_invalid_char;
-      }
+    }
     c = scan.SkipSpace(json_buf_, pos_);
 
   obj_cont:
@@ -606,16 +605,16 @@ class Parser {
 
   arr_val:
     switch (c) {
-    case '{': {
-      sax.StartObject();
-      depth.push_back(kObjMask);
-      c = scan.SkipSpace(json_buf_, pos_);
-      if (c == '}') {
-        sax.EndObject(0);
-        goto scope_end;
+      case '{': {
+        sax.StartObject();
+        depth.push_back(kObjMask);
+        c = scan.SkipSpace(json_buf_, pos_);
+        if (c == '}') {
+          sax.EndObject(0);
+          goto scope_end;
+        }
+        goto obj_key;
       }
-      goto obj_key;
-    }
       case '[': {
         sax.StartArray();
         depth.push_back(kArrMask);
@@ -658,7 +657,7 @@ class Parser {
         break;
       default:
         goto err_invalid_char;
-      }
+    }
     c = scan.SkipSpace(json_buf_, pos_);
 
   arr_cont:
@@ -699,34 +698,33 @@ class Parser {
     const uint8_t *src, *sdst;
 
     switch (c) {
-    case '[': {
-      sax.StartArray();
-      c = scan.SkipSpaceSafe(data, pos, len);
-      if (c == ']') {
-        sax.EndArray(0);
+      case '[': {
+        sax.StartArray();
+        c = scan.SkipSpaceSafe(data, pos, len);
+        if (c == ']') {
+          sax.EndArray(0);
+          return kErrorNone;
+        }
+        pos--;
+        goto arr_val;
+      };
+      case '{': {
+        sax.StartObject();
+        c = scan.SkipSpaceSafe(data, pos, len);
+        if (c == '}') {
+          sax.EndObject(0);
+          return kErrorNone;
+        }
+        goto obj_key;
+      }
+      default: {
+        // TODO: fix the abstract.
+        pos--;
+        start = scan.SkipOne(data, pos, len);
+        if (start < 0) goto skip_error;
+        sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
         return kErrorNone;
       }
-      pos--;
-      goto arr_val;
-    };
-    case '{': {
-      sax.StartObject();
-      c = scan.SkipSpaceSafe(data, pos, len);
-      if (c == '}') {
-        sax.EndObject(0);
-        return kErrorNone;
-      }
-      goto obj_key;
-    }
-    default: {
-      // TODO: fix the abstract.
-      pos--;
-      start = scan.SkipOne(data, pos, len);
-      if (start < 0)
-        goto skip_error;
-      sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
-      return kErrorNone;
-    }
     };
 
   obj_key:
@@ -765,8 +763,7 @@ class Parser {
       goto err_invalid_char;
     }
     start = scan.SkipOne(data, pos, len);
-    if (start < 0)
-      goto skip_error;
+    if (start < 0) goto skip_error;
     sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
@@ -782,8 +779,7 @@ class Parser {
 
   arr_val:
     start = scan.SkipOne(data, pos, len);
-    if (start < 0)
-      goto skip_error;
+    if (start < 0) goto skip_error;
     sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
@@ -804,7 +800,7 @@ class Parser {
 
 #undef sonic_check_err
 
-private:
+ private:
   sonic_force_inline void reset() {
     pos_ = 0;
     err_ = kErrorNone;
@@ -812,7 +808,7 @@ private:
   };
   constexpr static size_t kJsonPaddingSize = SONICJSON_PADDING;
 
-  uint8_t* json_buf_{nullptr};
+  uint8_t *json_buf_{nullptr};
   size_t len_{0};
   size_t pos_{0};
   SonicError err_{kErrorNone};

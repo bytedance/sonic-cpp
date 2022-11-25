@@ -24,10 +24,12 @@
 
 namespace sonic_json {
 
-template <typename NodeType> class GenericDocument;
+template <typename NodeType>
+class GenericDocument;
 
-template <typename NodeType> class SAXHandler {
-public:
+template <typename NodeType>
+class SAXHandler {
+ public:
   using Allocator = typename NodeType::AllocatorType;
 
   SAXHandler() = default;
@@ -36,7 +38,10 @@ public:
   SAXHandler(const SAXHandler &) = delete;
   SAXHandler &operator=(const SAXHandler &rhs) = delete;
   SAXHandler(SAXHandler &&rhs)
-      : st_(rhs.st_), np_(rhs.np_), cap_(rhs.cap_), parent_(rhs.parent_),
+      : st_(rhs.st_),
+        np_(rhs.np_),
+        cap_(rhs.cap_),
+        parent_(rhs.parent_),
         alloc_(rhs.alloc_) {
     rhs.st_ = nullptr;
     rhs.cap_ = 0;
@@ -65,20 +70,17 @@ public:
   sonic_force_inline bool SetUp(StringView json) {
     size_t len = json.size();
     size_t cap = len / 2 + 2;
-    if (cap < 16)
-      cap = 16;
+    if (cap < 16) cap = 16;
     if (!st_ || cap_ < cap) {
       st_ = static_cast<NodeType *>(std::realloc(st_, sizeof(NodeType) * cap));
-      if (!st_)
-        return false;
+      if (!st_) return false;
       cap_ = cap;
     }
     return true;
   };
 
   sonic_force_inline void TearDown() {
-    if (st_ == nullptr)
-      return;
+    if (st_ == nullptr) return;
     for (size_t i = 0; i < np_; i++) {
       st_[i].~NodeType();
     }
@@ -86,10 +88,9 @@ public:
     st_ = nullptr;
   };
 
-#define SONIC_ADD_NODE()                                                       \
-  {                                                                            \
-    if (!node())                                                               \
-      return false;                                                            \
+#define SONIC_ADD_NODE()       \
+  {                            \
+    if (!node()) return false; \
   }
 
   sonic_force_inline bool Null() noexcept {
@@ -181,7 +182,7 @@ public:
     return true;
   }
 
-private:
+ private:
   friend class GenericDocument<NodeType>;
 
   sonic_force_inline bool stringImpl(StringView s) {
@@ -209,8 +210,9 @@ private:
   Allocator *alloc_{nullptr};
 };
 
-template <typename NodeType> class LazySAXHandler {
-public:
+template <typename NodeType>
+class LazySAXHandler {
+ public:
   using Allocator = typename NodeType::AllocatorType;
 
   LazySAXHandler() = delete;

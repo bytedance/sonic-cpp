@@ -108,13 +108,15 @@ class WriteBuffer {
     top_ += sizeof(T);
   }
 
-  template <typename T> sonic_force_inline T *PushSize(size_t n) {
+  template <typename T>
+  sonic_force_inline T* PushSize(size_t n) {
     Grow(n * sizeof(T));
     return PushSizeUnsafe<T>(n);
   }
 
-  template <typename T> sonic_force_inline T *PushSizeUnsafe(size_t n) {
-    T *ret = reinterpret_cast<T *>(top_);
+  template <typename T>
+  sonic_force_inline T* PushSizeUnsafe(size_t n) {
+    T* ret = reinterpret_cast<T*>(top_);
     top_ += n * sizeof(T);
     return ret;
   }
@@ -182,14 +184,16 @@ class WriteBuffer {
    * @brief Get the begin of the buffer.
    * @return the value pointer into the begin.
    */
-  template <typename T> sonic_force_inline T *Begin() {
-    return reinterpret_cast<T *>(buf_);
+  template <typename T>
+  sonic_force_inline T* Begin() {
+    return reinterpret_cast<T*>(buf_);
   }
-  template <typename T> sonic_force_inline const T *Begin() const {
-    return reinterpret_cast<T *>(buf_);
+  template <typename T>
+  sonic_force_inline const T* Begin() const {
+    return reinterpret_cast<T*>(buf_);
   }
 
-private:
+ private:
   void setZero() {
     buf_ = nullptr;
     top_ = nullptr;
