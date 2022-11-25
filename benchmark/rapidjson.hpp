@@ -34,7 +34,7 @@ class RapidjsonParseResult
  public:
   rapidjson::Document document;
 
-  RapidjsonParseResult(std::string_view json) { (void) json;}
+  RapidjsonParseResult(std::string_view json) { (void)json; }
 
   bool contains_impl(std::string_view key) const {
     return document.HasMember(key.data());
@@ -63,7 +63,7 @@ class RapidjsonParseResult
   }
 
  private:
-  void find_value(const rapidjson::Value& v, DocStat &stat) const {
+  void find_value(const rapidjson::Value &v, DocStat &stat) const {
     stat = DocStat();
     switch (v.GetType()) {
       case rapidjson::kObjectType:
@@ -84,7 +84,8 @@ class RapidjsonParseResult
         break;
     }
   }
-  void GetStats(const rapidjson::Value &v, DocStat &stat, size_t depth = 0) const {
+  void GetStats(const rapidjson::Value &v, DocStat &stat,
+                size_t depth = 0) const {
     stat = DocStat();
     switch (v.GetType()) {
       case rapidjson::kNullType:
@@ -98,8 +99,7 @@ class RapidjsonParseResult
         break;
 
       case rapidjson::kObjectType:
-        if (depth > stat.depth)
-          stat.depth = depth;
+        if (depth > stat.depth) stat.depth = depth;
         for (rapidjson::Value::ConstMemberIterator m = v.MemberBegin();
              m != v.MemberEnd(); ++m) {
           stat.length += m->name.GetStringLength();
@@ -111,8 +111,7 @@ class RapidjsonParseResult
         break;
 
       case rapidjson::kArrayType:
-        if (depth > stat.depth)
-          stat.depth = depth;
+        if (depth > stat.depth) stat.depth = depth;
         for (rapidjson::Value::ConstValueIterator i = v.Begin(); i != v.End();
              ++i)
           GetStats(*i, stat, depth + 1);

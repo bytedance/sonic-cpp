@@ -53,11 +53,11 @@ static void BM_Encode(benchmark::State &state, std::string_view filename,
 
 template <typename Json, typename PR, typename SR>
 static void BM_Stat(benchmark::State &state, std::string filename,
-                      std::string_view data) {
+                    std::string_view data) {
   Json json;
   std::unique_ptr<const PR> pr;
   pr = json.parse(data);
-  
+
   if (!pr) {
     state.SkipWithError("Failed to parse file");
     return;
@@ -95,7 +95,7 @@ static void BM_Stat(benchmark::State &state, std::string filename,
 
 template <typename Json, typename PR, typename SR>
 static void BM_Find(benchmark::State &state, std::string filename,
-                      std::string_view data) {
+                    std::string_view data) {
   Json json;
   std::unique_ptr<const PR> pr;
   pr = json.parse(data);
@@ -218,27 +218,27 @@ int main(int argc, char **argv) {
         json.first.string(), json.second);                           \
   } while (0)
 
-#define ADD_BMK(METHOD)                                        \
-  do {                                                         \
-    for (const auto &json : jsons) {                           \
-      ADD_JSON_BMK(SonicDyn, METHOD);                          \
-      ADD_JSON_BMK(Rapidjson, METHOD);                         \
-      ADD_JSON_BMK(YYjson, METHOD);                            \
-      ADD_JSON_BMK(SIMDjson, METHOD);                          \
-    }                                                          \
+#define ADD_BMK(METHOD)                \
+  do {                                 \
+    for (const auto &json : jsons) {   \
+      ADD_JSON_BMK(SonicDyn, METHOD);  \
+      ADD_JSON_BMK(Rapidjson, METHOD); \
+      ADD_JSON_BMK(YYjson, METHOD);    \
+      ADD_JSON_BMK(SIMDjson, METHOD);  \
+    }                                  \
   } while (0)
 
   ADD_BMK(Decode);
   ADD_BMK(Encode);
   // ADD_BMK(Stat);
   // ADD_BMK(Find);
-  do {                                 
-    for (const auto &json : jsons) {   
-      ADD_JSON_BMK(SonicDyn, Stat);  
-      ADD_JSON_BMK(SonicDyn, Find);  
-      ADD_JSON_BMK(Rapidjson, Stat); 
-      ADD_JSON_BMK(Rapidjson, Find); 
-    }                                  
+  do {
+    for (const auto &json : jsons) {
+      ADD_JSON_BMK(SonicDyn, Stat);
+      ADD_JSON_BMK(SonicDyn, Find);
+      ADD_JSON_BMK(Rapidjson, Stat);
+      ADD_JSON_BMK(Rapidjson, Find);
+    }
   } while (0);
 
   benchmark::RunSpecifiedBenchmarks();

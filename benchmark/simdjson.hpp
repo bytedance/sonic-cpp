@@ -33,7 +33,7 @@ class SIMDjsonParseResult
   simdjson::dom::element root_;
   simdjson::error_code error_;
 
-  SIMDjsonParseResult(std::string_view json) { (void)json;}
+  SIMDjsonParseResult(std::string_view json) { (void)json; }
 
   bool contains_impl(std::string_view key) const {
     (void)key;
@@ -54,8 +54,14 @@ class SIMDjsonParseResult
     return true;
   }
 
-  bool stat_impl(DocStat &stat) const { (void)stat; return true; }
-  bool find_impl(DocStat &stat) const { (void)stat; return true; }
+  bool stat_impl(DocStat &stat) const {
+    (void)stat;
+    return true;
+  }
+  bool find_impl(DocStat &stat) const {
+    (void)stat;
+    return true;
+  }
 };
 
 class SIMDjson : public JsonBase<SIMDjson, SIMDjsonParseResult> {

@@ -37,7 +37,10 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
   SonicParseResult(std::string_view json) { (void)json; }
   ~SonicParseResult() {}
 
-  bool contains_impl(std::string_view key) const { (void)key; return false; }
+  bool contains_impl(std::string_view key) const {
+    (void)key;
+    return false;
+  }
 
   bool stringfy_impl(SonicStringResult<NodeType> &sr) const {
     auto err = doc.Serialize(sr.wb);
@@ -46,7 +49,10 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
     return true;
   }
 
-  bool prettify_impl(SonicStringResult<NodeType> &sr) const { (void) sr; return false; }
+  bool prettify_impl(SonicStringResult<NodeType> &sr) const {
+    (void)sr;
+    return false;
+  }
 
   bool stat_impl(DocStat &stat) const {
     GetStats(doc, stat);
@@ -59,7 +65,7 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
   }
 
  private:
-  void find_value(const NodeType& v, DocStat &stat) const {
+  void find_value(const NodeType &v, DocStat &stat) const {
     stat = DocStat();
     switch (v.GetType()) {
       case sonic_json::kObject:
@@ -80,21 +86,20 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
         break;
     }
   }
-  void GetStats(const NodeType& v, DocStat &stat, size_t depth = 0) const {
+  void GetStats(const NodeType &v, DocStat &stat, size_t depth = 0) const {
     stat = DocStat();
     switch (v.GetType()) {
       case sonic_json::kNull:
-       stat.nulls++;
-       break;
+        stat.nulls++;
+        break;
       case sonic_json::kFalse:
-       stat.falses++;
-       break;
+        stat.falses++;
+        break;
       case sonic_json::kTrue:
-       stat.trues++;
-       break;
+        stat.trues++;
+        break;
       case sonic_json::kObject:
-        if (depth > stat.depth)
-          stat.depth = depth;
+        if (depth > stat.depth) stat.depth = depth;
         for (auto m = v.MemberBegin(); m != v.MemberEnd(); ++m) {
           stat.length += m->name.Size();
           GetStats(m->value, stat, depth + 1);
@@ -104,8 +109,7 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
         stat.strings += v.Size();
         break;
       case sonic_json::kArray:
-        if (depth > stat.depth)
-          stat.depth = depth;
+        if (depth > stat.depth) stat.depth = depth;
         for (auto i = v.Begin(); i != v.End(); ++i) {
           GetStats(*i, stat, depth + 1);
         }
@@ -126,7 +130,6 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
       default:
         break;
     }
-
   }
 };
 
