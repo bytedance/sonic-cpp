@@ -399,6 +399,33 @@ TYPED_TEST(NodeTest, RemoveMember) {
   }
 }
 
+TYPED_TEST(NodeTest, EraseMember) {
+  using NodeType = TypeParam;
+  using Allocator = typename NodeType::alloc_type;
+  NodeType node1;
+  Allocator a;
+
+  TestFixture::Add100Nodes(node1, a);
+
+  for (int i = 9; i >= 0; --i) {
+    node1.EraseMember(node1.MemberBegin() + i * 10, node1.MemberBegin() + (i + 1) * 10);
+  }
+  EXPECT_TRUE(node1.Empty());
+
+  TestFixture::Add100Nodes(node1, a);
+  using MemberIterator = typename NodeType::MemberIterator;
+  for (int i = 0; i < 99; ++i) {
+    MemberIterator m = node1.EraseMember(node1.MemberBegin(), node1.MemberBegin() + 1);
+    std::string expect_key = "key" + std::to_string(i + 1);
+    EXPECT_TRUE(m->name == expect_key);
+    EXPECT_TRUE(m->value.GetInt64() == i + 1);
+  }
+  {
+    MemberIterator m = node1.EraseMember(node1.MemberBegin(), node1.MemberBegin() + 1);
+    EXPECT_TRUE(m == node1.MemberEnd());
+  }
+}
+
 TYPED_TEST(NodeTest, HasMember) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;
