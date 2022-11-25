@@ -11,9 +11,9 @@ jobs:
       with:
         clang-format-version: '11'
         check-path:
-          - 'include/sonic'
-          - 'benchmark'
-          - 'tests'
-          - 'example'
-          - 'fuzz'
+        - 'include/sonic'
+        - 'benchmark'
+        - 'tests'
+        - 'example'
+        - 'fuzz'
         fallback-style: 'Google'
