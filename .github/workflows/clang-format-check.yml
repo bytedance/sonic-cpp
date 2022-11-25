@@ -15,4 +15,5 @@ jobs:
           - 'benchmark'
           - 'tests'
           - 'example'
+          - 'fuzz'
         fallback-style: 'Google'
