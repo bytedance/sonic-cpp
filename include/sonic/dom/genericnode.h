@@ -189,7 +189,7 @@ class GenericNode {
    * @param s     string_view that contina string pointer and length.
    * @param alloc Allocator
    */
-  GenericNode(StringView s, alloc_type &alloc) {
+  GenericNode(StringView s, alloc_type& alloc) {
     StringCopy(s.data(), s.size(), alloc);
   }
 
@@ -466,7 +466,7 @@ class GenericNode {
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
-  NodeType &SetString(StringView s, alloc_type &alloc) {
+  NodeType& SetString(StringView s, alloc_type& alloc) {
     return SetString(s.data(), s.size(), alloc);
   }
   /**
@@ -488,7 +488,7 @@ class GenericNode {
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
-  NodeType &SetString(StringView s) { return SetString(s.data(), s.size()); }
+  NodeType& SetString(StringView s) { return SetString(s.data(), s.size()); }
   /**
    * @brief Set this node as string type. Only copy string pointer.
    * @param s char array pointer
@@ -663,7 +663,7 @@ class GenericNode {
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
-  sonic_force_inline NodeType &operator[](StringView key) noexcept {
+  sonic_force_inline NodeType& operator[](StringView key) noexcept {
     sonic_assert(this->IsObject());
     return downCast()->findValueImpl(key);
   }
@@ -674,7 +674,7 @@ class GenericNode {
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
-  sonic_force_inline const NodeType &operator[](StringView key) const noexcept {
+  sonic_force_inline const NodeType& operator[](StringView key) const noexcept {
     sonic_assert(this->IsObject());
     return downCast()->findValueImpl(key);
   }
@@ -731,8 +731,8 @@ class GenericNode {
    * @retval others success
    */
   template <typename StringType>
-  sonic_force_inline const NodeType *
-  AtPointer(const GenericJsonPointer<StringType> &pointer) const {
+  sonic_force_inline const NodeType* AtPointer(
+      const GenericJsonPointer<StringType>& pointer) const {
     return atPointerImpl(pointer);
   }
 
@@ -1003,7 +1003,7 @@ class GenericNode {
       setEmptyString();
     }
   }
-  NodeType &setRaw(StringView s) {
+  NodeType& setRaw(StringView s) {
     return downCast()->setRawImpl(s.data(), s.size());
   }
   void setEmptyString() noexcept {
@@ -1024,7 +1024,7 @@ class GenericNode {
     return std::numeric_limits<uint>::max();
   }
 
-private:
+ private:
   friend NodeType;
   friend class SAXHandler<NodeType>;
   friend class LazySAXHandler<NodeType>;
@@ -1052,8 +1052,8 @@ private:
 
   struct Raw {
     uint64_t len;
-    const char *p;
-  }; // 16 bytes
+    const char* p;
+  };  // 16 bytes
   struct Number {
     uint64_t t;
     union {

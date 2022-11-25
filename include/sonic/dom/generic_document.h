@@ -44,11 +44,14 @@ class GenericDocument : public NodeType {
   /**
    * @brief Move constructor
    */
-  GenericDocument(GenericDocument &&rhs)
+  GenericDocument(GenericDocument&& rhs)
       : NodeType(std::forward<NodeType>(rhs)),
-        own_alloc_(rhs.own_alloc_.release()), alloc_(rhs.alloc_),
-        parse_result_(rhs.parse_result_), str_(rhs.str_),
-        str_cap_(rhs.str_cap_), strp_(rhs.strp_) {
+        own_alloc_(rhs.own_alloc_.release()),
+        alloc_(rhs.alloc_),
+        parse_result_(rhs.parse_result_),
+        str_(rhs.str_),
+        str_cap_(rhs.str_cap_),
+        strp_(rhs.strp_) {
     rhs.clear();
   }
 
@@ -111,12 +114,12 @@ class GenericDocument : public NodeType {
    * before parsing to avoid memory overuse.
    */
   template <unsigned parseFlags = kParseDefault>
-  GenericDocument &Parse(StringView json) {
+  GenericDocument& Parse(StringView json) {
     return Parse<parseFlags>(json.data(), json.size());
   }
 
   template <unsigned parseFlags = kParseDefault>
-  GenericDocument &Parse(const char *data, size_t len) {
+  GenericDocument& Parse(const char* data, size_t len) {
     destroyDom();
     return parseImpl<parseFlags>(data, len);
   }
@@ -132,15 +135,15 @@ class GenericDocument : public NodeType {
    */
   template <unsigned parseFlags = kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
-  GenericDocument &ParseOnDemand(StringView json,
-                                 const GenericJsonPointer<JPStringType> &path) {
+  GenericDocument& ParseOnDemand(StringView json,
+                                 const GenericJsonPointer<JPStringType>& path) {
     return ParseOnDemand(json.data(), json.size(), path);
   }
 
   template <unsigned parseFlags = kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
-  GenericDocument &ParseOnDemand(const char *data, size_t len,
-                                 const GenericJsonPointer<JPStringType> &path) {
+  GenericDocument& ParseOnDemand(const char* data, size_t len,
+                                 const GenericJsonPointer<JPStringType>& path) {
     destroyDom();
     return parseOnDemandImpl<parseFlags, JPStringType>(data, len, path);
   }
@@ -218,9 +221,9 @@ class GenericDocument : public NodeType {
     return parseImpl<parseFlags>(target.data(), target.size());
   }
 
-  SonicError allocateStringBuffer(const char *json, size_t len) {
+  SonicError allocateStringBuffer(const char* json, size_t len) {
     size_t pad_len = len + 64;
-    str_ = (char *)(alloc_->Malloc(pad_len));
+    str_ = (char*)(alloc_->Malloc(pad_len));
     if (str_ == nullptr) {
       return kErrorNoMem;
     }

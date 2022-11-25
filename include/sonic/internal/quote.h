@@ -119,8 +119,8 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
     // Copy the next n bytes, and find the backslash and quote in them.
     simd256<uint8_t> v(src);
     block = StringBlock{
-        static_cast<uint32_t>((v == '\\').to_bitmask()), // bs_bits
-        static_cast<uint32_t>((v == '"').to_bitmask()),  // quote_bits
+        static_cast<uint32_t>((v == '\\').to_bitmask()),  // bs_bits
+        static_cast<uint32_t>((v == '"').to_bitmask()),   // quote_bits
         static_cast<uint32_t>((v <= '\x1f').to_bitmask()),
     };
     // If the next thing is the end quote, copy and return
