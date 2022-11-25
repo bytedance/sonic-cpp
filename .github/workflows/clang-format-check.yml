@@ -10,5 +10,9 @@ jobs:
       uses: jidicula/clang-format-action@v4.9.0
       with:
         clang-format-version: '11'
-        check-path: 'include/sonic'
+        check-path:
+          - 'include/sonic'
+          - 'benchmark'
+          - 'tests'
+          - 'example'
         fallback-style: 'Google'
