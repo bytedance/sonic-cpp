@@ -74,8 +74,7 @@ class SAXHandler {
     if (!st_ || cap_ < cap) {
       st_ = static_cast<NodeType *>(
           std::realloc((void *)(st_), sizeof(NodeType) * cap));
-      if (!st_)
-        return false;
+      if (!st_) return false;
       cap_ = cap;
     }
     return true;

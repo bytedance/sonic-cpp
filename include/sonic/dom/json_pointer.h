@@ -16,7 +16,10 @@
 
 #pragma once
 
+#include <type_traits>
 #include <vector>
+
+#include "sonic/string_view.h"
 
 // define the string type of query node
 #ifdef SONIC_JSON_POINTER_NODE_STRING
@@ -33,14 +36,16 @@ template <typename StringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
 class GenericJsonPointerNode {
  public:
   GenericJsonPointerNode() = delete;
+  GenericJsonPointerNode(StringView str)
+      : str_(str), num_(0), is_number_(false) {}
   GenericJsonPointerNode(const std::string& str)
       : str_(str), num_(0), is_number_(false) {}
-  GenericJsonPointerNode(const char* str, size_t len)
-      : str_(str, len), num_(0), is_number_(false) {}
-  GenericJsonPointerNode(int i) : str_(), num_(i), is_number_(true) {}
-  template <size_t N>
-  GenericJsonPointerNode(const char (&str)[N])
-      : str_(str, N - 1), num_(0), is_number_(false) {}
+  GenericJsonPointerNode(const char* str)
+      : str_(str), num_(0), is_number_(false) {}
+  template <typename T,
+            std::enable_if_t<std::is_integral<T>::value, bool> = true>
+  GenericJsonPointerNode(T i)
+      : str_(), num_(static_cast<int>(i)), is_number_(true) {}
 
   GenericJsonPointerNode(const GenericJsonPointerNode& rhs) = default;
   GenericJsonPointerNode(GenericJsonPointerNode&& rhs) = default;

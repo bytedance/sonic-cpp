@@ -15,6 +15,7 @@
  */
 
 #include <gtest/gtest.h>
+
 #include <vector>
 
 #include "sonic/experiment/lazy_update.h"
@@ -117,4 +118,4 @@ TEST(UpdateLazy, Basic) {
   }
 }
 
-} // namespace
+}  // namespace
