@@ -59,9 +59,7 @@ class SimpleAllocator {
     return new_ptr;
   }
 
-  static void Free(void* ptr) {
-    std::free(ptr);
-  }
+  static void Free(void* ptr) { std::free(ptr); }
 
   bool operator==(const SimpleAllocator&) const { return true; }
   bool operator!=(const SimpleAllocator&) const { return false; }
@@ -80,11 +78,11 @@ class SimpleAllocator {
 #endif
 
 // SpinLock is copied from https://rigtorp.se/spinlock/
-class SpinLock
-{
-private:
+class SpinLock {
+ private:
   std::atomic<bool> lock_ = {false};
-public:
+
+ public:
   void lock() {
     for (;;) {
       if (!lock_.exchange(true, std::memory_order_acquire)) {
@@ -95,9 +93,7 @@ public:
       }
     }
   }
-  void unlock() {
-    lock_.store(false, std::memory_order_release);
-  }
+  void unlock() { lock_.store(false, std::memory_order_release); }
 };
 
 #ifdef SONIC_LOCKED_ALLOCATOR

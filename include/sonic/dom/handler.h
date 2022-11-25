@@ -24,10 +24,12 @@
 
 namespace sonic_json {
 
-template <typename NodeType> class GenericDocument;
+template <typename NodeType>
+class GenericDocument;
 
-template <typename NodeType> class SAXHandler {
-public:
+template <typename NodeType>
+class SAXHandler {
+ public:
   using Allocator = typename NodeType::AllocatorType;
 
   SAXHandler() = default;
@@ -36,7 +38,10 @@ public:
   SAXHandler(const SAXHandler &) = delete;
   SAXHandler &operator=(const SAXHandler &rhs) = delete;
   SAXHandler(SAXHandler &&rhs)
-      : st_(rhs.st_), np_(rhs.np_), cap_(rhs.cap_), parent_(rhs.parent_),
+      : st_(rhs.st_),
+        np_(rhs.np_),
+        cap_(rhs.cap_),
+        parent_(rhs.parent_),
         alloc_(rhs.alloc_) {
     rhs.st_ = nullptr;
     rhs.cap_ = 0;
@@ -65,20 +70,18 @@ public:
   sonic_force_inline bool SetUp(StringView json) {
     size_t len = json.size();
     size_t cap = len / 2 + 2;
-    if (cap < 16)
-      cap = 16;
+    if (cap < 16) cap = 16;
     if (!st_ || cap_ < cap) {
-      st_ = static_cast<NodeType *>(std::realloc(st_, sizeof(NodeType) * cap));
-      if (!st_)
-        return false;
+      st_ = static_cast<NodeType *>(
+          std::realloc((void *)(st_), sizeof(NodeType) * cap));
+      if (!st_) return false;
       cap_ = cap;
     }
     return true;
   };
 
   sonic_force_inline void TearDown() {
-    if (st_ == nullptr)
-      return;
+    if (st_ == nullptr) return;
     for (size_t i = 0; i < np_; i++) {
       st_[i].~NodeType();
     }
@@ -86,10 +89,9 @@ public:
     st_ = nullptr;
   };
 
-#define SONIC_ADD_NODE()                                                       \
-  {                                                                            \
-    if (!node())                                                               \
-      return false;                                                            \
+#define SONIC_ADD_NODE()       \
+  {                            \
+    if (!node()) return false; \
   }
 
   sonic_force_inline bool Null() noexcept {
@@ -155,7 +157,8 @@ public:
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy(obj.getObjChildrenFirstUnsafe(), &obj + 1, size);
+      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+                  size);
     } else {
       obj.setChildren(nullptr);
     }
@@ -172,7 +175,8 @@ public:
       // As above note.
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy(arr.getArrChildrenFirstUnsafe(), &arr + 1, size);
+      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+                  size);
     } else {
       arr.setChildren(nullptr);
     }
@@ -181,7 +185,7 @@ public:
     return true;
   }
 
-private:
+ private:
   friend class GenericDocument<NodeType>;
 
   sonic_force_inline bool stringImpl(StringView s) {
@@ -209,8 +213,9 @@ private:
   Allocator *alloc_{nullptr};
 };
 
-template <typename NodeType> class LazySAXHandler {
-public:
+template <typename NodeType>
+class LazySAXHandler {
+ public:
   using Allocator = typename NodeType::AllocatorType;
 
   LazySAXHandler() = delete;
@@ -240,7 +245,8 @@ public:
     if (count) {
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy(arr.getArrChildrenFirstUnsafe(), &arr + 1, size);
+      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+                  size);
       stack_.Pop<NodeType>(count);
     } else {
       arr.setChildren(nullptr);
@@ -250,14 +256,14 @@ public:
 
   sonic_force_inline bool EndObject(size_t pairs) {
     NodeType &obj = *stack_.template Begin<NodeType>();
-    size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
       size_t size = pairs * 2 * sizeof(NodeType);
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy(obj.getObjChildrenFirstUnsafe(), &obj + 1, size);
+      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+                  size);
       stack_.Pop<NodeType>(pairs * 2);
     } else {
       obj.setChildren(nullptr);

@@ -47,7 +47,7 @@
 #endif
 
 #ifdef SONIC_NHEADONLY  // Not Headonly
-#define sonic_static_inline 
+#define sonic_static_inline
 #else  // Headonly
 #define sonic_static_inline static sonic_force_inline
 #endif

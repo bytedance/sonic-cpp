@@ -21,32 +21,32 @@
 namespace sonic_json {
 enum TypeFlag {
   // BasicType: 3 bits
-  kNull = 0,   // xxxxx000
-  kBool = 2,   // xxxxx010
-  kNumber = 3, // xxxxx011
-  kString = 4, // xxxxx100
-  kRaw = 5,    // xxxxx101
+  kNull = 0,    // xxxxx000
+  kBool = 2,    // xxxxx010
+  kNumber = 3,  // xxxxx011
+  kString = 4,  // xxxxx100
+  kRaw = 5,     // xxxxx101
   // Container Mask 00000110, & Mask == Mask
-  kObject = 6, // xxxxx110
-  kArray = 7,  // xxxxx111
+  kObject = 6,  // xxxxx110
+  kArray = 7,   // xxxxx111
 
   // SubType: 2 bits
-  kFalse = ((uint8_t)(0 << 3)) | kBool,  // xxx00_010, 2
-  kTrue = ((uint8_t)(1 << 3)) | kBool,   // xxx01_010, 10
-  kUint = ((uint8_t)(0 << 3)) | kNumber, // xxx00_011, 3
-  kSint = ((uint8_t)(1 << 3)) | kNumber, // xxx01_011, 11
-  kReal = ((uint8_t)(2 << 3)) | kNumber, // xxx10_011, 19
+  kFalse = ((uint8_t)(0 << 3)) | kBool,   // xxx00_010, 2
+  kTrue = ((uint8_t)(1 << 3)) | kBool,    // xxx01_010, 10
+  kUint = ((uint8_t)(0 << 3)) | kNumber,  // xxx00_011, 3
+  kSint = ((uint8_t)(1 << 3)) | kNumber,  // xxx01_011, 11
+  kReal = ((uint8_t)(2 << 3)) | kNumber,  // xxx10_011, 19
   // kStringCopy: sv.p is copied, but not need free, e.g. node's string buffer
   // is dom str_
-  kStringCopy = kString, // xxx00_100, 4
+  kStringCopy = kString,  // xxx00_100, 4
   // kStringFree: sv.p is copied and need free, e.g. SetString with allocator
   // arg
-  kStringFree = ((uint8_t)(1 << 3)) | kString, // xxx01_100, 12
+  kStringFree = ((uint8_t)(1 << 3)) | kString,  // xxx01_100, 12
   // kStringConst: sv.p is not copied, so not need free, e.g. SetString without
   // allocator arg
-  kStringConst = ((uint8_t)(2 << 3)) | kString, // xxx10_100, 20
+  kStringConst = ((uint8_t)(2 << 3)) | kString,  // xxx10_100, 20
 
-}; // 8 bits
+};  // 8 bits
 
 enum TypeInfo {
   kTotalTypeBits = 8,

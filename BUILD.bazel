@@ -1,15 +1,17 @@
 package(default_visibility = ["//visibility:public"])
 
-noavx_opts = ['-O3', '-msse4', '-Wall', '-Wextra',]
-common_copts = noavx_opts + ["-mavx2", '-mbmi', '-mpclmul', '-mlzcnt']
+common_copts = ['-msse4', '-mavx2', '-mbmi', '-mpclmul', '-mlzcnt']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 
 cc_library(
+    name = "string_view",
+    hdrs = glob(["include/thirdparty/**/*.h"]),
+)
+
+cc_library(
     name = "sonic-cpp",
-    hdrs = glob([
-        "include/sonic/**/*.h",
-        "include/thirdparty/**/*.h",
-    ]),
+    hdrs = glob(["include/sonic/**/*.h"]),
+    deps = [":string_view"],
     includes = ["include"],
 )
 
@@ -36,13 +38,14 @@ cc_binary(
 cc_test(
     name = "unittest-gcc",
     srcs = glob([
-        "tests/*.cpp",
-        "tests/*.h",
-    ]),
-    includes = ["include"],
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
     deps = [ 
-        ":sonic-cpp",
-        "@gtest//:gtest_main" 
+        ":string_view",
+        "@gtest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
@@ -51,23 +54,23 @@ cc_test(
         '-lasan'
     ],
     copts = common_copts + sanitize_copts + [
-        '-O0', '-g', '-UNDEBUG', '-std=c++14',
+        '-O3', '-g', '-UNDEBUG', '-std=c++14',
         '-fstack-protector-all',
-        '-Iinclude',
-        '-Wall -Wextra -Werror',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ],
 )
 
 cc_test(
     name = "unittest-clang",
     srcs = glob([
-        "tests/*.cpp",
-        "tests/*.h",
-    ]),
-    includes = ["include"],
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
     deps = [ 
-        ":sonic-cpp",
-        "@gtest//:gtest_main" 
+        ":string_view",
+        "@gtest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
@@ -76,10 +79,9 @@ cc_test(
         '-fsanitize-link-c++-runtime'
     ],
     copts = common_copts + sanitize_copts + [
-        '-O0', '-g', '-UNDEBUG', '-std=c++14',
+        '-O3', '-g', '-UNDEBUG', '-std=c++14',
         '-fstack-protector-all',
-        '-Iinclude',
-        '-Wall -Wextra -Werror',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ],
 )
 
