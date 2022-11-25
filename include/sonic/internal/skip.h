@@ -450,7 +450,8 @@ class SkipScanner {
       goto err_invalid_char;
     }
     // match key and skip parsing unneeded fields
-    if (sn == key.size() && std::memcmp(sp, key.data(), sn) == 0) {
+    if (sn == static_cast<long>(key.size()) &&
+        std::memcmp(sp, key.data(), sn) == 0) {
       goto query;
     } else {
       c = SkipSpaceSafe(data, pos, len);
