@@ -40,7 +40,7 @@ class GenericJsonPointerNode {
       : str_(str), num_(0), is_number_(false) {}
   GenericJsonPointerNode(const std::string& str)
       : str_(str), num_(0), is_number_(false) {}
-  GenericJsonPointerNode(const char *str)
+  GenericJsonPointerNode(const char* str)
       : str_(str), num_(0), is_number_(false) {}
   template <typename T,
             std::enable_if_t<std::is_integral<T>::value, bool> = true>
