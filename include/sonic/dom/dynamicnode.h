@@ -687,6 +687,29 @@ class DNode : public GenericNode<DNode, Allocator> {
     return false;
   }
 
+  MemberIterator eraseMemberImpl(MemberIterator first, MemberIterator last) {
+    // Destroy map before removing members.
+    DestroyMap();
+    size_t size = this->Size();
+    MemberIterator end = this->MemberEnd();
+    if (size_t(last - first) >= size) {
+      destroy();
+      setChildren(nullptr);
+      this->subLength(size);
+      return this->MemberEnd();
+    }
+    for (MemberIterator it = first; it != last; ++it) {
+      it->name.~DNode();
+      it->value.~DNode();
+    }
+    if (first != last || last != end) {
+      std::memmove(static_cast<void*>(&(*first)), static_cast<void*>(&(*last)),
+                   sizeof(MemberNode) * (end - last));
+    }
+    this->subLength(last - first);
+    return first;
+  }
+
   DNode& pushBackImpl(DNode& value, Allocator& alloc) {
     constexpr size_t k_default_array_cap = 16;
     sonic_assert(this->IsArray());

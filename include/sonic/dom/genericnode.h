@@ -774,6 +774,16 @@ class GenericNode {
     return downCast()->removeMemberImpl(key);
   }
 
+  /**
+   * @brief Remove specific range [first, last) in object
+   * @param first range start
+   * @param last range end
+   * @return iterator following the last removed member
+   */
+  MemberIterator EraseMember(MemberIterator first, MemberIterator last) {
+    return downCast()->eraseMemberImpl(first, last);
+  }
+
   // Array APIs
   /**
    * @brief Get array capacity.
