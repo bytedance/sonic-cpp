@@ -76,7 +76,7 @@ cc_test(
         '-fsanitize-link-c++-runtime'
     ],
     copts = common_copts + sanitize_copts + [
-        '-O0', '-g', '-UNDEBUG', '-std=c++14',
+        '-O0', '-g', '-UNDEBUG', '-std=c++17',
         '-fstack-protector-all',
         '-Iinclude',
         '-Wall -Wextra -Werror',

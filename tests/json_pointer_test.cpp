@@ -43,8 +43,7 @@ TYPED_TEST(JsonPointerTest, Constructor) {
   JsonPointerType path_t;
   EXPECT_TRUE(path_t.empty());
 
-  std::string path0 = "path0";
-  JsonPointerType path{path0, {"path1", 5}, 5, {"path 2", 6}, {"path\0A", 6}};
+  JsonPointerType path{"path0", "path1", 5, "path 2", StringView("path\0A", 6)};
   EXPECT_FALSE(path.empty());
   EXPECT_EQ(path.size(), 5);
   auto itr = path.begin();
@@ -166,7 +165,7 @@ TYPED_TEST(JsonPointerTest, QueryNode) {
   }
 
   {
-    QueryNode n1("hello", 3);
+    QueryNode n1(StringView("hello", 3));
     EXPECT_FALSE(n1.IsNum());
     EXPECT_TRUE(n1.IsStr());
     EXPECT_EQ(0, n1.GetNum());
@@ -208,7 +207,7 @@ TYPED_TEST(JsonPointerTest, QueryNode) {
   {
     std::string str{"hello"};
     QueryNode n2(str);
-    QueryNode n1("world", 5);
+    QueryNode n1(StringView("world", 5));
     n1 = n2;
     EXPECT_FALSE(n1.IsNum());
     EXPECT_TRUE(n1.IsStr());
@@ -220,7 +219,7 @@ TYPED_TEST(JsonPointerTest, QueryNode) {
   {
     std::string str{"hello"};
     QueryNode n2(str);
-    QueryNode n1("world", 5);
+    QueryNode n1(StringView("world", 5));
     n1 = std::move(n2);
     EXPECT_FALSE(n1.IsNum());
     EXPECT_TRUE(n1.IsStr());
