@@ -105,7 +105,7 @@ class NodeTest : public testing::Test {
     }
     return;
   }
-  
+
   void Add100Nodes(NodeType& node, Allocator& a) {
     node.SetObject();
     for (int i = 0; i < 100; ++i) {
@@ -207,7 +207,7 @@ TYPED_TEST(NodeTest, MoveConstrcut) {
   for (auto it = old.MemberBegin(); it != old.MemberEnd(); ++it) {
     NodeType& old = it->value;
     NodeType copied = NodeType(old, alloc);
-    NodeType moved =  NodeType(std::move(old));
+    NodeType moved = NodeType(std::move(old));
     EXPECT_TRUE(moved == copied);
     // origin node become null after moved
     EXPECT_TRUE(old.IsNull());

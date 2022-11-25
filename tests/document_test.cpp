@@ -648,7 +648,7 @@ TYPED_TEST(DocumentTest, Iterator) {
     EXPECT_TRUE((++beg)->IsUint64());
     EXPECT_TRUE((beg++)->IsUint64());
     EXPECT_EQ(beg - 2, beg2);
-    //EXPECT_TRUE(end[-1].IsUint64());
+    // EXPECT_TRUE(end[-1].IsUint64());
     EXPECT_TRUE((--end)->IsUint64());
     EXPECT_TRUE((end--)->IsUint64());
     EXPECT_EQ(end + 2, end2);
@@ -699,7 +699,9 @@ TYPED_TEST(DocumentTest, NodeCopyControl) {
   }
 
   {  // case 3: assign the subnode
-    this->doc_["titles"].PushBack(NodeType("new allocated in sub-node", this->doc_.GetAllocator()), this->doc_.GetAllocator());
+    this->doc_["titles"].PushBack(
+        NodeType("new allocated in sub-node", this->doc_.GetAllocator()),
+        this->doc_.GetAllocator());
     EXPECT_FALSE(this->doc_["titles"].End()[-1].IsStringConst());
     this->doc_["titles"] = std::move(this->doc_["titles"].End()[-1]);
     EXPECT_FALSE(this->doc_["titles"].IsStringConst());
@@ -874,7 +876,8 @@ TYPED_TEST(DocumentTest, ObjAddRemove) {
     std::vector<size_t> commas;
     char* p = buf + 1;
     for (int i = 0; i < 10; i++) {
-      std::string kv = "\"new key" + std::to_string(i) + "\":" + std::to_string(i) + ",";
+      std::string kv =
+          "\"new key" + std::to_string(i) + "\":" + std::to_string(i) + ",";
       std::memcpy(p, kv.c_str(), kv.size());
       p += kv.size();
       commas.push_back(p - buf - 1);
@@ -900,7 +903,7 @@ TYPED_TEST(DocumentTest, ObjAddRemove) {
       buf[commas[i]] = '{';
     }
 
-    buf[commas[9]-1] = '{';
+    buf[commas[9] - 1] = '{';
     buf[commas[9]] = '}';
     EXPECT_STREQ(wb.ToString(), "{}");
 
@@ -913,7 +916,6 @@ TYPED_TEST(DocumentTest, ObjAddRemove) {
     EXPECT_STREQ(wb.ToString(), "{}");
   }
 }
-
 
 TYPED_TEST(DocumentTest, CopyFrom) {
   using Document = TypeParam;

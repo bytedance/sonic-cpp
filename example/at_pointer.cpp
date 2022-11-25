@@ -20,12 +20,18 @@ int main() {
   }
 
   sonic_json::Node* node1 = doc.AtPointer(PointerType({"a"}));
-  if (node1 != nullptr) { std::cout << "/a exists!\n"; }
-  else { std::cout << "/a doesn't exist!\n"; }
+  if (node1 != nullptr) {
+    std::cout << "/a exists!\n";
+  } else {
+    std::cout << "/a doesn't exist!\n";
+  }
 
   sonic_json::Node* node2 = doc.AtPointer(PointerType({"b", 1, "a"}));
-  if (node2 != nullptr) { std::cout << "/b/1/a Eixsts!\n"; }
-  else { std::cout << "/b/1/a doesn't exist!\n"; }
+  if (node2 != nullptr) {
+    std::cout << "/b/1/a Eixsts!\n";
+  } else {
+    std::cout << "/b/1/a doesn't exist!\n";
+  }
 
   return 0;
 }

@@ -53,11 +53,11 @@ static void BM_Encode(benchmark::State &state, std::string_view filename,
 
 template <typename Json, typename PR, typename SR>
 static void BM_Stat(benchmark::State &state, std::string filename,
-                      std::string_view data) {
+                    std::string_view data) {
   Json json;
   std::unique_ptr<const PR> pr;
   pr = json.parse(data);
-  
+
   if (!pr) {
     state.SkipWithError("Failed to parse file");
     return;
@@ -95,7 +95,7 @@ static void BM_Stat(benchmark::State &state, std::string filename,
 
 template <typename Json, typename PR, typename SR>
 static void BM_Find(benchmark::State &state, std::string filename,
-                      std::string_view data) {
+                    std::string_view data) {
   Json json;
   std::unique_ptr<const PR> pr;
   pr = json.parse(data);
@@ -175,7 +175,11 @@ static void BM_Decode(benchmark::State &state, std::string filename,
 static void regitser_OnDemand() {
   std::vector<OnDemand> tests = {
       {"twitter", "Normal", {"search_metadata", "count"}, 100, true},
-      {"citm_catalog", "Fronter", {"events", "342742596", "id"}, 342742596, true},
+      {"citm_catalog",
+       "Fronter",
+       {"events", "342742596", "id"},
+       342742596,
+       true},
       {"twitter", "NotFound", {"NotFound"}},
   };
 
@@ -183,11 +187,12 @@ static void regitser_OnDemand() {
     auto file_path = std::string("testdata/") + t.file + ".json";
     t.json = get_json(file_path);
 
-#define REG_ONDEMAND(JSON) \
-{ \
-  auto name = std::string(t.file) + ("/" #JSON "OnDemand") + "_" + t.name.c_str(); \
-  benchmark::RegisterBenchmark(name.c_str(), BM_##JSON##OnDemand, t); \
-}
+#define REG_ONDEMAND(JSON)                                                   \
+  {                                                                          \
+    auto name =                                                              \
+        std::string(t.file) + ("/" #JSON "OnDemand") + "_" + t.name.c_str(); \
+    benchmark::RegisterBenchmark(name.c_str(), BM_##JSON##OnDemand, t);      \
+  }
     REG_ONDEMAND(Sonic);
     REG_ONDEMAND(RapidjsonSax);
     REG_ONDEMAND(SIMDjson);
@@ -213,27 +218,27 @@ int main(int argc, char **argv) {
         json.first.string(), json.second);                           \
   } while (0)
 
-#define ADD_BMK(METHOD)                                        \
-  do {                                                         \
-    for (const auto &json : jsons) {                           \
-      ADD_JSON_BMK(SonicDyn, METHOD);                          \
-      ADD_JSON_BMK(Rapidjson, METHOD);                         \
-      ADD_JSON_BMK(YYjson, METHOD);                            \
-      ADD_JSON_BMK(SIMDjson, METHOD);                          \
-    }                                                          \
+#define ADD_BMK(METHOD)                \
+  do {                                 \
+    for (const auto &json : jsons) {   \
+      ADD_JSON_BMK(SonicDyn, METHOD);  \
+      ADD_JSON_BMK(Rapidjson, METHOD); \
+      ADD_JSON_BMK(YYjson, METHOD);    \
+      ADD_JSON_BMK(SIMDjson, METHOD);  \
+    }                                  \
   } while (0)
 
   ADD_BMK(Decode);
   ADD_BMK(Encode);
   // ADD_BMK(Stat);
   // ADD_BMK(Find);
-  do {                                 
-    for (const auto &json : jsons) {   
-      ADD_JSON_BMK(SonicDyn, Stat);  
-      ADD_JSON_BMK(SonicDyn, Find);  
-      ADD_JSON_BMK(Rapidjson, Stat); 
-      ADD_JSON_BMK(Rapidjson, Find); 
-    }                                  
+  do {
+    for (const auto &json : jsons) {
+      ADD_JSON_BMK(SonicDyn, Stat);
+      ADD_JSON_BMK(SonicDyn, Find);
+      ADD_JSON_BMK(Rapidjson, Stat);
+      ADD_JSON_BMK(Rapidjson, Find);
+    }
   } while (0);
 
   benchmark::RunSpecifiedBenchmarks();

@@ -33,7 +33,7 @@ class YYjsonParseResult
   yyjson_doc *doc;
   // yyjson_val *root;
 
-  YYjsonParseResult(std::string_view json) {(void)json;}
+  YYjsonParseResult(std::string_view json) { (void)json; }
   ~YYjsonParseResult() { yyjson_doc_free(doc); }
 
   bool contains_impl(std::string_view key) const {
@@ -58,7 +58,10 @@ class YYjsonParseResult
     return true;
   }
 
-  bool find_impl(DocStat &stat) const { (void)stat; return true; }
+  bool find_impl(DocStat &stat) const {
+    (void)stat;
+    return true;
+  }
 
  private:
   void GetStat(yyjson_val *val, DocStat &stat) const {
@@ -79,8 +82,7 @@ class YYjsonParseResult
     if (!val) return;
     if (yyjson_is_arr(val)) {
       stat.arrays++;
-      if (depth > stat.depth)
-        stat.depth = depth;
+      if (depth > stat.depth) stat.depth = depth;
       // not safe
       size_t idx, max;
       yyjson_val *tmp;
@@ -92,8 +94,7 @@ class YYjsonParseResult
       }
     } else if (yyjson_is_obj(val)) {
       stat.objects++;
-      if (depth > stat.depth)
-        stat.depth = depth;
+      if (depth > stat.depth) stat.depth = depth;
       // not safe
       size_t idx, max;
       yyjson_val *k, *v;

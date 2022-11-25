@@ -35,17 +35,29 @@ class cJsonParseResult
   cJsonParseResult(std::string_view json) { (void)json; }
   ~cJsonParseResult() { cJSON_Delete(json); }
 
-  bool contains_impl(std::string_view key) const { (void)key; return false; }
+  bool contains_impl(std::string_view key) const {
+    (void)key;
+    return false;
+  }
 
   bool stringfy_impl(cJsonStringResult &sr) const {
     sr.s = cJSON_PrintUnformatted(json);
     return sr.s != nullptr;
   }
 
-  bool prettify_impl(cJsonStringResult &sr) const { (void)sr;return false; }
+  bool prettify_impl(cJsonStringResult &sr) const {
+    (void)sr;
+    return false;
+  }
 
-  bool stat_impl(DocStat &stat) const { (void)stat; return true; }
-  bool find_impl(DocStat &stat) const { (void)stat; return true; }
+  bool stat_impl(DocStat &stat) const {
+    (void)stat;
+    return true;
+  }
+  bool find_impl(DocStat &stat) const {
+    (void)stat;
+    return true;
+  }
 };
 
 class cJson : public JsonBase<cJson, cJsonParseResult> {

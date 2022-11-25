@@ -21,6 +21,4 @@
 #include "gtest/gtest.h"
 #include "sonic/macro.h"
 
-TEST(Assert, Basic) {
-    ASSERT_DEATH(sonic_assert(0), ".*");
-}
+TEST(Assert, Basic) { ASSERT_DEATH(sonic_assert(0), ".*"); }
