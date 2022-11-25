@@ -69,14 +69,13 @@ static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
       target.AddMember(key, iter->value, alloc);
     } else {
       err = UpdateNodeLazy(match->value, iter->value, alloc);
-      if (err)
-        return err;
+      if (err) return err;
     }
   }
   return err;
 }
 
-} // namespace internal
+}  // namespace internal
 
 /**
  * @brief UpdateLazy will update the target json with the source json, and
@@ -113,4 +112,4 @@ static inline std::string UpdateLazy(StringView target, StringView source) {
   return std::string(wb.ToString(), wb.Size());
 }
 
-} // namespace sonic_json
+}  // namespace sonic_json

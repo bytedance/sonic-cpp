@@ -387,7 +387,7 @@ class DNode : public GenericNode<DNode, Allocator> {
     return *this;
   }
 
-  DNode &setRawImpl(const char *s, size_t len) {
+  DNode& setRawImpl(const char* s, size_t len) {
     this->destroy();
     this->raw.p = s;
     this->setLength(len, kRaw);
@@ -582,7 +582,7 @@ class DNode : public GenericNode<DNode, Allocator> {
     return const_cast<MemberIterator>(it);
   }
 
-  sonic_force_inline DNode &findValueImpl(StringView key) const noexcept {
+  sonic_force_inline DNode& findValueImpl(StringView key) const noexcept {
     auto m = findMemberImpl(key);
     if (m != this->MemberEnd()) {
       return m->value;
@@ -648,8 +648,7 @@ class DNode : public GenericNode<DNode, Allocator> {
     } else {
       m = memberBeginUnsafe();
       for (; m != memberEndUnsafe(); ++m)  // {
-        if (m->name.GetStringView() == key)
-          goto find;
+        if (m->name.GetStringView() == key) goto find;
 
       goto not_find;
     }
@@ -667,7 +666,7 @@ class DNode : public GenericNode<DNode, Allocator> {
         size_t pos = m - memberBeginUnsafe();
         // erase tail
         auto range =
-            map->equal_range(m->name.GetStringView()); // already moved.
+            map->equal_range(m->name.GetStringView());  // already moved.
         for (auto i = range.first; i != range.second; ++i) {
           if (i->second == this->Size() - 1) {
             map->erase(i);
