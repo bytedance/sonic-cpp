@@ -17,16 +17,15 @@
 #ifndef _ONDEMAND_H_
 #define _ONDEMAND_H_
 
-#include "rapidjson_sax.hpp"
-
 #include <benchmark/benchmark.h>
-#include <sonic/sonic.h>
 #include <simdjson.h>
+#include <sonic/sonic.h>
 
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "rapidjson_sax.hpp"
 
 struct OnDemand {
   std::string file;
@@ -54,12 +53,11 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
     lite.ParseOnDemand(data.json.data(), data.json.size(), path);
     get = lite.GetUint64();
   }
-  
+
   state.SetLabel(data.name);
   state.SetBytesProcessed(int64_t(state.iterations()) *
                           int64_t(data.json.size()));
 }
-
 
 static void BM_SIMDjsonOnDemand(benchmark::State& state, const OnDemand& data) {
   using namespace simdjson;
@@ -92,7 +90,8 @@ static void BM_SIMDjsonOnDemand(benchmark::State& state, const OnDemand& data) {
                           int64_t(data.json.size()));
 }
 
-static void BM_RapidjsonSaxOnDemand(benchmark::State& state, const OnDemand& data) {
+static void BM_RapidjsonSaxOnDemand(benchmark::State& state,
+                                    const OnDemand& data) {
   uint64_t get = 0;
   bool existed = RapidjsonSaxOnDemand(data.json, data.path, get);
   bool ok = existed == data.existed && get == data.value;
