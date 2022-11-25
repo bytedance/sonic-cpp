@@ -56,6 +56,3 @@ perf.data
 # GDB
 .gdbinit
 gdb.txt
-
-# Format
-.bytelinter
