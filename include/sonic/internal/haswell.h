@@ -36,12 +36,7 @@ sonic_force_inline int trailing_zeroes(uint64_t input_num) {
   // return (int)_tzcnt_u64(input_num);
   // but the generated code differs and might be less efficient?
   ////////
-#if sonic_has_builtin(__builtin_ctzll)
   return __builtin_ctzll(input_num);
-#else
-#error "!Not found __builtin_ctzll".
-  return 0;
-#endif
 }
 
 /* result might be undefined when input_num is zero */
@@ -55,32 +50,17 @@ sonic_force_inline uint64_t clear_lowest_bit(uint64_t input_num) {
 
 /* result might be undefined when input_num is zero */
 sonic_force_inline int leading_zeroes(uint64_t input_num) {
-#if sonic_has_builtin(__builtin_clzll)
   return __builtin_clzll(input_num);
-#else
-#error "!Not found __builtin_clzll".
-  return 0;
-#endif
 }
 
 sonic_force_inline long long int count_ones(uint64_t input_num) {
-#if sonic_has_builtin(__builtin_popcountll)
   return __builtin_popcountll(input_num);
-#else
-#error "!Not found __builtin_popcountll".
-  return 0;
-#endif
 }
 
 sonic_force_inline bool add_overflow(uint64_t value1, uint64_t value2,
                                      uint64_t *result) {
-#if sonic_has_builtin(__builtin_uaddll_overflow)
   return __builtin_uaddll_overflow(
       value1, value2, reinterpret_cast<unsigned long long *>(result));
-#else
-#error "!Not found __builtin_uaddll_overflow".
-  return false;
-#endif
 }
 
 sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {

@@ -26,12 +26,6 @@
 #define sonic_static_noinline static sonic_never_inline
 #define sonic_static_inline static sonic_force_inline
 
-#ifdef __has_builtin
-#define sonic_has_builtin(x) __has_builtin(x)
-#else
-#define sonic_has_builtin(x) (void)(x)
-#endif
-
 #ifdef SONIC_DEBUG
 #include <cassert>
 #include <cstdlib>
