@@ -1,6 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-common_copts = ['-msse4', '-mavx2', '-mbmi', '-mpclmul', '-mlzcnt']
+common_copts = ['-mavx2', '-mbmi', '-mpclmul']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 
 cc_library(
