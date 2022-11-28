@@ -16,11 +16,26 @@
 
 #pragma once
 
+#define SONICJSON_PADDING 64
+
+#define sonic_likely(v) (__builtin_expect((v), 1))
+#define sonic_align(s) __attribute__((aligned(s)))
+#define sonic_unlikely(v) (__builtin_expect((v), 0))
+#define sonic_force_inline inline __attribute__((always_inline))
+#define sonic_never_inline inline __attribute__((noinline))
+#define sonic_static_noinline static sonic_never_inline
+#define sonic_static_inline static sonic_force_inline
+
+#ifdef __has_builtin
+#define sonic_has_builtin(x) __has_builtin(x)
+#else
+#define sonic_has_builtin(x) (void)(x)
+#endif
+
+#ifdef SONIC_DEBUG
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
-#include <string>
-
 #define sonic_specific_assert(expr)                                      \
   do {                                                                   \
     if (!(expr)) {                                                       \
@@ -29,25 +44,11 @@
       std::abort();                                                      \
     }                                                                    \
   } while (0);
-
-#define SONICJSON_PADDING 64
-#define sonic_likely(v) (__builtin_expect((v), 1))
-#define sonic_align(s) __attribute__((aligned(s)))
-#define sonic_unlikely(v) (__builtin_expect((v), 0))
-#define sonic_force_inline inline __attribute__((always_inline))
-#define sonic_never_inline inline __attribute__((noinline))
-#define sonic_static_noinline static sonic_never_inline
-
-#ifdef SONIC_DEBUG
 #define sonic_assert(x) sonic_specific_assert(x)
 #elif defined(NDEBUG)
 #define sonic_assert(x) (void)(x)
 #else
+#include <cassert>
 #define sonic_assert(x) assert((x));
 #endif
 
-#ifdef SONIC_NHEADONLY  // Not Headonly
-#define sonic_static_inline
-#else  // Headonly
-#define sonic_static_inline static sonic_force_inline
-#endif
