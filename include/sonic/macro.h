@@ -45,3 +45,4 @@
 #include <cassert>
 #define sonic_assert(x) assert((x));
 #endif
+
