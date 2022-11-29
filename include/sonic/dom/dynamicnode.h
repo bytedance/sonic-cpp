@@ -588,6 +588,7 @@ class DNode : public GenericNode<DNode, Allocator> {
       return m->value;
     }
     static DNode tmp{};
+    tmp.SetNull();
     return tmp;
   }
 
