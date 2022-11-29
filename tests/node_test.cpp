@@ -314,6 +314,15 @@ TYPED_TEST(NodeTest, FindMember) {
     EXPECT_TRUE(obj["Unknown"].IsNull());
     EXPECT_TRUE(obj[std::string("False")].IsFalse());
   }
+
+  // Check return value always Null when provided key does'nt exist.
+  {
+    auto& value = obj["Unknown"];
+    EXPECT_TRUE(value.IsNull());
+    value.SetInt64(1);  // illed codes
+    auto& value1 = obj["Unknown"];
+    EXPECT_TRUE(value1.IsNull());
+  }
 }
 
 template <typename StringType, typename NodeType>
