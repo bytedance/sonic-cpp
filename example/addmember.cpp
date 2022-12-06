@@ -13,4 +13,4 @@ int main() {
   node.AddMember(NodeType("ConstKey"), NodeType("CopiedKey", alloc), alloc);
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 get_and_set.cpp -o get_and_set
+// g++ -I../include/ -march=haswell --std=c++11 get_and_set.cpp -o get_and_set

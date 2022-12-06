@@ -37,6 +37,39 @@ using JsonPointerTypes =
 
 TYPED_TEST_SUITE(JsonPointerTest, JsonPointerTypes);
 
+TYPED_TEST(JsonPointerTest, NodeConstructor) {
+  using JsonPointerType = TypeParam;
+  using JPNodeType = typename JsonPointerType::JsonPointerNodeType;
+
+  // string
+  { JPNodeType node("hi"); }
+  {
+    std::string hi = "hi";
+    JPNodeType node(hi);
+  }
+  { JPNodeType node(sonic_json::StringView("hi")); }
+  {
+    char hi[3] = "hi";
+    JPNodeType node(hi);
+  }
+
+  // number
+#define TEST_INIT_TYPE(type) \
+  { JPNodeType node((type)(0)); }
+  TEST_INIT_TYPE(int);
+  TEST_INIT_TYPE(unsigned int);
+  TEST_INIT_TYPE(int64_t);
+  TEST_INIT_TYPE(uint64_t);
+  TEST_INIT_TYPE(size_t);
+  TEST_INIT_TYPE(bool);
+
+  // MUST compile failed code here.
+  // TEST_INIT_TYPE(double);
+  // TEST_INIT_TYPE(float);
+  // TEST_INIT_TYPE(std::nullptr_t);
+  // { uint8_t hi[3] = "hi"; JPNodeType node(hi); }
+}
+
 TYPED_TEST(JsonPointerTest, Constructor) {
   using JsonPointerType = TypeParam;
 

@@ -20,5 +20,5 @@ int main() {
   }
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 check_parse_result.cpp -o
+// g++ -I../include/ -march=haswell --std=c++11 check_parse_result.cpp -o
 // check_parse_result

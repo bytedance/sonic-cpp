@@ -19,5 +19,5 @@ int main() {
   std::cout << wb.ToString() << std::endl;
   return 0;
 }
-// g++ -I../include/ -march=haswell --std=c++14 parse_and_serialize.cpp -o
+// g++ -I../include/ -march=haswell --std=c++11 parse_and_serialize.cpp -o
 // parse_and_serialize
