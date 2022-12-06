@@ -42,8 +42,7 @@ enum SonicError {
                               ///< object.
   kParseErrorArrIndexOutOfRange,  ///< ParseOnDemand: the target array index out
                                   ///< of range.
-  kParseErrorMismatchType,   ///< ParseOnDemand: try to find index in object or
-                             ///< find key in array.
+  kParseErrorMismatchType,   ///< ParseOnDemand: the target type is not matched.
   kSerErrorUnsupportedType,  ///< Serialize: DOM has invalid node type.
   kSerErrorInfinity,         ///< Serialize: DOM has inifinity number node.
   kSerErrorInvalidObjKey,    ///< Serialize: The type of object's key is not
@@ -77,7 +76,7 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kParseErrorArrIndexOutOfRange,
        "ParseOnDemand: the target array index out of range."},
       {kParseErrorMismatchType,
-       "ParseOnDemand: try to find index in object or find key in array."},
+       "ParseOnDemand: the target type is not matched."},
       {kSerErrorUnsupportedType, "Serialize: DOM has invalid node type."},
       {kSerErrorInfinity, "Serialize: DOM has inifinity number node."},
       {kSerErrorInvalidObjKey,

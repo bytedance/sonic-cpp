@@ -36,14 +36,15 @@ template <typename StringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
 class GenericJsonPointerNode {
  public:
   GenericJsonPointerNode() = delete;
+  GenericJsonPointerNode(std::nullptr_t) = delete;
   GenericJsonPointerNode(StringView str)
       : str_(str), num_(0), is_number_(false) {}
   GenericJsonPointerNode(const std::string& str)
       : str_(str), num_(0), is_number_(false) {}
   GenericJsonPointerNode(const char* str)
       : str_(str), num_(0), is_number_(false) {}
-  template <typename T,
-            std::enable_if_t<std::is_integral<T>::value, bool> = true>
+  template <typename T, typename std::enable_if<std::is_integral<T>::value,
+                                                bool>::type = true>
   GenericJsonPointerNode(T i)
       : str_(), num_(static_cast<int>(i)), is_number_(true) {}
 
@@ -158,5 +159,8 @@ using JsonPointer =
     GenericJsonPointer<SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>;
 using JsonPointerNode =
     GenericJsonPointerNode<SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>;
+
+using JsonPointerView = GenericJsonPointer<StringView>;
+using JsonPointerNodeView = GenericJsonPointerNode<StringView>;
 
 }  // namespace sonic_json
