@@ -41,3 +41,5 @@ int main() {
   }
   return 0;
 }
+// g++ -I../include/ -march=haswell --std=c++11 parseondemand.cpp -o
+// parseondemand
