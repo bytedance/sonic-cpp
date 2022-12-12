@@ -1,10 +1,6 @@
 # Usage
 Example for how to use Sonic-Cpp.
 
-## Requirement
-- C++14 or above and compiler which supports c++14.
-- The processors support AVX2 instrution.
-
 ## including Sonic-Cpp
 1. Copy all files under `include/` into your project inlcude path
 2. or using compiler option, such as `-I/path/to/sonic/include`.
