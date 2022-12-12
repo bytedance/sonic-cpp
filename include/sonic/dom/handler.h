@@ -21,6 +21,7 @@
 #include "sonic/dom/type.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
+#include "sonic/internal/haswell.h"
 
 namespace sonic_json {
 
@@ -149,15 +150,11 @@ class SAXHandler {
     size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
-      // Note: shallow copy here, because resource pointer is owned by the node
-      // itself, likely move. But the node from begin to end will never call
-      // dctor, so, we don't need to set null at here. And this is diffrent from
-      // move.
       size_t size = pairs * 2 * sizeof(NodeType);
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
                   size);
     } else {
       obj.setChildren(nullptr);
@@ -175,7 +172,7 @@ class SAXHandler {
       // As above note.
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
                   size);
     } else {
       arr.setChildren(nullptr);
@@ -245,7 +242,7 @@ class LazySAXHandler {
     if (count) {
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
+      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
                   size);
       stack_.Pop<NodeType>(count);
     } else {
@@ -262,7 +259,7 @@ class LazySAXHandler {
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
+      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
                   size);
       stack_.Pop<NodeType>(pairs * 2);
     } else {

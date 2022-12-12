@@ -81,6 +81,31 @@ sonic_force_inline bool is_ascii(const simd8x64<uint8_t> &input) {
   return input.reduce_or().is_ascii();
 }
 
+// xmemcpy_16n is only used for memcpy 16 * n
+sonic_force_inline void xmemcpy_16n(void* dst_, const void*  src_, size_t n) {
+  uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
+  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
+  size_t vn = n / 32;
+  for (size_t i = 0; i < vn / 4; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+  }
+  // has remained 1, 2, 3 * 32-bytes
+  switch (vn & 3) {
+    case 3: { simd256<uint8_t> s(src); s.store(dst); src += 32, dst += 32; }
+    case 2: { simd256<uint8_t> s(src); s.store(dst); src += 32, dst += 32; }
+    case 1: { simd256<uint8_t> s(src); s.store(dst); src += 32, dst += 32; }
+  }
+  // has remained 16 bytes
+  if (n & 31) { 
+    simd128<uint8_t> s(src);
+    s.store(dst);
+  }
+}
+
 }  // namespace haswell
 }  // namespace internal
 }  // namespace sonic_json
