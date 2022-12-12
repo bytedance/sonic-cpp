@@ -58,9 +58,9 @@ sonic_force_inline long long int count_ones(uint64_t input_num) {
 }
 
 sonic_force_inline bool add_overflow(uint64_t value1, uint64_t value2,
-                                     uint64_t *result) {
+                                     uint64_t* result) {
   return __builtin_uaddll_overflow(
-      value1, value2, reinterpret_cast<unsigned long long *>(result));
+      value1, value2, reinterpret_cast<unsigned long long*>(result));
 }
 
 sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
@@ -77,13 +77,13 @@ sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
 #endif
 }
 
-sonic_force_inline bool is_ascii(const simd8x64<uint8_t> &input) {
+sonic_force_inline bool is_ascii(const simd8x64<uint8_t>& input) {
   return input.reduce_or().is_ascii();
 }
 
 template <size_t ChunkSize>
 sonic_force_inline void xmemcpy(void* dst_, const void* src_, size_t chunks) {
-  return std::memcpy(dst_, src_, chunks * ChunkSize);
+  std::memcpy(dst_, src_, chunks * ChunkSize);
 }
 
 template <>
