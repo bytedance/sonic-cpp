@@ -30,8 +30,8 @@
 #ifndef __clang__
 #define sonic_fallthrough __attribute__((fallthrough))
 #else
-#define sonic_fallthrough 
-#endif 
+#define sonic_fallthrough
+#endif
 
 #endif
 
