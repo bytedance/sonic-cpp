@@ -723,6 +723,66 @@ class GenericNode {
   }
 
   /**
+   * @brief get specific node by json pointer. This is implemented by variable
+   *        argument.
+   * @retval nullptr get node failed
+   * @retval others success
+   * @note This method has better performance than JsonPointer when arguments
+   *       are string literal, such as obj.AtPointer("a", "b", "c"). However,
+   *       if arguments are string, please use JsonPointer.
+   */
+  sonic_force_inline NodeType* AtPointer() { return downCast(); }
+
+  sonic_force_inline const NodeType* AtPointer() const { return downCast(); }
+
+  template <typename... Args>
+  sonic_force_inline NodeType* AtPointer(size_t idx, Args... args) {
+    if (!IsArray()) {
+      return nullptr;
+    }
+    if (idx >= Size()) {
+      return nullptr;
+    }
+    return (*this)[idx].AtPointer(args...);
+  }
+
+  template <typename... Args>
+  sonic_force_inline const NodeType* AtPointer(size_t idx, Args... args) const {
+    if (!IsArray()) {
+      return nullptr;
+    }
+    if (idx >= Size()) {
+      return nullptr;
+    }
+    return (*this)[idx].AtPointer(args...);
+  }
+
+  template <typename... Args>
+  sonic_force_inline NodeType* AtPointer(StringView key, Args... args) {
+    if (!IsObject()) {
+      return nullptr;
+    }
+    auto m = FindMember(key);
+    if (m == MemberEnd()) {
+      return nullptr;
+    }
+    return m->value.AtPointer(args...);
+  }
+
+  template <typename... Args>
+  sonic_force_inline const NodeType* AtPointer(StringView key,
+                                               Args... args) const {
+    if (!IsObject()) {
+      return nullptr;
+    }
+    auto m = FindMember(key);
+    if (m == MemberEnd()) {
+      return nullptr;
+    }
+    return m->value.AtPointer(args...);
+  }
+
+  /**
    * @brief get specific node by json pointer(RFC 6901)
    * @tparam StringType json pointer string type, can use StringView to aovid
    *                    copying string.

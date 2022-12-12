@@ -363,6 +363,18 @@ TYPED_TEST(NodeTest, AtPointer) {
 
   AtPointerHelper<std::string>(obj);
   AtPointerHelper<sonic_json::StringView>(obj);
+
+  // Test Recursive AtPointer
+  {
+    EXPECT_TRUE(obj.AtPointer("Object", "New_object", "Double")->IsDouble());
+    EXPECT_TRUE(obj.AtPointer("Array", 0, "String")->IsString());
+    EXPECT_TRUE(obj.AtPointer(0) == nullptr);
+    EXPECT_TRUE(obj.AtPointer("Unknown") == nullptr);
+    EXPECT_TRUE(obj.AtPointer("Object", "Array", 1, "Double") == nullptr);
+    EXPECT_TRUE(obj.AtPointer("EArray", 0) == nullptr);
+    EXPECT_TRUE(obj.AtPointer("EArray", -1) == nullptr);
+    EXPECT_TRUE(obj.AtPointer("Object", 0) == nullptr);
+  }
 }
 
 TYPED_TEST(NodeTest, AddMember) {
