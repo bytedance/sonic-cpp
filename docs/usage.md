@@ -23,6 +23,10 @@ std::string json = "[1,2,3]";
 
 sonic_json::Document doc;
 doc.Parse(json);
+if (doc.HasParseError()) {
+  // error path
+  // If parse failed, the type of doc is null.
+}
 ```
 
 #### Serailizing to a string
@@ -42,7 +46,7 @@ Document also the root of JSON value tree. There is an allocator in Document,
 which one you should used to allocate memory for Node and Document.
 
 ### Find member in object
-There are two ways to find members: `operator[]` or `FindMember`. We recommand 
+There are two ways to find members: `operator[]` or `FindMember`. We recommend 
 using `FindMember`.
 ```c++
 #include "sonic/sonic.h"
@@ -55,25 +59,26 @@ AllocatorType alloc;
 // find member by key
 if (node.IsObject()) { // Note: CHECK NODE TYPE IS VERY IMPORTANT.
   const char* key = "key";
-  auto m = node.FindMember(key, std::strlen(key)); // recommand
+  auto m = node.FindMember(key); // recommended
   if (m != node.MemberEnd()) {
-    // do something
-  }
-
-  auto m = node.FindMember(key, std::strlen(key), alloc); // create a map to record k-v.
-  if (m != node.MemberEnd()) {
-    // do something
-  }
-
-  {
-    sonic_json::Node& value = node[key];
     // do something
   }
 }
-```
 
-A multimap will be created to acclerate find operation if `FindMember` has allocator 
-as argument. This map is maintained by object, user cannot access it directly.
+// Second method
+if (node.IsObject()) {
+  const char* key1 = "key1";
+  const char* key2 = "key2";
+  // You must sure that the keys are all existed.
+  sonic_json::Node& val = node[key1][key2];
+  // If key doesn't exist, operator[] will return reference to a static node
+  // which type is Null. You SHOULD NOT MODIFIY this static node. In this case,
+  // FindMember is better choice.
+  if (val.IsNull()) {
+    // error path
+  }
+}
+```
 
 ### Is\*, Get\* and Set\* Value
 ```c++
@@ -108,12 +113,12 @@ sonic_json::Document doc;
 auto& alloc = doc.GetAllocator();
 
 doc.SetObject();
-doc.AddMember(NodeType("key1", alloc), NodeType(1));
+doc.AddMember("key1", NodeType(1), alloc);
 
 {
   NodeType node;
   node.SetArray();
-  doc.AddMember(NodeType("key2",  alloc), std::move(node));
+  doc.AddMember("key2", std::move(node), alloc);
 }
 
 sonic_json::WriteBuffer wb;
