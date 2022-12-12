@@ -81,7 +81,7 @@ sonic_force_inline bool is_ascii(const simd8x64<uint8_t> &input) {
   return input.reduce_or().is_ascii();
 }
 
-// xmemcpy_16n is only used for memcpy 16 * n
+// xmemcpy_16n is only used for memcpy N 16-bytes(n = N * 16).
 sonic_force_inline void xmemcpy_16n(void* dst_, const void* src_, size_t n) {
   uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
   const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
@@ -99,17 +99,17 @@ sonic_force_inline void xmemcpy_16n(void* dst_, const void* src_, size_t n) {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-    }
+    } /* fallthrough; */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-    }
+    } /* fallthrough; */
     case 1: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-    }
+    } /* fallthrough; */
   }
   // has remained 16 bytes
   if (n & 31) {
