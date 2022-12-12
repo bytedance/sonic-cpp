@@ -19,9 +19,9 @@
 #include <string>
 
 #include "sonic/dom/type.h"
+#include "sonic/internal/haswell.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
-#include "sonic/internal/haswell.h"
 
 namespace sonic_json {
 
@@ -154,8 +154,8 @@ class SAXHandler {
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
-                  size);
+      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(),
+                                     (void *)(&obj + 1), size);
     } else {
       obj.setChildren(nullptr);
     }
@@ -172,8 +172,8 @@ class SAXHandler {
       // As above note.
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
-                  size);
+      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(),
+                                     (void *)(&arr + 1), size);
     } else {
       arr.setChildren(nullptr);
     }
@@ -242,8 +242,8 @@ class LazySAXHandler {
     if (count) {
       size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
-                  size);
+      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(),
+                                     (void *)(&arr + 1), size);
       stack_.Pop<NodeType>(count);
     } else {
       arr.setChildren(nullptr);
@@ -259,8 +259,8 @@ class LazySAXHandler {
       void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
           pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
-                  size);
+      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(),
+                                     (void *)(&obj + 1), size);
       stack_.Pop<NodeType>(pairs * 2);
     } else {
       obj.setChildren(nullptr);
