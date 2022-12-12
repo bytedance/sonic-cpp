@@ -105,14 +105,14 @@ sonic_force_inline void xmemcpy<32>(void* dst_, const void* src_,
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-      sonic_fallthrough;
     }
+    /* fall through */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-      sonic_fallthrough;
     }
+    /* fall through */
     case 1: {
       simd256<uint8_t> s(src);
       s.store(dst);
@@ -139,14 +139,14 @@ sonic_force_inline void xmemcpy<16>(void* dst_, const void* src_,
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-      sonic_fallthrough;
     }
+    /* fall through */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
-      sonic_fallthrough;
     }
+    /* fall through */
     case 1: {
       simd256<uint8_t> s(src);
       s.store(dst);

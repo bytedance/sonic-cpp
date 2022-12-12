@@ -25,7 +25,6 @@
 #define sonic_never_inline inline __attribute__((noinline))
 #define sonic_static_noinline static sonic_never_inline
 #define sonic_static_inline static sonic_force_inline
-#define sonic_fallthrough __attribute__((fallthrough))
 
 #ifdef SONIC_DEBUG
 #include <cassert>
