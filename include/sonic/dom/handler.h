@@ -151,10 +151,9 @@ class SAXHandler {
     size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
-      constexpr size_t CHUNK_SIZE = sizeof(MemberType);
       void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy<CHUNK_SIZE>(
+      internal::haswell::xmemcpy<sizeof(MemberType)>(
           (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
     } else {
       obj.setChildren(nullptr);
@@ -169,9 +168,8 @@ class SAXHandler {
     size_t old = arr.o.next.ofs;
     arr.setLength(count, kArray);
     if (count) {
-      constexpr size_t CHUNK_SIZE = sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy<CHUNK_SIZE>(
+      internal::haswell::xmemcpy<sizeof(NodeType)>(
           (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
     } else {
       arr.setChildren(nullptr);
@@ -240,9 +238,8 @@ class LazySAXHandler {
     NodeType &arr = *stack_.template Begin<NodeType>();
     arr.setLength(count, kArray);
     if (count) {
-      constexpr size_t CHUNK_SIZE = sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy<CHUNK_SIZE>(
+      internal::haswell::xmemcpy<sizeof(NodeType)>(
           (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
       stack_.Pop<NodeType>(count);
     } else {
@@ -255,10 +252,9 @@ class LazySAXHandler {
     NodeType &obj = *stack_.template Begin<NodeType>();
     obj.setLength(pairs, kObject);
     if (pairs) {
-      constexpr size_t CHUNK_SIZE = sizeof(MemberType);
       void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy<CHUNK_SIZE>(
+      internal::haswell::xmemcpy<sizeof(MemberType)>(
           (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
       stack_.Pop<MemberType>(pairs);
     } else {
