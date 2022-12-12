@@ -4,7 +4,9 @@ A fast JSON serializing & deserializing library, accelerated by SIMD.
 
 ## Requirement
 - c++11 or above
-- X86 platform and AVX2 instruction support
+- x86 platform with AVX2 instruction
+- GCC or LLVM compiler (not support MSVC compiler now)
+- Linux OS
 
 ## Features
 - Complete APIs for JSON value manipulation
