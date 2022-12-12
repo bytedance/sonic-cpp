@@ -81,12 +81,18 @@ sonic_force_inline bool is_ascii(const simd8x64<uint8_t> &input) {
   return input.reduce_or().is_ascii();
 }
 
-// xmemcpy_16n is only used for memcpy N 16-bytes(n = N * 16).
-sonic_force_inline void xmemcpy_16n(void* dst_, const void* src_, size_t n) {
+template <size_t ChunkSize>
+sonic_force_inline void xmemcpy(void* dst_, const void* src_, size_t chunks) {
+  return std::memcpy(dst_, src_, chunks * ChunkSize);
+}
+
+template <>
+sonic_force_inline void xmemcpy<32>(void* dst_, const void* src_,
+                                    size_t chunks) {
   uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
   const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
-  size_t vn = n / 32;
-  for (size_t i = 0; i < vn / 4; i++) {
+  size_t blocks = chunks / 4;
+  for (size_t i = 0; i < blocks; i++) {
     for (size_t j = 0; j < 4; j++) {
       simd256<uint8_t> s(src);
       s.store(dst);
@@ -94,28 +100,61 @@ sonic_force_inline void xmemcpy_16n(void* dst_, const void* src_, size_t n) {
     }
   }
   // has remained 1, 2, 3 * 32-bytes
-  switch (vn & 3) {
+  switch (chunks & 3) {
     case 3: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
       sonic_fallthrough;
-    } /* fallthrough; */
+    }
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
       sonic_fallthrough;
-    } /* fallthrough; */
+    }
     case 1: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+    }
+  }
+}
+
+template <>
+sonic_force_inline void xmemcpy<16>(void* dst_, const void* src_,
+                                    size_t chunks) {
+  uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
+  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
+  size_t blocks = chunks / 8;
+  for (size_t i = 0; i < blocks; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+  }
+  // has remained 1, 2, 3 * 32-bytes
+  switch ((chunks / 2) & 3) {
+    case 3: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
       sonic_fallthrough;
-    } /* fallthrough; */
+    }
+    case 2: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+      sonic_fallthrough;
+    }
+    case 1: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
   }
   // has remained 16 bytes
-  if (n & 31) {
+  if (chunks & 1) {
     simd128<uint8_t> s(src);
     s.store(dst);
   }

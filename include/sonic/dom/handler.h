@@ -32,6 +32,7 @@ template <typename NodeType>
 class SAXHandler {
  public:
   using Allocator = typename NodeType::AllocatorType;
+  using MemberType = typename NodeType::MemberNode;
 
   SAXHandler() = default;
   SAXHandler(Allocator &alloc) : alloc_(&alloc) {}
@@ -150,12 +151,11 @@ class SAXHandler {
     size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
-      size_t size = pairs * 2 * sizeof(NodeType);
-      void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
-          pairs, *alloc_);
+      constexpr size_t CHUNK_SIZE = sizeof(MemberType);
+      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(),
-                                     (void *)(&obj + 1), size);
+      internal::haswell::xmemcpy<CHUNK_SIZE>(
+          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
     } else {
       obj.setChildren(nullptr);
     }
@@ -169,11 +169,10 @@ class SAXHandler {
     size_t old = arr.o.next.ofs;
     arr.setLength(count, kArray);
     if (count) {
-      // As above note.
-      size_t size = count * sizeof(NodeType);
+      constexpr size_t CHUNK_SIZE = sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(),
-                                     (void *)(&arr + 1), size);
+      internal::haswell::xmemcpy<CHUNK_SIZE>(
+          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
     } else {
       arr.setChildren(nullptr);
     }
@@ -214,6 +213,7 @@ template <typename NodeType>
 class LazySAXHandler {
  public:
   using Allocator = typename NodeType::AllocatorType;
+  using MemberType = typename NodeType::MemberNode;
 
   LazySAXHandler() = delete;
   LazySAXHandler(Allocator &alloc) : alloc_(&alloc) {}
@@ -240,10 +240,10 @@ class LazySAXHandler {
     NodeType &arr = *stack_.template Begin<NodeType>();
     arr.setLength(count, kArray);
     if (count) {
-      size_t size = count * sizeof(NodeType);
+      constexpr size_t CHUNK_SIZE = sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::haswell::xmemcpy_16n((void *)arr.getArrChildrenFirstUnsafe(),
-                                     (void *)(&arr + 1), size);
+      internal::haswell::xmemcpy<CHUNK_SIZE>(
+          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
       stack_.Pop<NodeType>(count);
     } else {
       arr.setChildren(nullptr);
@@ -255,13 +255,12 @@ class LazySAXHandler {
     NodeType &obj = *stack_.template Begin<NodeType>();
     obj.setLength(pairs, kObject);
     if (pairs) {
-      size_t size = pairs * 2 * sizeof(NodeType);
-      void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
-          pairs, *alloc_);
+      constexpr size_t CHUNK_SIZE = sizeof(MemberType);
+      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      internal::haswell::xmemcpy_16n((void *)obj.getObjChildrenFirstUnsafe(),
-                                     (void *)(&obj + 1), size);
-      stack_.Pop<NodeType>(pairs * 2);
+      internal::haswell::xmemcpy<CHUNK_SIZE>(
+          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+      stack_.Pop<MemberType>(pairs);
     } else {
       obj.setChildren(nullptr);
     }
