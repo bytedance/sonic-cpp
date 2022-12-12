@@ -16,9 +16,9 @@
 // Modifications are Copyright 2022 ByteDance Authors.
 
 #pragma once
-#include <x86intrin.h>
 
 #include "sonic/internal/simd.h"
+#include "sonic/macro.h"
 
 namespace sonic_json {
 namespace internal {
@@ -99,16 +99,19 @@ sonic_force_inline void xmemcpy_16n(void* dst_, const void* src_, size_t n) {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
+      sonic_fallthrough;
     } /* fallthrough; */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
+      sonic_fallthrough;
     } /* fallthrough; */
     case 1: {
       simd256<uint8_t> s(src);
       s.store(dst);
       src += 32, dst += 32;
+      sonic_fallthrough;
     } /* fallthrough; */
   }
   // has remained 16 bytes

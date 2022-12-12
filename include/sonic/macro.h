@@ -26,6 +26,15 @@
 #define sonic_static_noinline static sonic_never_inline
 #define sonic_static_inline static sonic_force_inline
 
+#ifndef sonic_fallthrough
+#ifndef __clang__
+#define sonic_fallthrough __attribute__((fallthrough))
+#else
+#define sonic_fallthrough 
+#endif 
+
+#endif
+
 #ifdef SONIC_DEBUG
 #include <cassert>
 #include <cstdlib>
