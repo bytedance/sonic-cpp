@@ -79,7 +79,7 @@ static const uint16_t kVecShiftPowers[8] sonic_align(16) = {
 // The converted vector is { a, b, c, d, e, f, g, h }
 sonic_force_inline __m128i UtoaSSE(uint32_t num) {
   // num(abcdefgh) -> v04 = vector{abcd, efgh, 0, 0, 0, 0, 0, 0}
-  __m128i v00 = _mm_cvtsi32_si128(num);
+  __m128i v00 = _mm_cvtsi32_si128(static_cast<int>(num));
   __m128i v01 = _mm_mul_epu32(v00, as_m128v(kVec4xDiv10k));
   __m128i v02 = _mm_srli_epi64(v01, 45);
   __m128i v03 = _mm_mul_epu32(v02, as_m128v(kVec4x10k));
