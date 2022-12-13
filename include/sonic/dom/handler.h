@@ -19,6 +19,7 @@
 #include <string>
 
 #include "sonic/dom/type.h"
+#include "sonic/internal/haswell.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
 
@@ -31,6 +32,7 @@ template <typename NodeType>
 class SAXHandler {
  public:
   using Allocator = typename NodeType::AllocatorType;
+  using MemberType = typename NodeType::MemberNode;
 
   SAXHandler() = default;
   SAXHandler(Allocator &alloc) : alloc_(&alloc) {}
@@ -149,16 +151,10 @@ class SAXHandler {
     size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
     if (pairs) {
-      // Note: shallow copy here, because resource pointer is owned by the node
-      // itself, likely move. But the node from begin to end will never call
-      // dctor, so, we don't need to set null at here. And this is diffrent from
-      // move.
-      size_t size = pairs * 2 * sizeof(NodeType);
-      void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
-          pairs, *alloc_);
+      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
-                  size);
+      internal::haswell::xmemcpy<sizeof(MemberType)>(
+          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
     } else {
       obj.setChildren(nullptr);
     }
@@ -172,11 +168,9 @@ class SAXHandler {
     size_t old = arr.o.next.ofs;
     arr.setLength(count, kArray);
     if (count) {
-      // As above note.
-      size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
-                  size);
+      internal::haswell::xmemcpy<sizeof(NodeType)>(
+          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
     } else {
       arr.setChildren(nullptr);
     }
@@ -217,6 +211,7 @@ template <typename NodeType>
 class LazySAXHandler {
  public:
   using Allocator = typename NodeType::AllocatorType;
+  using MemberType = typename NodeType::MemberNode;
 
   LazySAXHandler() = delete;
   LazySAXHandler(Allocator &alloc) : alloc_(&alloc) {}
@@ -243,10 +238,9 @@ class LazySAXHandler {
     NodeType &arr = *stack_.template Begin<NodeType>();
     arr.setLength(count, kArray);
     if (count) {
-      size_t size = count * sizeof(NodeType);
       arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      std::memcpy((void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1),
-                  size);
+      internal::haswell::xmemcpy<sizeof(NodeType)>(
+          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
       stack_.Pop<NodeType>(count);
     } else {
       arr.setChildren(nullptr);
@@ -258,13 +252,11 @@ class LazySAXHandler {
     NodeType &obj = *stack_.template Begin<NodeType>();
     obj.setLength(pairs, kObject);
     if (pairs) {
-      size_t size = pairs * 2 * sizeof(NodeType);
-      void *mem = obj.template containerMalloc<typename NodeType::MemberNode>(
-          pairs, *alloc_);
+      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       obj.setChildren(mem);
-      std::memcpy((void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1),
-                  size);
-      stack_.Pop<NodeType>(pairs * 2);
+      internal::haswell::xmemcpy<sizeof(MemberType)>(
+          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+      stack_.Pop<MemberType>(pairs);
     } else {
       obj.setChildren(nullptr);
     }

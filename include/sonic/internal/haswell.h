@@ -16,9 +16,9 @@
 // Modifications are Copyright 2022 ByteDance Authors.
 
 #pragma once
-#include <x86intrin.h>
 
 #include "sonic/internal/simd.h"
+#include "sonic/macro.h"
 
 namespace sonic_json {
 namespace internal {
@@ -58,9 +58,9 @@ sonic_force_inline long long int count_ones(uint64_t input_num) {
 }
 
 sonic_force_inline bool add_overflow(uint64_t value1, uint64_t value2,
-                                     uint64_t *result) {
+                                     uint64_t* result) {
   return __builtin_uaddll_overflow(
-      value1, value2, reinterpret_cast<unsigned long long *>(result));
+      value1, value2, reinterpret_cast<unsigned long long*>(result));
 }
 
 sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
@@ -77,8 +77,87 @@ sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
 #endif
 }
 
-sonic_force_inline bool is_ascii(const simd8x64<uint8_t> &input) {
+sonic_force_inline bool is_ascii(const simd8x64<uint8_t>& input) {
   return input.reduce_or().is_ascii();
+}
+
+template <size_t ChunkSize>
+sonic_force_inline void xmemcpy(void* dst_, const void* src_, size_t chunks) {
+  std::memcpy(dst_, src_, chunks * ChunkSize);
+}
+
+template <>
+sonic_force_inline void xmemcpy<32>(void* dst_, const void* src_,
+                                    size_t chunks) {
+  uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
+  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
+  size_t blocks = chunks / 4;
+  for (size_t i = 0; i < blocks; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+  }
+  // has remained 1, 2, 3 * 32-bytes
+  switch (chunks & 3) {
+    case 3: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+    /* fall through */
+    case 2: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+    /* fall through */
+    case 1: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+    }
+  }
+}
+
+template <>
+sonic_force_inline void xmemcpy<16>(void* dst_, const void* src_,
+                                    size_t chunks) {
+  uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
+  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
+  size_t blocks = chunks / 8;
+  for (size_t i = 0; i < blocks; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+  }
+  // has remained 1, 2, 3 * 32-bytes
+  switch ((chunks / 2) & 3) {
+    case 3: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+    /* fall through */
+    case 2: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+    /* fall through */
+    case 1: {
+      simd256<uint8_t> s(src);
+      s.store(dst);
+      src += 32, dst += 32;
+    }
+  }
+  // has remained 16 bytes
+  if (chunks & 1) {
+    simd128<uint8_t> s(src);
+    s.store(dst);
+  }
 }
 
 }  // namespace haswell
