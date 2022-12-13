@@ -10,7 +10,7 @@ int main() {
   Allocator alloc;
 
   node.SetObject();
-  node.AddMember(NodeType("ConstKey"), NodeType("CopiedKey", alloc), alloc);
+  node.AddMember("Key", NodeType("Value", alloc), alloc);
   return 0;
 }
 // g++ -I../include/ -march=haswell --std=c++11 get_and_set.cpp -o get_and_set
