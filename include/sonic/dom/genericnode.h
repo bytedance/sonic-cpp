@@ -48,19 +48,37 @@ class MemberNodeT {
 template <typename derived_t>
 struct NodeTraits;
 
+template <bool UpdateExistentKey, typename T, typename S, typename Allocator,
+          typename>
+static inline void Update(T&, const S&, Allocator&);
+//
+// template <typename T, typename S, typename Allocator, bool=false>
+// static inline void Merge(T&, const S&, Allocator&);
+
+// Copied from http://coliru.stacked-crooked.com/a/8dd19d21817cadf5
+template <template <typename...> class C, typename... Ts>
+std::true_type is_base_of_template_impl(const C<Ts...>*);
+
+template <template <typename...> class C>
+std::false_type is_base_of_template_impl(...);
+
+template <typename T, template <typename...> class C>
+using is_base_of_template =
+    decltype(is_base_of_template_impl<C>(std::declval<T*>()));
+
 /**
  * @brief Basic class represent a json value.
  * @tparam tmpalte <typename> class Node  Derived class.
  * @tparam Allocator  Allocator type for derived class, which allocating memory
  * for container and string.
  */
-template <template <typename> class Node, typename Allocator>
+template <typename NodeType>
 class GenericNode {
  public:
-  using NodeType = Node<Allocator>;  ///< Derived class type.
   using alloc_type =
       typename NodeTraits<NodeType>::alloc_type;  ///< Dervied class allocator
                                                   ///< type.
+  using Allocator = alloc_type;
   using MemberNode =
       typename NodeTraits<NodeType>::MemberNode;  ///< Derived class key-value
                                                   ///< pair struct.
@@ -1041,6 +1059,34 @@ class GenericNode {
     return err == kErrorNone ? wb.ToString() : "";
   }
 
+  /**
+   * @brief Json Merge patch, rfc7386
+   */
+  template <typename PatchType,
+            typename std::enable_if<
+                is_base_of_template<PatchType, GenericNode>::value,
+                bool>::type = false>
+  void MergePatch(const PatchType& patch, Allocator& alloc) {
+    return Merge(*(downCast()), patch, alloc);
+  }
+
+  /**
+   * @brief updates from another object. Copying non-existent key. Updating\n
+   *        existent key \b deeply if template parameter is true.
+   * @tparam UpdateExistentKey overwritting existent key
+   * @note cases: \n
+   *   {"a":"b"} .UPDATE. {"a":"c} => {"a":"c"} (UpdateExistedKey == true) \n
+   *   {"a":"b"} .UPDATE. {"a":"c} => {"a":"b"} (UpdateExistedKey == false) \n
+   *   {"a":"b"} .UPDATE. {"b":"c} => {"a":"c", "b":"c"} \n
+   *   {"a":{"bb":1}} .UPDATE. {"a":{"cc":1}} => {"a":{"bb":1, "cc":1}}
+   */
+  template <bool UpdateExistentKey = true, typename S,
+            typename std::enable_if<is_base_of_template<S, GenericNode>::value,
+                                    bool>::type = false>
+  void UpdateFrom(const S& src, Allocator& alloc) {
+    return Update<UpdateExistentKey>(*(downCast()), src, alloc);
+  }
+
  protected:
   sonic_force_inline NodeType* next() noexcept {
     return downCast()->nextImpl();
@@ -1179,5 +1225,122 @@ class GenericNode {
     return const_cast<NodeType*>(re);
   }
 };
+
+/*
+ * @brief merge two json, rfc 7386
+ * @param alloc Memory Allocator for original
+ */
+template <
+    typename T, typename P, typename Allocator,
+    typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
+                                is_base_of_template<P, GenericNode>::value,
+                            bool>::type = false>
+static inline void Merge(T& original, const P& patch, Allocator& alloc) {
+  if (patch.IsObject()) {
+    if (!original.IsObject()) {
+      original.SetObject();
+    }
+    original.CreateMap(alloc);
+    for (auto itr = patch.MemberBegin(), e = patch.MemberEnd(); itr != e;
+         ++itr) {
+      if (itr->value.IsNull()) {
+        original.RemoveMember(itr->name.GetStringView());
+      } else {
+        auto m = original.FindMember(itr->name.GetStringView());
+        if (m == original.MemberEnd()) {
+          T null_node{};
+          auto n =
+              original.AddMember(itr->name.GetStringView(), null_node, alloc);
+          Merge(n->value, itr->value, alloc);
+        } else {
+          Merge(m->value, itr->value, alloc);
+        }
+      }
+    }
+  } else {
+    original.CopyFrom(patch, alloc);
+  }
+}
+
+template <
+    bool UpdateExistentKey = true, typename T, typename S, typename Allocator,
+    typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
+                                is_base_of_template<S, GenericNode>::value,
+                            bool>::type = false>
+static inline void Update(T& original, const S& src, Allocator& alloc) {
+  if (src.IsObject()) {
+    if (!original.IsObject()) {
+      original.CopyFrom(src, alloc);
+    } else {
+      original.CreateMap(alloc);
+      for (auto itr = src.MemberBegin(), e = src.MemberEnd(); itr != e; ++itr) {
+        auto m = original.FindMember(itr->name.GetStringView());
+        if (m == original.MemberEnd()) {
+          T new_node(itr->value, alloc);
+          original.AddMember(itr->name.GetStringView(), new_node, alloc);
+        } else {
+          Update<UpdateExistentKey>(m->value, itr->value, alloc);
+        }
+      }
+    }
+  } else if (UpdateExistentKey) {
+    original.CopyFrom(src, alloc);
+  }
+}
+
+/*
+ * @brief diff from one json to another
+ * @prarm alloc Memory allocator for patch
+ */
+template <
+    typename T, typename U, typename V, typename Allocator,
+    typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
+                                is_base_of_template<U, GenericNode>::value &&
+                                is_base_of_template<V, GenericNode>::value,
+                            bool>::type = false>
+static bool Diff(const T& from, const U& to, V& patch, Allocator& alloc) {
+  if (from.GetType() != to.GetType()) {
+    if (from.IsString() && from == to) {
+      return false;
+    }
+    patch.CopyFrom(to, alloc);
+    return true;
+  }
+
+  bool is_diff = false;
+  switch (from.GetType()) {
+    case kObject:
+      patch.SetObject();
+      for (auto it = from.MemberBegin(), e = from.MemberEnd(); it != e; ++it) {
+        auto m = to.FindMember(it->name.GetStringView());
+        if (m != to.MemberEnd()) {
+          V tmp;
+          bool b = Diff(it->value, m->value, tmp, alloc);
+          if (b) {
+            is_diff = true;
+            patch.AddMember(it->name.GetStringView(), tmp, alloc);
+          }
+        } else {    // target doesn't have this key
+          V tmp{};  // Null
+          patch.AddMember(it->name.GetStringView(), tmp, alloc);
+        }
+      }
+      for (auto it = to.MemberBegin(), e = to.MemberEnd(); it != e; ++it) {
+        auto m = from.FindMember(it->name.GetStringView());
+        if (m == from.MemberEnd()) {  // only need add non-existed key to patch
+          V tmp{};
+          tmp.CopyFrom(it->value, alloc);
+          patch.AddMember(it->name.GetStringView(), tmp, alloc);
+        }
+      }
+      break;
+    default:
+      if (from != to) {
+        patch.CopyFrom(to, alloc);
+        is_diff = true;
+      }
+  }
+  return is_diff;
+}
 
 }  // namespace sonic_json

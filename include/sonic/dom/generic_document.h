@@ -260,4 +260,22 @@ class GenericDocument : public NodeType {
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
 
+template <typename ReturnDocType, typename T, typename U>
+static ReturnDocType Diff(const T& from, const U& to) {
+  ReturnDocType ret;
+  using RetNodeType = typename ReturnDocType::NodeType;
+  Diff(from, to, (RetNodeType&)(ret), ret.GetAllocator());
+
+  return ret; /* RVO */
+}
+
+template <typename T, typename U>
+static Document Diff(const T& from, const U& to) {
+  Document ret;
+  using RetNodeType = typename Document::NodeType;
+  Diff(from, to, (RetNodeType&)(ret), ret.GetAllocator());
+
+  return ret; /* RVO */
+}
+
 }  // namespace sonic_json
