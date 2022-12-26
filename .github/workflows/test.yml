@@ -30,7 +30,7 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v1
         with:
-          bazel-version: "6.0.0"
+          bazel-version: "latest"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'
@@ -74,7 +74,7 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v1
         with:
-          bazel-version: "6.0.0"
+          bazel-version: "latest"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'
