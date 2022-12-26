@@ -13,14 +13,14 @@ jobs:
           - '15'
 
     steps:
+      - uses: actions/checkout@v3
+
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: ${{ matrix.llvm_version }}
 
       - uses: bazelbuild/setup-bazelisk@v2
-
-      - uses: actions/checkout@v3
 
       - name: Run Unittest
         run : |
