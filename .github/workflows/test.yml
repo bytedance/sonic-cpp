@@ -9,7 +9,7 @@ jobs:
       matrix:
         llvm_version:
           - '11'
-          - '13'
+          - '13.0.0'
           - '15'
         tool:
           - 'cmake'
