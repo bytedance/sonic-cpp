@@ -1,12 +1,29 @@
 name: linux-clang
 on: [push, pull_request]
+
 jobs:
-  build:
+  unittest:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm_version:
+          - '11'
+          - '12'
+          - '13'
+          - '14'
+          - '15'
+
     steps:
       - uses: actions/checkout@v3
-      - name: Install clang13
-        run : sudo apt-get install -y clang-13 clang++-13
-      - name: Run Unittest in Clang13
-        run : export CC=clang-13 && export CXX=clang++-13 && source ./scripts/unittest.sh -c
 
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: ${{ matrix.llvm_version }}
+
+      - name: Run Unittest
+        run : |
+          export CC=clang
+          export CXX=clang++
+          bash ./scripts/unittest.sh -c
