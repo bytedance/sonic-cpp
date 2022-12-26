@@ -2,8 +2,8 @@ name: linux-clang
 on: [push, pull_request]
 
 jobs:
-  unittest-llvm:
-    runs-on: ubuntu-22.04
+  test-llvm:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -11,6 +11,9 @@ jobs:
           - '11'
           - '13'
           - '15'
+        tool:
+          - 'cmake'
+          - 'bazel'
     env:
       CC: clang
       CXX: clang++
@@ -23,8 +26,24 @@ jobs:
         with:
           version: ${{ matrix.llvm_version }}
 
-      - uses: bazelbuild/setup-bazelisk@v2
+      - name: Setup bazel
+        if: matrix.tool == 'bazel'
+        uses: jwlawson/actions-setup-bazel@v1
+        with:
+          bazel-version: "latest"
 
-      - name: Run Unittest Use Bazel
+      - name: Setup cmake
+        if: matrix.tool == 'cmake'
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: "latest"
+
+      - name: Run Test Use Bazel
+        if: matrix.tool == 'bazel'
         run : |
           bash ./scripts/unittest.sh -c
+
+      - name: Run Test Use CMake
+        if: matrix.tool == 'cmake'
+        run: |
+          bash ./scripts/run_cmake.sh
