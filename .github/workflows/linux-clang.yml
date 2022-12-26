@@ -2,7 +2,7 @@ name: linux-clang
 on: [push, pull_request]
 
 jobs:
-  unittest:
+  unittest-llvm:
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -11,6 +11,9 @@ jobs:
           - '11'
           - '13'
           - '15'
+    env:
+      CC: clang
+      CXX: clang++
 
     steps:
       - uses: actions/checkout@v3
@@ -22,8 +25,6 @@ jobs:
 
       - uses: bazelbuild/setup-bazelisk@v2
 
-      - name: Run Unittest
+      - name: Run Unittest Use Bazel
         run : |
-          export CC=clang
-          export CXX=clang++
           bash ./scripts/unittest.sh -c
