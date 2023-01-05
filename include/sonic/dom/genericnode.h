@@ -938,10 +938,10 @@ class GenericNode {
   }
 
   /**
-   * @brief Reserve array capacity if NodeType support. Otherwise do nothing.
+   * @brief Reserve arrat capacity if NodeType support. Otherwise do nothing.
    * @param new_cap Expected array capacity, unit is node
    * @param alloc Allocator reference that maintain array memory.
-   * @return NodeType& Reference to this array to support streaming APIs
+   * @return NodeType& Reference to this object to support streaming APIs
    */
   // TODO: Check when new_cap less than size() or capacity @Xie Gengxin
   NodeType& Reserve(size_t new_cap, alloc_type& alloc) {
