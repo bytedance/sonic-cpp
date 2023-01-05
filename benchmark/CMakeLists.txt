@@ -10,7 +10,7 @@ include("${PROJECT_SOURCE_DIR}/cmake/external.cmake")
 
 add_executable(bench "${BENCH_SRC}")
 
-set(EP_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/externl/)
+set(EP_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/)
 include(ExternalProject)
 ExternalProject_Add(
     google_benchmark

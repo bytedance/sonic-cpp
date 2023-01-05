@@ -18,13 +18,14 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(gflags)
 
+set(SIMDJSON_AVX512_ALLOWED OFF)
 FetchContent_Declare(
     simdjson
     GIT_REPOSITORY https://github.com/simdjson/simdjson.git
-    GIT_TAG  v1.0.2
+    GIT_TAG  master
     GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(simdjson)
-target_compile_definitions(simdjson PUBLIC SIMDJSON_EXCEPTIONS=OFF)
+
 
 FetchContent_Declare(
     rapidjson
