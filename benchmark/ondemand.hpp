@@ -59,31 +59,33 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
                           int64_t(data.json.size()));
 }
 
+static inline bool SIMDjsonOnDemand(simdjson::ondemand::parser& parser,
+                                    simdjson::padded_string& json_pad,
+                                    const std::vector<std::string_view>& path,
+                                    uint64_t& val) {
+  auto dom = parser.iterate(json_pad);
+  auto value = dom.get_value();
+  for (const auto key : path) {
+    value = value.find_field(key);
+  }
+  auto err = value.get(val);
+  return err == simdjson::SUCCESS;
+}
+
 static void BM_SIMDjsonOnDemand(benchmark::State& state, const OnDemand& data) {
   using namespace simdjson;
   ondemand::parser parser;
-  uint64_t u = 0;
-  error_code err = SUCCESS;
-
+  uint64_t get = 0;
   auto json_pad = padded_string(data.json);
-  auto dom = parser.iterate(json_pad);
-  auto value = dom.get_value();
-  for (const auto key : data.path) {
-    value = value[key];
-  }
-  err = value.get(u);
-  bool ok = (!err) == data.existed && u == data.value;
+  bool existed = SIMDjsonOnDemand(parser, json_pad, data.path, get);
+  bool ok = existed == data.existed && get == data.value;
   if (!ok) {
     state.SkipWithError("Verify failed");
     return;
   }
 
   for (auto _ : state) {
-    auto value = parser.iterate(json_pad).get_value();
-    for (const auto key : data.path) {
-      value = value[key];
-    }
-    err = value.get(u);
+    SIMDjsonOnDemand(parser, json_pad, data.path, get);
   }
   state.SetLabel(data.name);
   state.SetBytesProcessed(int64_t(state.iterations()) *

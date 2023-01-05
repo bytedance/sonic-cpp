@@ -30,7 +30,7 @@ new_git_repository(
 
 new_git_repository(
     name = "simdjson",
-    commit = "203c03e90b73a32e641ad94f4bc4ab267ac0b6d5",
+    branch = "master",
     build_file = "//:bazel/simdjson.BUILD",
     remote = "https://github.com/simdjson/simdjson.git",
 )
