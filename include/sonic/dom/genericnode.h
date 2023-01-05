@@ -320,14 +320,6 @@ class GenericNode {
   sonic_force_inline bool IsContainer() const noexcept {
     return (t.t & kContainerMask) == static_cast<uint8_t>(kContainerMask);
   }
-  /**
-   * @brief         Check this node is null, bool, string, number, and EMPTY
-   * array/object.
-   * @return bool   is single
-   */
-  sonic_force_inline bool IsSingle() const noexcept {
-    return (IsContainer() && Empty()) || !IsContainer();
-  }
 
   /**
    * @brief         Get boolean value of this node.
@@ -369,13 +361,7 @@ class GenericNode {
   sonic_force_inline TypeFlag GetType() const noexcept {
     return static_cast<TypeFlag>(t.t & kSubTypeMask);
   }
-  /**
-   * @brief         Get 8-bits type info
-   * @return TypeFlag
-   */
-  sonic_force_inline TypeFlag GetFullType() const noexcept {
-    return static_cast<TypeFlag>(t.t);
-  }
+
   /**
    * @brief         Get int64 data.
    * @return int64_t
