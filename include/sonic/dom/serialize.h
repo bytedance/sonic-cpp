@@ -54,8 +54,8 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   internal::Stack stk;
   ParentCtx* parent;
 
-  wb.stack_.Clear();
-  wb.stack_.Reserve(estimate);
+  wb.Clear();
+  wb.Reserve(estimate);
 
   bool is_single = (!node->IsContainer()) || node->Empty();
   if (sonic_unlikely(is_single)) {
@@ -64,7 +64,7 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   }
   val_cnt = node->Size() << is_obj;
   member_cnt = node->Size();
-  wb.stack_.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
+  wb.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
   node = is_obj ? node->getObjChildrenFirstUnsafe()
                 : node->getArrChildrenFirstUnsafe();
 val_begin:
@@ -73,29 +73,28 @@ val_begin:
       is_key = ((size_t)(is_obj) & (~val_cnt));
       str_len = node->Size();
       inc_len = str_len * 6 + 32 + 3;
-      wb.stack_.Grow(inc_len);
+      wb.Grow(inc_len);
       str_ptr = node->GetStringView().data();
-      rn = internal::Quote(str_ptr, str_len, wb.stack_.End<char>()) -
-           wb.stack_.End<char>();
-      wb.stack_.PushSizeUnsafe<char>(rn);
-      wb.stack_.PushUnsafe<char>(is_key ? ':' : ',');
+      rn = internal::Quote(str_ptr, str_len, wb.End<char>()) - wb.End<char>();
+      wb.PushSizeUnsafe<char>(rn);
+      wb.PushUnsafe<char>(is_key ? ':' : ',');
       member_cnt -= is_key;
       break;
     }
 
     case kNumber: {
-      wb.stack_.Grow(kNumberSize);
+      wb.Grow(kNumberSize);
       switch (node->GetType()) {
         case kSint:
-          rn = internal::I64toa(wb.stack_.End<char>(), node->GetInt64()) -
-               wb.stack_.End<char>();
+          rn = internal::I64toa(wb.End<char>(), node->GetInt64()) -
+               wb.End<char>();
           break;
         case kUint:
-          rn = internal::U64toa(wb.stack_.End<char>(), node->GetUint64()) -
-               wb.stack_.End<char>();
+          rn = internal::U64toa(wb.End<char>(), node->GetUint64()) -
+               wb.End<char>();
           break;
         case kReal: {
-          rn = internal::F64toa(wb.stack_.End<char>(), node->GetDouble());
+          rn = internal::F64toa(wb.End<char>(), node->GetDouble());
           if (rn <= 0) goto inf_err;
           break;
           default:
@@ -103,28 +102,28 @@ val_begin:
         }
       }
       sonic_assert(rn > 0 && rn <= 32);
-      wb.stack_.PushSizeUnsafe<char>(rn);
-      wb.stack_.PushUnsafe<char>(',');
+      wb.PushSizeUnsafe<char>(rn);
+      wb.PushUnsafe<char>(',');
       break;
     };
     case kBool: {
-      wb.stack_.Push5_8(node->IsFalse() ? "false,  " : "true,   ",
-                        5 + node->IsFalse());
+      wb.Push5_8(node->IsFalse() ? "false,  " : "true,   ",
+                 5 + node->IsFalse());
       break;
     }
     case kNull: {
-      wb.stack_.Push5_8("null,   ", 5);
+      wb.Push5_8("null,   ", 5);
       break;
     }
     case kObject:
     case kArray: {
-      wb.stack_.Grow(3);
+      wb.Grow(3);
       is_obj_nxt = node->IsObject();
       val_cnt_nxt = node->Size();
       if (sonic_unlikely(val_cnt_nxt == 0)) {
-        wb.stack_.PushUnsafe<char>('[' | (uint8_t)(is_obj_nxt) << 5);
-        wb.stack_.PushUnsafe<char>(']' | (uint8_t)(is_obj_nxt) << 5);
-        wb.stack_.PushUnsafe<char>(',');
+        wb.PushUnsafe<char>('[' | (uint8_t)(is_obj_nxt) << 5);
+        wb.PushUnsafe<char>(']' | (uint8_t)(is_obj_nxt) << 5);
+        wb.PushUnsafe<char>(',');
         break;
       } else {
         // check the serialized member count
@@ -138,7 +137,7 @@ val_begin:
         val_cnt = val_cnt_nxt << is_obj_nxt;
         member_cnt = val_cnt_nxt;
         is_obj = is_obj_nxt;
-        wb.stack_.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
+        wb.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
         node = is_obj ? node->getObjChildrenFirstUnsafe()
                       : node->getArrChildrenFirstUnsafe();
         goto val_begin;
@@ -147,9 +146,9 @@ val_begin:
     }
     case kRaw: {
       str_len = node->Size();
-      wb.stack_.Grow(str_len + 1);
-      wb.stack_.PushUnsafe(node->GetStringView().data(), str_len);
-      wb.stack_.PushUnsafe<char>(',');
+      wb.Grow(str_len + 1);
+      wb.PushUnsafe(node->GetStringView().data(), str_len);
+      wb.PushUnsafe<char>(',');
       break;
     }
     default:
@@ -161,14 +160,14 @@ val_begin:
     goto val_begin;
   }
 scope_end:
-  wb.stack_.Pop<char>(1);
+  wb.Pop<char>(1);
   // check the serialized member count
   if (sonic_unlikely((member_cnt && is_obj) != 0)) {
     goto key_err;
   }
-  wb.stack_.Grow(2);
-  wb.stack_.PushUnsafe<char>(']' | (uint8_t)(is_obj) << 5);
-  wb.stack_.PushUnsafe<char>(',');
+  wb.Grow(2);
+  wb.PushUnsafe<char>(']' | (uint8_t)(is_obj) << 5);
+  wb.PushUnsafe<char>(',');
   if (sonic_unlikely(stk.Size() == 0)) goto doc_end;
   parent = stk.Top<ParentCtx>();
   val_cnt = parent->len >> 1;
@@ -181,7 +180,7 @@ scope_end:
   goto scope_end;
 
 doc_end:
-  wb.stack_.Pop<char>(1 + is_single);
+  wb.Pop<char>(1 + is_single);
   return kErrorNone;
 
 type_err:

@@ -24,58 +24,58 @@ using namespace sonic_json;
 
 TEST(WriteBuffer, CopyControl) {
   WriteBuffer wb;
-  wb.stack_.Push("hello", 5);
+  wb.Push("hello", 5);
   WriteBuffer wb2(std::move(wb));
   EXPECT_EQ(wb2.Size(), 5);
-  EXPECT_TRUE(wb.stack_.Empty());
+  EXPECT_TRUE(wb.Empty());
 
   WriteBuffer wb3;
   wb3 = std::move(wb2);
   EXPECT_EQ(wb3.Size(), 5);
-  EXPECT_TRUE(wb.stack_.Empty());
+  EXPECT_TRUE(wb.Empty());
 }
 
 TEST(WriteBuffer, PushPop) {
   WriteBuffer wb;
-  wb.stack_.Push("hello", 5);
-  EXPECT_EQ(*wb.stack_.Top<char>(), 'o');
-  wb.stack_.Push<char>(' ');
+  wb.Push("hello", 5);
+  EXPECT_EQ(*wb.Top<char>(), 'o');
+  wb.Push<char>(' ');
   for (const auto c : {'w', 'o', 'r', 'l', 'd'}) {
-    wb.stack_.Push<char>(c);
+    wb.Push<char>(c);
   }
-  EXPECT_EQ(*wb.stack_.Top<char>(), 'd');
-  EXPECT_EQ(wb.stack_.Size(), 11);
+  EXPECT_EQ(*wb.Top<char>(), 'd');
+  EXPECT_EQ(wb.Size(), 11);
 
-  wb.stack_.Pop<char>(5);
-  EXPECT_EQ(*wb.stack_.Top<char>(), ' ');
-  EXPECT_EQ(wb.stack_.Size(), 6);
+  wb.Pop<char>(5);
+  EXPECT_EQ(*wb.Top<char>(), ' ');
+  EXPECT_EQ(wb.Size(), 6);
 }
 
 TEST(WriteBuffer, Reserve) {
   WriteBuffer wb;
-  wb.stack_.Reserve(300);
-  EXPECT_EQ(wb.stack_.Capacity(), 300);
+  wb.Reserve(300);
+  EXPECT_EQ(wb.Capacity(), 300);
   // donothing when reserve cap is smaller than current
-  wb.stack_.Reserve(1);
-  EXPECT_EQ(wb.stack_.Capacity(), 300);
-  wb.stack_.Push(std::string(500, 'x').data(), 500);
-  EXPECT_TRUE(wb.stack_.Size() <= wb.stack_.Capacity());
+  wb.Reserve(1);
+  EXPECT_EQ(wb.Capacity(), 300);
+  wb.Push(std::string(500, 'x').data(), 500);
+  EXPECT_TRUE(wb.Size() <= wb.Capacity());
 }
 
 TEST(WriteBuffer, ToString) {
   {
     WriteBuffer wb;
-    wb.stack_.Push("hello", 5);
+    wb.Push("hello", 5);
     EXPECT_STREQ(wb.ToString(), "hello");
   }
   {
     WriteBuffer wb;
-    wb.stack_.Push("", 0);
+    wb.Push("", 0);
     EXPECT_STREQ(wb.ToString(), "");
   }
   {
     WriteBuffer wb;
-    wb.stack_.Push<char>('c');
+    wb.Push<char>('c');
     EXPECT_STREQ(wb.ToString(), "c");
   }
   {
@@ -84,7 +84,7 @@ TEST(WriteBuffer, ToString) {
   }
   {
     WriteBuffer wb;
-    wb.stack_.Push<char>('c');
+    wb.Push<char>('c');
     const WriteBuffer cwb = std::move(wb);
     EXPECT_STREQ(cwb.ToString(), "c");
   }
