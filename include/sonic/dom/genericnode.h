@@ -30,36 +30,26 @@
 
 namespace sonic_json {
 
-union ContainerNext {
-  size_t ofs;
-  void* children;
-};  // 8 bytes
-
 template <typename NodeType>
 class MemberNodeT {
  public:
   const NodeType name;
   NodeType value;
-
-  MemberNodeT* Next() const { return (MemberNodeT*)(value.Next()); }
 };
 
-// Forward Decalaration.
+// Forward Declaration.
 template <typename derived_t>
 struct NodeTraits;
 
 /**
- * @brief Basic class represent a json value.
- * @tparam tmpalte <typename> class Node  Derived class.
- * @tparam Allocator  Allocator type for derived class, which allocating memory
- * for container and string.
+ * @brief Basic class represents a json value.
+ * @tparam typename NodeType: the Derived class.
  */
-template <template <typename> class Node, typename Allocator>
+template <typename NodeType>
 class GenericNode {
  public:
-  using NodeType = Node<Allocator>;  ///< Derived class type.
   using alloc_type =
-      typename NodeTraits<NodeType>::alloc_type;  ///< Dervied class allocator
+      typename NodeTraits<NodeType>::alloc_type;  ///< Derived class allocator
                                                   ///< type.
   using MemberNode =
       typename NodeTraits<NodeType>::MemberNode;  ///< Derived class key-value
@@ -91,7 +81,7 @@ class GenericNode {
    * @brief Constructor for creating boolean json value.
    * @param b boolean, true/false
    * @note This function rejects converting from others type to boolean when
-   *       ovarload resolution.
+   *       overload resolution.
    */
   template <class T, typename std::enable_if<std::is_same<T, bool>::value,
                                              bool>::type = false>
@@ -157,8 +147,8 @@ class GenericNode {
    * @brief Constructor for creating string node. Doesn't COPY string.
    * @param s string pointer
    * @param len string length
-   * @note GenericNode doesn't have the ability to manger memory alloced from
-   *       heap. This constructor function only copy the pointer.
+   * @note GenericNode doesn't have the ability to manger memory allocted from
+   *       heap. This constructor function only copies the pointer.
    */
   GenericNode(const char* s, size_t len) noexcept {
     setLength(len, kStringConst);
@@ -167,7 +157,7 @@ class GenericNode {
 
   /**
    * @brief Constructor for creating string node. Doesn't COPY string.
-   * @param s string_view that contain string pointer and length.
+   * @param s string_view that contains string pointer and length.
    */
   explicit GenericNode(StringView s) noexcept {
     setLength(s.size(), kStringConst);
@@ -470,7 +460,7 @@ class GenericNode {
 
   /**
    * @brief Set this node as string type. Only copy string pointer.
-   * @param s string_view that contain string pointer and size.
+   * @param s string_view that contains string pointer and size.
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
@@ -541,10 +531,10 @@ class GenericNode {
   }
   /**
    * @brief operator!= with boolean, int, uint32_t, int64_t, uint64_t, float and
-   * double. Only above types is acceptable.
+   * double. Only above types are acceptable.
    * @tparam T data type.
    * @param data rhs value.
-   * @retval true not equals to
+   * @retval true not equal to
    * @retval false equals to
    */
   template <
@@ -1084,6 +1074,11 @@ class GenericNode {
   friend NodeType;
   friend class SAXHandler<NodeType>;
   friend class LazySAXHandler<NodeType>;
+
+  union ContainerNext {
+    size_t ofs;
+    void* children;
+  };  // 8 bytes
 
   struct Object {
     uint64_t len;
