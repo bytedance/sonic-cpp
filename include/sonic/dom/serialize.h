@@ -147,7 +147,7 @@ val_begin:
     case kRaw: {
       str_len = node->Size();
       wb.Grow(str_len + 1);
-      wb.PushUnsafe(node->GetStringView().data(), str_len);
+      wb.PushUnsafe(node->GetRaw().data(), str_len);
       wb.PushUnsafe<char>(',');
       break;
     }
