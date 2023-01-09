@@ -42,8 +42,8 @@ template <typename derived_t>
 struct NodeTraits;
 
 /**
- * @brief Basic class represents a json value.
- * @tparam typename NodeType: the Derived class.
+ * @brief Basic class represents a JSON value.
+ * @tparam NodeType: the Derived class.
  */
 template <typename NodeType>
 class GenericNode {
@@ -66,19 +66,20 @@ class GenericNode {
       ConstValueIterator;  ///< Derived class array const iterator type.
 
   /**
-   * @brief Default constructor, which creates null node.
+   * @brief Default constructor, which creates a null node.
    */
   GenericNode() noexcept {}
 
   /**
-   * @brief Constructor for creating specific type.
-   * @param type json value type.
-   * @note Data of node is ZERO, except string. String type will keep as "".
+   * @brief Constructor for creating specific types.
+   * @param type the type of JSON value.
+   * @note If type is kString, the pointer of string will be set to a constant
+   * empty string("").
    */
   explicit GenericNode(TypeFlag type) noexcept { setType(type); }
 
   /**
-   * @brief Constructor for creating boolean json value.
+   * @brief Constructor for creating boolean JSON value.
    * @param b boolean, true/false
    * @note This function rejects converting from others type to boolean when
    *       overload resolution.
@@ -98,8 +99,8 @@ class GenericNode {
     n.i64 = i;
   }
   /**
-   * @brief Constructor for creating uint node.
-   * @param i data of uint node.
+   * @brief Constructor for creating a uint node.
+   * @param i data of the uint node.
    */
   explicit GenericNode(unsigned int i) noexcept {
     setType(kUint);
@@ -127,16 +128,16 @@ class GenericNode {
     n.u64 = i;
   }
   /**
-   * @brief Constructor for creating double node.
-   * @param d data of double node.
+   * @brief Constructor for creating a double node.
+   * @param d data of the double node.
    */
   explicit GenericNode(double d) noexcept {
     setType(kReal);
     n.f64 = d;
   }
   /**
-   * @brief Constructor for creating double node.
-   * @param f data of double node.
+   * @brief Constructor for creating a double node.
+   * @param f data of the double node.
    */
   explicit GenericNode(float f) noexcept {
     setType(kReal);
@@ -147,7 +148,7 @@ class GenericNode {
    * @brief Constructor for creating string node. Doesn't COPY string.
    * @param s string pointer
    * @param len string length
-   * @note GenericNode doesn't have the ability to manger memory allocted from
+   * @note GenericNode cannot manage the memory allocated from
    *       heap. This constructor function only copies the pointer.
    */
   GenericNode(const char* s, size_t len) noexcept {
@@ -176,7 +177,7 @@ class GenericNode {
 
   /**
    * @brief Constructor for creating string node. Makes a string copy.
-   * @param s     string_view that contina string pointer and length.
+   * @param s     string_view that contains string pointer and length.
    * @param alloc Allocator
    */
   GenericNode(StringView s, alloc_type& alloc) {
@@ -184,12 +185,13 @@ class GenericNode {
   }
 
   /**
-   * @brief Copy string data to memory malloc from alloc, then store pointer and
-   * size into node.
+   * @brief Copy string data to memory allocated from alloc, then store pointer
+   * and size into node.
    * @param s     string pointer
    * @param len   string length
    * @param alloc Allocator
-   * @note: If failed when allocating memory, node will be set as empty string.
+   * @note: If failed when allocating memory, the node will be set as an empty
+   * string.
    */
   void StringCopy(const char* s, size_t len, alloc_type& alloc) {
     sv.p = (char*)(alloc.Malloc(len + 1));
@@ -204,77 +206,77 @@ class GenericNode {
 
   // Check APIs
   /**
-   * @brief         Check this node is null.
-   * @return bool   is null.
+   * @brief  Check this node is null.
+   * @return true if it is null.
    */
   sonic_force_inline bool IsNull() const noexcept {
     return getBasicType() == kNull;
   }
   /**
-   * @brief         Check this node is boolean.
-   * @return bool   is boolean.
+   * @brief  Check this node is boolean.
+   * @return true if it is a boolean.
    */
   sonic_force_inline bool IsBool() const noexcept {
     return getBasicType() == kBool;
   }
   /**
-   * @brief         Check this node is string.
-   * @return bool   is string.
+   * @brief  Check this node is a string.
+   * @return true if it is a string.
    */
   sonic_force_inline bool IsString() const noexcept {
     return getBasicType() == kString;
   }
   /**
-   * @brief         Check this node is raw json.
-   * @return bool   is raw json.
+   * @brief  Check this node is a raw json.
+   * @return true if it is raw json.
    */
   sonic_force_inline bool IsRaw() const noexcept {
     return getBasicType() == kRaw;
   }
   /**
-   * @brief         Check this node is number.
-   * @return bool   is number.
+   * @brief  Check this node is a number.
+   * @return true if it is a number.
    */
   sonic_force_inline bool IsNumber() const noexcept {
     return getBasicType() == kNumber;
   }
   /**
-   * @brief         Check this node is array.
-   * @return bool   is array.
+   * @brief  Check this node is an array.
+   * @return true if it is an array.
    */
   sonic_force_inline bool IsArray() const noexcept {
     return getBasicType() == kArray;
   }
   /**
-   * @brief         Check this node is object.
-   * @return bool   is object.
+   * @brief  Check this node is an object.
+   * @return true if it is an object.
    */
   sonic_force_inline bool IsObject() const noexcept {
     return getBasicType() == kObject;
   }
 
   /**
-   * @brief         Check this node is true.
-   * @return bool   is true.
+   * @brief  Check this node is true.
+   * @return true if it is true.
    */
   sonic_force_inline bool IsTrue() const noexcept { return GetType() == kTrue; }
   /**
-   * @brief         Check this node is false.
-   * @return bool   is false.
+   * @brief  Check this node is false.
+   * @return true if it is false.
    */
   sonic_force_inline bool IsFalse() const noexcept {
     return GetType() == kFalse;
   }
   /**
-   * @brief         Check this node is double number.
-   * @return bool   is double.
+   * @brief  Check this node is double.
+   * @return true if it is double.
    */
   sonic_force_inline bool IsDouble() const noexcept {
     return GetType() == kReal;
   }
   /**
-   * @brief         Check this node is in range of int64.
-   * @return bool   is int64.
+   * @brief  Check this node is in the range of int64.
+   * @return true if it is int64.
    */
   sonic_force_inline bool IsInt64() const noexcept {
     return (GetType() == kSint) ||
@@ -282,70 +284,66 @@ class GenericNode {
             n.u64 <= static_cast<uint64_t>(getInt64Max()));
   };
   /**
-   * @brief         Check this node is in range of uint64.
-   * @return bool   is uint64.
+   * @brief  Check this node is in the range of uint64.
+   * @return true if it is uint64.
    */
   sonic_force_inline bool IsUint64() const noexcept {
     return GetType() == kUint;
   }
   /**
-   * @brief         Check this node is only copy pointer, doesn't maintian
-   *                string data in allocator.
-   * @return bool   is not string const.
-   */
-  sonic_force_inline bool IsStringCopy() const noexcept {
-    return GetType() != kStringConst;
-  }
-  /**
-   * @brief         Check this node has a string copy in allocator.
-   * @return bool   is string const.
+   * @brief  Check this node is a const string. "Const" means the string's
+   * buffer is not allocated by any allocator.
+   * @return true if its string is const.
    */
   sonic_force_inline bool IsStringConst() const noexcept {
     return GetType() == kStringConst;
   }
   /**
-   * @brief         Check this node is object or array.
-   * @return bool   is object or array.
+   * @brief  Check the node is an container(object or array).
+   * @return true if it is an object or array.
    */
   sonic_force_inline bool IsContainer() const noexcept {
     return (t.t & kContainerMask) == static_cast<uint8_t>(kContainerMask);
   }
 
   /**
-   * @brief         Get boolean value of this node.
-   * @retval true   this node is true.
-   * @retval false  this node if false.
+   * @brief  Get the boolean value of this node.
+   * @retval true if this node is true, otherwise, false.
    */
   sonic_force_inline bool GetBool() const noexcept {
+    sonic_assert(IsBool());
     return GetType() == kTrue;
   }
 
   /**
-   * @brief                 Get string of this node.
-   * @return std::string    string
+   * @brief  Get the string of this node.
+   * @return std::string
    */
   sonic_force_inline std::string GetString() const {
+    sonic_assert(IsString());
     return std::string(sv.p, Size());
   }
 
   /**
-   * @brief                 Get string view of this node, won't copy string.
-   * @return StringView     string view
+   * @brief  Get the string view of this node, won't copy the string.
+   * @return StringView
    */
   sonic_force_inline StringView GetStringView() const noexcept {
+    sonic_assert(IsString());
     return StringView(sv.p, Size());
   }
 
   /**
-   * @brief                 Get string view of this node, won't copy string.
-   * @return StringView     string view
+   * @brief  Get the raw json of this node, won't copy it.
+   * @return StringView that represents the raw json.
    */
   sonic_force_inline StringView GetRaw() const noexcept {
+    sonic_assert(IsRaw());
     return StringView(raw.p, Size());
   }
 
   /**
-   * @brief         Get 5-bits type info
+   * @brief  Get 5-bits type info
    * @return TypeFlag
    */
   sonic_force_inline TypeFlag GetType() const noexcept {
@@ -353,7 +351,7 @@ class GenericNode {
   }
 
   /**
-   * @brief         Get int64 data.
+   * @brief  Get int64 data.
    * @return int64_t
    */
   sonic_force_inline int64_t GetInt64() const noexcept {
@@ -361,7 +359,7 @@ class GenericNode {
     return n.i64;
   }
   /**
-   * @brief         Get uint64 data.
+   * @brief  Get uint64 data.
    * @return uint64_t
    */
   sonic_force_inline uint64_t GetUint64() const noexcept {
@@ -369,7 +367,7 @@ class GenericNode {
     return n.u64;
   }
   /**
-   * @brief         Get double data.
+   * @brief  Get double data.
    * @return double
    */
   sonic_force_inline double GetDouble() const noexcept {
@@ -390,34 +388,34 @@ class GenericNode {
    */
   NodeType& SetNull() noexcept { return downCast()->setNullImpl(); }
   /**
-   * @brief Set this node as object type. Data is ZERO!
+   * @brief Set this node as an object type. Data is ZERO!
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
   NodeType& SetObject() noexcept { return downCast()->setObjectImpl(); }
   /**
-   * @brief Set this node as array type. Data is ZERO!
+   * @brief Set this node as an array type. Data is ZERO!
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
   NodeType& SetArray() noexcept { return downCast()->setArrayImpl(); }
   /**
    * @brief Set this node as bool type.
-   * @param b true/fase
+   * @param b true/false
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
   NodeType& SetBool(bool b) noexcept { return downCast()->setBoolImpl(b); }
   /**
    * @brief Set this node as int64_t type.
-   * @param i value of node
+   * @param i the int64_t value
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
   NodeType& SetInt64(int64_t i) noexcept { return downCast()->setInt64Impl(i); }
   /**
    * @brief Set this node as uint64 type.
-   * @param i value of node
+   * @param i the uint64_t value
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
@@ -426,7 +424,7 @@ class GenericNode {
   }
   /**
    * @brief Set this node as double type.
-   * @param d value of node
+   * @param d the double value
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
@@ -435,10 +433,10 @@ class GenericNode {
   }
 
   /**
-   * @brief Set this node as string type. A string copy will be maintianed in
+   * @brief Set this node as a copied string through the allocator alloc.
    * allocator.
-   * @param s string_view that contain string pointer and size.
-   * @param alloc Allocator which maintain nodes memory.
+   * @param s string_view that contains string pointer and size.
+   * @param alloc Allocator which maintains the node's memory.
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
@@ -446,11 +444,10 @@ class GenericNode {
     return SetString(s.data(), s.size(), alloc);
   }
   /**
-   * @brief Set this node as string type. A string copy will be maintianed in
-   * allocator.
+   * @brief Set this node as a copied string through the allocator alloc.
    * @param s string pointer
    * @param len string length
-   * @param alloc Allocator which maintain nodes memory.
+   * @param alloc Allocator which manages the node's memory.
    * @return NodeType& Reference to this.
    * @note this node will deconstruct firstly.
    */
@@ -490,9 +487,9 @@ class GenericNode {
 
   /**
    * @brief Compare with string_view
-   * @param s string_view that contian string pointer and size
+   * @param s string_view that contains string pointer and size
    * @retval true equals to
-   * @retval false not equals to
+   * @retval false not equal to
    */
   sonic_force_inline bool operator==(StringView s) const noexcept {
     return GetStringView() == s;
@@ -500,11 +497,11 @@ class GenericNode {
 
   /**
    * @brief Compare with boolean, int, uint32_t, int64_t, uint64_t, float and
-   * double. Only above types is acceptable.
+   * double. Only the above types are acceptable.
    * @tparam T data type.
    * @param data rhs value.
    * @retval true equals to
-   * @retval false not equals to
+   * @retval false not equal to
    */
   template <
       class T,
@@ -522,8 +519,8 @@ class GenericNode {
 
   /**
    * @brief operator!=
-   * @param s string_view that contian string pointer and size
-   * @retval true not equals to
+   * @param s string_view that contains string pointer and size
+   * @retval true not equal to
    * @retval false equals to
    */
   sonic_force_inline bool operator!=(StringView s) const noexcept {
@@ -531,7 +528,7 @@ class GenericNode {
   }
   /**
    * @brief operator!= with boolean, int, uint32_t, int64_t, uint64_t, float and
-   * double. Only above types are acceptable.
+   * double. Only the above types are acceptable.
    * @tparam T data type.
    * @param data rhs value.
    * @retval true not equal to
@@ -598,7 +595,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get object const beign iterator.
+   * @brief Get object const begin iterator.
    * @return MemberIterator
    */
   ConstMemberIterator CMemberBegin() const noexcept {
@@ -634,8 +631,8 @@ class GenericNode {
   }
 
   /**
-   * @brief Get specific node in object by key.
-   * @param key string view that contain key's pointer and size.
+   * @brief Get a specific child node in the object by key.
+   * @param key string view of the string key
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
@@ -645,8 +642,8 @@ class GenericNode {
   }
 
   /**
-   * @brief Get specific node in object by key.
-   * @param key string view that contain key's pointer and size.
+   * @brief Get a specific child node in the object by key.
+   * @param key string view of the string key
    * @retval null-node Expected node doesn't exist.
    * @retval others Reference to the expected node.
    */
@@ -656,8 +653,8 @@ class GenericNode {
   }
 
   /**
-   * @brief Check object has specific key.
-   * @param key string view that contain key's pointer and size.
+   * @brief Check object has the specific key.
+   * @param key string view of the string key
    * @return bool
    */
   sonic_force_inline bool HasMember(StringView key) const noexcept {
@@ -665,8 +662,9 @@ class GenericNode {
   }
 
   /**
-   * @brief Find specific member in object
-   * @param key string view that contain key's pointer and size
+   * @brief Find a specific member in an object. A member is a pair node of key
+   * and name.
+   * @param key string view of the string key
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    */
@@ -675,8 +673,9 @@ class GenericNode {
   }
 
   /**
-   * @brief Find specific member in object
-   * @param key string view that contain key's pointer and size
+   * @brief Find a specific member in object. A member is a pair node of key and
+   * name.
+   * @param key string view of the string key
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    */
@@ -687,8 +686,8 @@ class GenericNode {
 
   /**
    * @brief get specific node by json pointer(RFC 6901)
-   * @tparam StringType json pointer string type, can use StringView to aovid
-   *                    copying string.
+   * @tparam StringType json pointer string type, can use StringView to avoid
+   *      copying string.
    * @param pointer json pointer
    * @retval nullptr get node failed
    * @retval others success
@@ -760,8 +759,8 @@ class GenericNode {
 
   /**
    * @brief get specific node by json pointer(RFC 6901)
-   * @tparam StringType json pointer string type, can use StringView to aovid
-   *                    copying string.
+   * @tparam StringType json pointer string type, can use StringView to aovoid
+   *      copying string.
    * @param pointer json pointer
    * @retval nullptr get node failed
    * @retval others success
@@ -777,8 +776,8 @@ class GenericNode {
    * @tparam ValueType the type of member's value
    * @param key new member's name, must be string
    * @param value rvalue or lvalue reference for value, must be NodeType
-   * @param copyKey copy the key's string when creating key node if copyKey is
-   * true.
+   * @param copyKey copy the key's string when creating the key node if copyKey
+   * is true.
    * @return NodeType& Reference of the added member.
    * @note value will be moved.
    */
@@ -792,7 +791,7 @@ class GenericNode {
   /**
    * @brief Reserve object capacity if NodeType support. Otherwise do nothing.
    * @param new_cap Expected object capacity, unit is member(key-value pair)
-   * @param alloc Allocator reference that maintain object memory.
+   * @param alloc Allocator reference that maintains object memory.
    * @return NodeType& Reference to this object to support streaming APIs
    */
   NodeType& MemberReserve(size_t new_cap, alloc_type& alloc) {
@@ -801,8 +800,8 @@ class GenericNode {
   }
 
   /**
-   * @brief Remove specific member in object by key.
-   * @param key string view that contian key's pointer and size
+   * @brief Remove a specific member in the object by key.
+   * @param key string view that contains key's pointer and size
    * @retval true success
    * @retval false failed
    */
@@ -811,7 +810,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Remove specific range [first, last) in object
+   * @brief Remove specific range [first, last) in an object
    * @param first range start
    * @param last range end
    * @return iterator following the last removed member
@@ -832,7 +831,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get array beign iterator
+   * @brief Get array =begin iterator
    * @return ValueIterator
    */
   ValueIterator Begin() noexcept {
@@ -841,7 +840,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get array const beign iterator
+   * @brief Get array const begin iterator
    * @return ValueIterator
    */
   ConstValueIterator Begin() const noexcept {
@@ -850,7 +849,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get array const beign iterator
+   * @brief Get array const begin iterator
    * @return ValueIterator
    */
   ConstValueIterator CBegin() const noexcept {
@@ -906,7 +905,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get specific element in array by index
+   * @brief Get specific child node in an array by index
    * @param idx index
    * @return NodeType&
    */
@@ -917,7 +916,7 @@ class GenericNode {
   }
 
   /**
-   * @brief Get specific element in array by index
+   * @brief Get specific child node in an array by index
    * @param idx index
    * @return NodeType&
    */
@@ -928,10 +927,10 @@ class GenericNode {
   }
 
   /**
-   * @brief Reserve arrat capacity if NodeType support. Otherwise do nothing.
-   * @param new_cap Expected array capacity, unit is node
-   * @param alloc Allocator reference that maintain array memory.
-   * @return NodeType& Reference to this object to support streaming APIs
+   * @brief Reserve array capacity if NodeType support. Otherwise do nothing.
+   * @param new_cap Expected capacity of an array.
+   * @param alloc Allocator reference that maintains array memory.
+   * @return NodeType& Reference to this.
    */
   // TODO: Check when new_cap less than size() or capacity @Xie Gengxin
   NodeType& Reserve(size_t new_cap, alloc_type& alloc) {
@@ -940,11 +939,11 @@ class GenericNode {
   }
 
   /**
-   * @brief Push an element into array.
+   * @brief Push an element into an array.
    * @tparam ValueType push node type
    * @param value rvalue or lvalue reference of push node.
-   * @param alloc allocator reference that maintain array memory
-   * @return NodeType reference for this node to support streaming APIs
+   * @param alloc allocator reference that manages array memory
+   * @return NodeType& Reference to this.
    * @note value will be moved.
    */
   template <typename ValueType>
@@ -954,7 +953,7 @@ class GenericNode {
   }
 
   /**
-   * @brief pop out the last element in arra
+   * @brief pop out the last element in an array
    * @return NodeType& reference for this node to support streaming APIs
    */
   NodeType& PopBack() noexcept {
@@ -964,30 +963,30 @@ class GenericNode {
   }
 
   /**
-   * @brief erase specific element in array by iterator
+   * @brief erase specific element in an array by an iterator
    * @param pos ValueIterator for expected erasing element.
-   * @return ValueIterator the next iterator of erased element.
+   * @return ValueIterator the next iterator of the erased element.
    */
   ValueIterator Erase(const ValueIterator pos) noexcept {
     return Erase(pos, pos + 1);
   }
   /**
-   * @brief erase specific elements in array by iterator range
+   * @brief erase specific elements in the array by iterator range
    * @param first ValueIterator for expected erasing element range start.
    * @param last ValueIterator for expected erasing element range end.
    * @return ValueType the ValueIterator point to last.
-   * @note erase in range [first, last)
+   * @note erase in the range [first, last)
    */
   ValueIterator Erase(const ValueIterator first,
                       const ValueIterator last) noexcept {
     return downCast()->eraseImpl(first, last);
   }
   /**
-   * @brief erase specific elements in array by index range
+   * @brief erase specific elements in the array by an index range
    * @param first expected erasing element range start index.
    * @param last expected erasing element range end.
    * @return ValueType the ValueIterator point to last.
-   * @note erase in range [first, last)
+   * @note erase in the range [first, last)
    */
   ValueIterator Erase(size_t first, size_t last) noexcept {
     return Erase(Begin() + first, Begin() + last);
@@ -997,7 +996,7 @@ class GenericNode {
   /**
    * @brief serialize this node as json string.
    * @param serializeFlags combination of different SerializeFlag.
-   * @param wb write buffer where you want store json string.
+   * @param wb write buffer where you want to store json string.
    * @return EndcodeError
    */
   template <unsigned serializeFlags = kSerializeDefault>
@@ -1128,6 +1127,7 @@ class GenericNode {
     Data data = {};
   };  // anonymous member
 
+ private:
   const NodeType* downCast() const noexcept {
     return static_cast<const NodeType*>(this);
   }

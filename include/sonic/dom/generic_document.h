@@ -29,8 +29,8 @@ class GenericDocument : public NodeType {
 
   /**
    * @brief Default GenericDocument constructor.
-   * @param allocator Allocator pointer to maintain all nodes memory. If is not
-   * given or nullptr, GenericDocument will create one by itself.
+   * @param allocator Allocator pointer to maintain all nodes' memory. If it is
+   * not given or nullptr, GenericDocument will create one by itself.
    */
   GenericDocument(Allocator* allocator = nullptr)
       : NodeType(kNull), alloc_(allocator) {
@@ -95,12 +95,12 @@ class GenericDocument : public NodeType {
   }
 
   /**
-   * @brief Get reference of memory allocator.
+   * @brief Get the reference of memory allocator.
    */
   sonic_force_inline Allocator& GetAllocator() { return *alloc_; }
 
   /**
-   * @brief Get reference of memory allocator.
+   * @brief Get the reference of memory allocator.
    */
   sonic_force_inline const Allocator& GetAllocator() const { return *alloc_; }
 
@@ -129,7 +129,7 @@ class GenericDocument : public NodeType {
    * @param parseFlags combination of different ParseFlag.
    * @param json json string pointer
    * @param len json string size
-   * @param path the query path of json keys
+   * @param path the query path of the json keys
    * @note If using memorypool allocator, memory will be cleared every time
    * before parsing to avoid memory overuse.
    */
@@ -252,7 +252,7 @@ class GenericDocument : public NodeType {
   size_t cap_{0};
   long np_{0};
 
-  // String Buffer for parsed string value
+  // String Buffer for all parsed string values
   char* str_{nullptr};
   size_t str_cap_{0};
   long strp_{0};
