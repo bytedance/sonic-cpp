@@ -34,10 +34,10 @@
 namespace sonic_json {
 
 template <typename Allocator = SONIC_DEFAULT_ALLOCATOR>
-class DNode : public GenericNode<DNode, Allocator> {
+class DNode : public GenericNode<DNode<Allocator>> {
  public:
   using NodeType = DNode;
-  using BaseNode = GenericNode<DNode, Allocator>;
+  using BaseNode = GenericNode<DNode<Allocator>>;
   using AllocatorType = Allocator;
   using MemberNode = typename NodeTraits<DNode>::MemberNode;
   using MemberIterator = typename NodeTraits<DNode>::MemberIterator;
