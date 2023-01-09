@@ -51,7 +51,7 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   long inc_len;
   const char* str_ptr;
   ssize_t rn = 0;
-  WriteBuffer stk;
+  internal::Stack stk;
   ParentCtx* parent;
 
   wb.Clear();

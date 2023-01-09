@@ -282,8 +282,7 @@ class LazySAXHandler {
   static constexpr size_t kDefaultNum = 16;
   // allocator for node stack and string buffers
   Allocator *alloc_{nullptr};
-  // TODO: abstract the stack
-  WriteBuffer stack_{};
+  internal::Stack stack_{};
 };
 
 }  // namespace sonic_json

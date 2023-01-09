@@ -78,5 +78,15 @@ TEST(WriteBuffer, ToString) {
     wb.Push<char>('c');
     EXPECT_STREQ(wb.ToString(), "c");
   }
+  {
+    const WriteBuffer cwb;
+    EXPECT_STREQ(cwb.ToString(), "");
+  }
+  {
+    WriteBuffer wb;
+    wb.Push<char>('c');
+    const WriteBuffer cwb = std::move(wb);
+    EXPECT_STREQ(cwb.ToString(), "c");
+  }
 }
 }  // namespace

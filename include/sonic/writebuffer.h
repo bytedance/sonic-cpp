@@ -18,64 +18,48 @@
 
 #include <cstring>
 
-#include "sonic/allocator.h"
-#include "sonic/macro.h"
+#include "sonic/internal/stack.h"
 
 namespace sonic_json {
 
 class WriteBuffer {
  public:
-  WriteBuffer(size_t cap = defaultCapcity()) : cap_(cap) { Reserve(cap); };
+  WriteBuffer() : stack_(){};
+  WriteBuffer(size_t cap) : stack_(cap){};
   WriteBuffer(const WriteBuffer&) = delete;
-  WriteBuffer(WriteBuffer&& rhs)
-      : buf_(rhs.buf_), top_(rhs.top_), cap_(rhs.cap_) {
-    rhs.setZero();
-  }
-  ~WriteBuffer() { std::free(buf_); }
+  WriteBuffer(WriteBuffer&& rhs) : stack_(std::move(rhs.stack_)) {}
+  ~WriteBuffer() = default;
   WriteBuffer& operator=(const WriteBuffer&) = delete;
   WriteBuffer& operator=(WriteBuffer&& rhs) {
-    this->~WriteBuffer();
-    buf_ = rhs.buf_;
-    top_ = rhs.top_;
-    cap_ = rhs.cap_;
-    rhs.setZero();
+    stack_ = std::move(rhs.stack_);
     return *this;
   }
 
   /**
-   * @brief Return the context in buffer.
+   * @brief Return the context in the buffer.
    * @return a null-terminate string.
+   * @note a '\0' will be added in the ending, so, this function is not
+   * thread-safe.
    */
-  sonic_force_inline const char* ToString() {
-    Grow(1);
-    *top_ = '\0';
-    return buf_;
+  sonic_force_inline const char* ToString() const {
+    stack_.Push('\0');
+    return stack_.Begin<char>();
   }
 
-  sonic_force_inline size_t Size() const { return top_ - buf_; }
-  sonic_force_inline size_t Capacity() const { return cap_; }
-  sonic_force_inline bool Empty() const { return Size() == 0; }
+  sonic_force_inline size_t Size() const { return stack_.Size(); }
+  sonic_force_inline size_t Capacity() const { return stack_.Capacity(); }
+  sonic_force_inline bool Empty() const { return stack_.Empty(); }
 
   /**
    * @brief Increase the capacity of buffer if new_cap is greater than the
    * current capacity(). Otherwise, do nothing.
    */
-  sonic_force_inline void Reserve(size_t new_cap) {
-    if (new_cap < Capacity()) {
-      return;
-    }
-    size_t align_cap = SONIC_ALIGN(new_cap);
-    char* tmp = static_cast<char*>(std::realloc(buf_, align_cap));
-    top_ = tmp + Size();
-    buf_ = tmp;
-    sonic_assert(buf_ != NULL);
-    cap_ = buf_ ? new_cap : 0;
-  }
+  sonic_force_inline void Reserve(size_t new_cap) { stack_.Reserve(new_cap); }
 
   /**
    * @brief Erases all contexts in the buffer.
    */
-  sonic_force_inline void Clear() { top_ = buf_; }
+  sonic_force_inline void Clear() { stack_.Clear(); }
 
   /**
    * @brief Push a value into buffer
@@ -83,49 +67,36 @@ class WriteBuffer {
    */
   template <typename T>
   sonic_force_inline void Push(T v) {
-    Grow(sizeof(T));
-    *reinterpret_cast<T*>(top_) = v;
-    top_ += sizeof(T);
+    stack_.template Push<T>(v);
   }
 
   /**
-   * @brief Push a string into buffer.
-   * @param s the begining of string
+   * @brief Push a string into the buffer.
+   * @param s the beginning of string
    * @param n the string size
    */
-  sonic_force_inline void Push(const char* s, size_t n) {
-    Grow(n + 1);
-    std::memcpy(top_, s, n);
-    top_ += n;
-  }
-  sonic_force_inline void PushUnsafe(const char* s, size_t cnt) {
-    std::memcpy(top_, s, cnt);
-    top_ += cnt;
+  sonic_force_inline void Push(const char* s, size_t n) { stack_.Push(s, n); }
+  sonic_force_inline void PushUnsafe(const char* s, size_t n) {
+    stack_.PushUnsafe(s, n);
   }
   template <typename T>
   sonic_force_inline void PushUnsafe(T v) {
-    *reinterpret_cast<T*>(top_) = v;
-    top_ += sizeof(T);
+    stack_.template PushUnsafe<T>(v);
   }
 
   template <typename T>
   sonic_force_inline T* PushSize(size_t n) {
-    Grow(n * sizeof(T));
-    return PushSizeUnsafe<T>(n);
+    return stack_.template PushSize<T>(n);
   }
 
   template <typename T>
   sonic_force_inline T* PushSizeUnsafe(size_t n) {
-    T* ret = reinterpret_cast<T*>(top_);
-    top_ += n * sizeof(T);
-    return ret;
+    return stack_.template PushSizeUnsafe<T>(n);
   }
 
   // faster api for push 5 ~ 8 bytes.
   sonic_force_inline void Push5_8(const char* bytes8, size_t n) {
-    Grow(8);
-    std::memcpy(top_, bytes8, 8);
-    top_ += n;
+    stack_.Push5_8(bytes8, n);
   }
 
   /**
@@ -134,11 +105,11 @@ class WriteBuffer {
    */
   template <typename T>
   sonic_force_inline const T* Top() const {
-    return reinterpret_cast<const T*>(top_ - sizeof(T));
+    return stack_.template Top<T>();
   }
   template <typename T>
   sonic_force_inline T* Top() {
-    return reinterpret_cast<T*>(top_ - sizeof(T));
+    return stack_.template Top<T>();
   }
 
   /**
@@ -146,26 +117,14 @@ class WriteBuffer {
    */
   template <typename T>
   sonic_force_inline void Pop(size_t n) {
-    top_ -= n * sizeof(T);
-    return;
+    return stack_.template Pop<T>(n);
   }
 
   /**
    * @brief Increase the capacity of buffer if cnt is greater than the
    * remained capacity in the buffer. Otherwise, do nothing.
    */
-  sonic_force_inline char* Grow(size_t cnt) {
-    if (sonic_unlikely(top_ + cnt >= buf_ + cap_)) {
-      if (sonic_unlikely((top_ + cnt) > buf_ + 2 * cap_)) {
-        cap_ = top_ - buf_ + cnt;
-        Reserve(cap_ + cap_ / 2);
-      } else {
-        Reserve(cap_ * 2);
-      }
-    }
-    sonic_assert(buf_ != NULL);
-    return top_;
-  }
+  sonic_force_inline char* Grow(size_t cnt) { return stack_.Grow(cnt); }
 
   /**
    * @brief Get the end of the buffer.
@@ -173,11 +132,11 @@ class WriteBuffer {
    */
   template <typename T>
   sonic_force_inline T* End() {
-    return reinterpret_cast<T*>(top_);
+    return stack_.template End<T>();
   }
   template <typename T>
   sonic_force_inline const T* End() const {
-    return reinterpret_cast<T*>(top_);
+    return stack_.template End<T>();
   }
 
   /**
@@ -186,23 +145,15 @@ class WriteBuffer {
    */
   template <typename T>
   sonic_force_inline T* Begin() {
-    return reinterpret_cast<T*>(buf_);
+    return stack_.template Begin<T>();
   }
   template <typename T>
   sonic_force_inline const T* Begin() const {
-    return reinterpret_cast<T*>(buf_);
+    return stack_.template Begin<T>();
   }
 
  private:
-  void setZero() {
-    buf_ = nullptr;
-    top_ = nullptr;
-    cap_ = 0;
-  }
-  static constexpr size_t defaultCapcity() { return 256; }
-  char* buf_{nullptr};
-  char* top_{nullptr};
-  size_t cap_{0};
+  mutable internal::Stack stack_;
 };
 
 }  // namespace sonic_json
