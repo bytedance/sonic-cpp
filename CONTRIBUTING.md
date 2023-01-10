@@ -4,7 +4,7 @@
 We use GitHub for our codebase. You can start by reading [How To Pull Request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests).
 
 ## Without Semantic Versioning
-We keep the stable code in branch `main`. Development base on branch `develop`. We promise the **Forward Compatibility** by adding new package directory with suffix `v2/v3` when code has break changes.
+Development base on branch `master`. We promise the **Forward Compatibility** by adding new package directory with suffix `v2/v3` when code has break changes.
 
 ## Branch Organization
 We use [git-flow](https://nvie.com/posts/a-successful-git-branching-model/) as our branch organization, as known as [FDD](https://en.wikipedia.org/wiki/Feature-driven_development)
@@ -28,19 +28,19 @@ Before you submit your Pull Request (PR) consider the following guidelines:
 3. [Fork](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo) the bytedance/sonic repo.
 4. In your forked repository, make your changes in a new git branch:
     ```
-    git checkout -b bugfix/security_bug develop
+    git checkout -b fix/security_bug develop
     ```
 5. Create your patch, including appropriate test cases.
-6. Follow our [Style Guides](#code-style-guides).
+6. Follow [Google C++ Style Guides](https://google.github.io/styleguide/cppguide.html).
 7. Commit your changes using a descriptive commit message that follows [AngularJS Git Commit Message Conventions](https://docs.google.com/document/d/1QrDFcIiPjSLDn3EL15IJygNPiHORgU1_OOAqWjiDU5Y/edit).
    Adherence to these conventions is necessary because release notes will be automatically generated from these messages.
 8. Push your branch to GitHub:
     ```
-    git push origin bugfix/security_bug
+    git push origin fix/security_bug
     ```
-9. In GitHub, send a pull request to `sonic:main`
+9. In GitHub, send a pull request to `sonic:master`
 
-Note: you must use one of `optimize/feature/bugfix/doc/ci/test/refactor` following a slash(`/`) as the branch prefix.
+Note: you must use one of `optimize/feature/fix/doc/ci/test/refactor` following a slash(`/`) as the branch prefix.
 
 Your pr title and commit message should follow https://www.conventionalcommits.org/.
 
