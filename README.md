@@ -54,6 +54,14 @@ Parsing Performance
 Serializing Performance
 ![image](docs/images/serialize.png)
 
+## API Document
+Make sure Doxygen 1.8.13 or higher version has been installed. Then following:
+
+```shell
+mdkir api-doc && cd api-doc
+doxygen ../Doxyfile
+```
+
 ## Design
 
 Sonic-cpp parses JSON into a compact document tree. The document structure is as follows:
@@ -65,13 +73,13 @@ There are many optimizations in parsing as follows:
 - using SIMD to find escaped chars when parsing strings.
 - using the STOA float pointing algorithm.
 
-Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for long JSON string.
+Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for a long JSON string.
 
 Sonic-cpp also supports ParseOnDemand if the user knows the target key at compile time. ParseOndemand also used SIMD and bit manipulation to skip the unwanted values fastly.
 
 ## Usage
-### include
-Sonic-Cpp is header-only library, you only need to include the directory of
+### Include
+Sonic-Cpp is a header-only library, you only need to include the directory of
 Sonic-Cpp header files, such as adding `-I/path/to/sonic/include/` to your
 compiler.
 
@@ -146,7 +154,7 @@ void print_member(member_itr_type m) {
               << key.GetString()
               << std::endl;
   } else {
-    std::cout << "Incoreect key type!\n";
+    std::cout << "Incorrect key type!\n";
     return;
   }
   if (value.IsInt64()) {
@@ -201,7 +209,7 @@ int main()
 The following Is\*, Get\* and Set\* methods are supported:
 - IsNull(), SetNull()
 - IsBoo(), GetBool(), SetBool(bool)
-- IsString(), GetString(), GetStringLength(), SetString(const char*, size_t)
+- IsString(), GetString(), GetStringView(), SetString(const char*, size_t)
 - IsNumber()
 - IsArray(), SetArray()
 - IsObject(), SetObject()

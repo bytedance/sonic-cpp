@@ -1,3 +1,6 @@
+#include <iostream>
+#include <string>
+
 #include "sonic/sonic.h"
 
 using PointerType = sonic_json::GenericJsonPointer<sonic_json::StringView>;
@@ -31,6 +34,13 @@ int main() {
     std::cout << "/b/1/a Eixsts!\n";
   } else {
     std::cout << "/b/1/a doesn't exist!\n";
+  }
+
+  sonic_json::Node* node3 = doc.AtPointer("b", 1, "b");
+  if (node3 != nullptr) {
+    std::cout << "/b/1/b Eixsts!\n";
+  } else {
+    std::cout << "/b/1/b doesn't exist!\n";
   }
 
   return 0;
