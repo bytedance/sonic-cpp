@@ -4,8 +4,8 @@ set -e
 CUR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 TOP_DIR="${CUR_DIR}/../"
 
-# apt update
-# apt install unzip openjdk-11-jdk -y
+apt update
+apt install unzip openjdk-11-jdk -y
 
 BAZEL=bazel
 if ! type bazel >/dev/null 2>&1; then
@@ -19,5 +19,5 @@ if [ $# -gt 0 ]; then
     COPT=$1
 fi
 
-$BAZEL coverage --combined_report=lcov --instrument_test_targets unittest-gcc-coverage
-mv "${TOP_DIR}"/bazel-out/_coverage/_coverage_report.dat "${TOP_DIR}"/coverage.dat
+$BAZEL coverage --combined_report=lcov unittest-gcc-coverage
+mv -f "${TOP_DIR}"/bazel-out/_coverage/_coverage_report.dat "${TOP_DIR}"/coverage.dat

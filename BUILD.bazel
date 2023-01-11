@@ -10,7 +10,10 @@ cc_library(
 
 cc_library(
     name = "sonic-cpp",
-    hdrs = glob(["include/sonic/**/*.h"]),
+    hdrs = glob([
+        "include/sonic/*.h",
+        "include/sonic/**/*.h",
+    ]),
     deps = [":string_view"],
     includes = ["include"],
 )
@@ -38,12 +41,10 @@ cc_binary(
 cc_test(
     name = "unittest-gcc",
     srcs = glob([
-            "tests/*.h",
-            "tests/*.cpp",
-            "include/sonic/*",
-            "include/sonic/**/*",
-        ]),
+        "tests/*.cpp",
+    ]),
     deps = [
+        ":sonic-cpp",
         ":string_view",
         "@gtest//:gtest_main",
     ],
@@ -90,10 +91,9 @@ cc_test(
     srcs = glob([
         "tests/*.cpp",
         "tests/*.h",
-        "include/sonic/*",
-        "include/sonic/**/*",
     ]),
     deps = [
+        ":sonic-cpp",
         "@gtest//:gtest_main",
     ],
     data = glob([
