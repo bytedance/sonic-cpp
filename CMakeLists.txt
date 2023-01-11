@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.11)
 
 project(
   sonic_cpp
-  VERSION 1.1.1
-  DESCRIPTION ""
+  VERSION 1.0.0
+  DESCRIPTION "A fast JSON serializing & deserializing library, accelerated by SIMD."
   LANGUAGES CXX)
 
 option(BUILD_UNITTEST "Build unittest." ON)
