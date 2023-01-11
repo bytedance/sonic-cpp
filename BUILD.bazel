@@ -43,7 +43,7 @@ cc_test(
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
-    deps = [ 
+    deps = [
         ":string_view",
         "@gtest//:gtest_main",
     ],
@@ -68,7 +68,7 @@ cc_test(
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
-    deps = [ 
+    deps = [
         ":string_view",
         "@gtest//:gtest_main",
     ],
@@ -110,4 +110,3 @@ cc_test(
         '-fprofile-arcs', '-ftest-coverage',
     ],
 )
-

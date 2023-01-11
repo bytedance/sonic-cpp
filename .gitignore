@@ -49,6 +49,7 @@ bazel-bin
 bazel-out
 bazel-sonic-cpp
 bazel-testlogs
+bazel-coverage-html
 
 # Perf data
 perf.data
@@ -56,3 +57,5 @@ perf.data
 # GDB
 .gdbinit
 gdb.txt
+
+coverage.dat
