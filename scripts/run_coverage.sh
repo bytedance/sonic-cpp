@@ -4,8 +4,8 @@ set -e
 CUR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 TOP_DIR="${CUR_DIR}/../"
 
-apt update
-apt install unzip openjdk-11-jdk -y
+# apt update
+# apt install unzip openjdk-11-jdk -y
 
 BAZEL=bazel
 if ! type bazel >/dev/null 2>&1; then
