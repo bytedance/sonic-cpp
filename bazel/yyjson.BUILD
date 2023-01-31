@@ -4,5 +4,6 @@ cc_library(
   srcs = ["src/yyjson.c"],
   hdrs = ["src/yyjson.h"],
   includes = ["src"],
-  copts = ['-O3', '-DNDEBUG', '-march=haswell', '-g'],
+  copts = ['-O3', '-DNDEBUG', '-g'],
 )
+

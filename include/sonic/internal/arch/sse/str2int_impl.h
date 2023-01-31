@@ -18,22 +18,35 @@
 
 #include <immintrin.h>
 
+#include <cstdint>
+
 namespace sonic_json {
 
 namespace internal {
 
+namespace sse {
+
+#ifdef DATA_MADDUBS
+#undef DATA_MADDUBS
+#endif
 #define DATA_MADDUBS()                               \
   {                                                  \
     __m128i q = _mm_set1_epi64x(0x010A010A010A010A); \
     data = _mm_maddubs_epi16(data, q);               \
   }
 
+#ifdef DATA_MADD
+#undef DATA_MADD
+#endif
 #define DATA_MADD()                                  \
   {                                                  \
     __m128i q = _mm_set1_epi64x(0x0001006400010064); \
     data = _mm_madd_epi16(data, q);                  \
   }
 
+#ifdef DATA_PACK_AND_MADD
+#undef DATA_PACK_AND_MADD
+#endif
 #define DATA_PACK_AND_MADD()                                   \
   {                                                            \
     data = _mm_packus_epi32(data, data);                       \
@@ -41,7 +54,8 @@ namespace internal {
     data = _mm_madd_epi16(data, q);                            \
   }
 
-sonic_force_inline uint64_t simd_str2int_sse(const char* c, int& man_nd) {
+SIMD_INLINE uint64_t simd_str2int(const char* c, int& man_nd) {
+  // uint64_t simd_str2int(const char* c, int& man_nd) {
   __m128i data = _mm_loadu_si128((const __m128i*)c);
   __m128i zero = _mm_setzero_si128();
   __m128i nine = _mm_set1_epi8(9);
@@ -128,5 +142,6 @@ sonic_force_inline uint64_t simd_str2int_sse(const char* c, int& man_nd) {
          _mm_extract_epi32(data, 1);
 }
 
+}  // namespace sse
 }  // namespace internal
 }  // namespace sonic_json

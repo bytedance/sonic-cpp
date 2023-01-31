@@ -24,12 +24,12 @@
 #include "sonic/dom/handler.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/error.h"
+#include "sonic/internal/arch/simd_quote.h"
+#include "sonic/internal/arch/simd_skip.h"
+#include "sonic/internal/arch/simd_str2int.h"
 #include "sonic/internal/atof_native.h"
-#include "sonic/internal/haswell.h"
 #include "sonic/internal/parse_number_normal_fast.h"
-#include "sonic/internal/simd_str2int.h"
-#include "sonic/internal/skip.h"
-#include "sonic/internal/unicode.h"
+#include "sonic/internal/utils.h"
 #include "sonic/writebuffer.h"
 
 namespace sonic_json {
@@ -352,24 +352,27 @@ class Parser {
   double_fract : {
     int fract_len = FLOATING_LONGEST_DIGITS - man_nd;
     if (fract_len > 0) {
-      uint64_t sum = internal::simd_str2int_sse(s + i, fract_len);
-      const uint64_t pow10[17] = {1,
-                                  10,
-                                  100,
-                                  1000,
-                                  10000,
-                                  100000,
-                                  1000000,
-                                  10000000,
-                                  100000000,
-                                  1000000000,
-                                  10000000000,
-                                  100000000000,
-                                  1000000000000,
-                                  10000000000000,
-                                  100000000000000,
-                                  1000000000000000,
-                                  10000000000000000};
+      uint64_t sum = internal::simd_str2int(s + i, fract_len);
+      const uint64_t pow10[18] = {
+          1,
+          10,
+          100,
+          1000,
+          10000,
+          100000,
+          1000000,
+          10000000,
+          100000000,
+          1000000000,
+          10000000000,
+          100000000000,
+          1000000000000,
+          10000000000000,
+          100000000000000,
+          1000000000000000,
+          10000000000000000,
+          100000000000000000,
+      };
       man = man * pow10[fract_len] + sum;
       man_nd += fract_len;
       i += fract_len;

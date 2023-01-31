@@ -15,32 +15,25 @@
  */
 
 #pragma once
-#include <immintrin.h>
 
-#include "sonic/dom/json_pointer.h"
-#include "sonic/error.h"
-#include "sonic/internal/haswell.h"
-#include "sonic/internal/quote.h"
-#include "sonic/internal/simd.h"
-#include "sonic/internal/unicode.h"
-#include "sonic/macro.h"
+#include "../skip_common.h"
+
+#ifndef VEC_LEN
+#error "You should define VEC macros before including skip.h"
+#endif
+
+// sse macros
+// #define VEC_LEN 16
+
+// avx2 macros
+// #define VEC_LEN 32
 
 namespace sonic_json {
 namespace internal {
+namespace x86_common {
 
-using namespace haswell;
-
-static sonic_force_inline bool EqBytes4(const uint8_t *src, uint32_t target) {
-  uint32_t val;
-  static_assert(sizeof(uint32_t) <= SONICJSON_PADDING,
-                "SONICJSON_PADDING must be larger than 4 bytes");
-  std::memcpy(&val, src, sizeof(uint32_t));
-  return val == target;
-}
-
-static sonic_force_inline bool IsSpace(uint8_t ch) {
-  return ch == ' ' || ch == '\r' || ch == '\n' || ch == '\t';
-}
+using sonic_json::internal::common::EqBytes4;
+using sonic_json::internal::common::SkipLiteral;
 
 sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
                                           uint64_t &prev_instring,
@@ -55,7 +48,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
     prev_escaped = 0;
   }
   uint64_t quote_bits = v.eq('"') & ~escaped;
-  uint64_t in_string = prefix_xor(quote_bits) ^ prev_instring;
+  uint64_t in_string = PrefixXor(quote_bits) ^ prev_instring;
   prev_instring = uint64_t(static_cast<int64_t>(in_string) >> 63);
   return in_string;
 }
@@ -65,18 +58,18 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
 template <size_t N>
 sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
                                         size_t len, const char (&tokens)[N]) {
-  while (pos + 32 <= len) {
-    simd256<uint8_t> v(data + pos);
-    simd256<bool> vor(false);
+  while (pos + VEC_LEN <= len) {
+    VecUint8Type v(data + pos);
+    VecBoolType vor(false);
     for (size_t i = 0; i < N - 1; i++) {
       vor |= (v == (uint8_t)(tokens[i]));
     }
     uint32_t next = static_cast<uint32_t>(vor.to_bitmask());
     if (next) {
-      pos += trailing_zeroes(next);
+      pos += TrailingZeroes(next);
       return data[pos];
     }
-    pos += 32;
+    pos += VEC_LEN;
   }
   while (pos < len) {
     for (size_t i = 0; i < N - 1; i++) {
@@ -98,12 +91,12 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
   uint64_t quote_bits;
   uint64_t escaped, bs_bits, prev_escaped = 0;
   bool found = false;
-  while (pos + 32 <= len) {
-    const simd::simd256<uint8_t> v(data + pos);
-    bs_bits = static_cast<uint32_t>((v == '\\').to_bitmask());
-    quote_bits = static_cast<uint32_t>((v == '"').to_bitmask());
+  while (pos + VEC_LEN <= len) {
+    const VecUint8Type v(data + pos);
+    bs_bits = static_cast<uint64_t>((v == '\\').to_bitmask());
+    quote_bits = static_cast<uint64_t>((v == '"').to_bitmask());
     if (((bs_bits - 1) & quote_bits) != 0) {
-      pos += trailing_zeroes(quote_bits) + 1;
+      pos += TrailingZeroes(quote_bits) + 1;
       return found ? kEscaped : kNormal;
     }
     if (bs_bits) {
@@ -111,11 +104,11 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
       found = true;
       quote_bits &= ~escaped;
       if (quote_bits) {
-        pos += trailing_zeroes(quote_bits) + 1;
+        pos += TrailingZeroes(quote_bits) + 1;
         return kEscaped;
       }
     }
-    pos += 32;
+    pos += VEC_LEN;
   }
   while (pos < len) {
     if (data[pos] == '\\') {
@@ -139,26 +132,26 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
   const uint8_t *p;
   while (pos + 64 <= len) {
     p = data + pos;
-#define SKIP_LOOP()                                                     \
-  {                                                                     \
-    instring = GetStringBits(p, prev_instring, prev_escaped);           \
-    simd::simd8x64<uint8_t> v(p);                                       \
-    last_lbrace_num = lbrace_num;                                       \
-    uint64_t rbrace = v.eq(right) & ~instring;                          \
-    uint64_t lbrace = v.eq(left) & ~instring;                           \
-    /* traverse each '}' */                                             \
-    while (rbrace > 0) {                                                \
-      rbrace_num++;                                                     \
-      lbrace_num = last_lbrace_num + count_ones((rbrace - 1) & lbrace); \
-      bool is_closed = lbrace_num < rbrace_num;                         \
-      if (is_closed) {                                                  \
-        sonic_assert(rbrace_num == lbrace_num + 1);                     \
-        pos += trailing_zeroes(rbrace) + 1;                             \
-        return true;                                                    \
-      }                                                                 \
-      rbrace &= (rbrace - 1);                                           \
-    }                                                                   \
-    lbrace_num = last_lbrace_num + count_ones(lbrace);                  \
+#define SKIP_LOOP()                                                    \
+  {                                                                    \
+    instring = GetStringBits(p, prev_instring, prev_escaped);          \
+    simd::simd8x64<uint8_t> v(p);                                      \
+    last_lbrace_num = lbrace_num;                                      \
+    uint64_t rbrace = v.eq(right) & ~instring;                         \
+    uint64_t lbrace = v.eq(left) & ~instring;                          \
+    /* traverse each '}' */                                            \
+    while (rbrace > 0) {                                               \
+      rbrace_num++;                                                    \
+      lbrace_num = last_lbrace_num + CountOnes((rbrace - 1) & lbrace); \
+      bool is_closed = lbrace_num < rbrace_num;                        \
+      if (is_closed) {                                                 \
+        sonic_assert(rbrace_num == lbrace_num + 1);                    \
+        pos += TrailingZeroes(rbrace) + 1;                             \
+        return true;                                                   \
+      }                                                                \
+      rbrace &= (rbrace - 1);                                          \
+    }                                                                  \
+    lbrace_num = last_lbrace_num + CountOnes(lbrace);                  \
   }
     SKIP_LOOP();
     pos += 64;
@@ -167,6 +160,7 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
   std::memcpy(buf, data + pos, len - pos);
   p = buf;
   SKIP_LOOP();
+#undef SKIP_LOOP
   return false;
 }
 
@@ -178,36 +172,6 @@ sonic_force_inline bool SkipArray(const uint8_t *data, size_t &pos,
 sonic_force_inline bool SkipObject(const uint8_t *data, size_t &pos,
                                    size_t len) {
   return SkipContainer(data, pos, len, '{', '}');
-}
-
-sonic_force_inline bool SkipLiteral(const uint8_t *data, size_t &pos,
-                                    size_t len, uint8_t token) {
-  static constexpr uint32_t kNullBin = 0x6c6c756e;
-  static constexpr uint32_t kTrueBin = 0x65757274;
-  static constexpr uint32_t kFalseBin =
-      0x65736c61;  // the binary of 'alse' in false
-  auto start = data + pos - 1;
-  auto end = data + len;
-  switch (token) {
-    case 't':
-      if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
-        pos += 3;
-        return true;
-      };
-      break;
-    case 'n':
-      if (start + 4 <= end && EqBytes4(start, kNullBin)) {
-        pos += 3;
-        return true;
-      };
-      break;
-    case 'f':
-      if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {
-        pos += 4;
-        return true;
-      }
-  }
-  return false;
 }
 
 sonic_force_inline uint8_t SkipNumber(const uint8_t *data, size_t &pos,
@@ -232,7 +196,7 @@ class SkipScanner {
         nonspace = GetNonSpaceBits(data + pos);
         if (nonspace) {
           nonspace_bits_end_ = pos + 64;
-          pos += trailing_zeroes(nonspace);
+          pos += TrailingZeroes(nonspace);
           nonspace_bits_ = nonspace;
           return data[pos++];
         } else {
@@ -253,7 +217,7 @@ class SkipScanner {
       pos = nonspace_bits_end_;
       goto found_space;
     }
-    pos = block_start + trailing_zeroes(nonspace);
+    pos = block_start + TrailingZeroes(nonspace);
     return data[pos++];
   }
 
@@ -274,7 +238,7 @@ class SkipScanner {
         nonspace = GetNonSpaceBits(data + pos);
         if (nonspace) {
           nonspace_bits_end_ = pos + 64;
-          pos += trailing_zeroes(nonspace);
+          pos += TrailingZeroes(nonspace);
           nonspace_bits_ = nonspace;
           return data[pos++];
         } else {
@@ -296,7 +260,7 @@ class SkipScanner {
         pos = nonspace_bits_end_;
         goto found_space;
       }
-      pos = block_start + trailing_zeroes(nonspace);
+      pos = block_start + TrailingZeroes(nonspace);
       return data[pos++];
     }
 
@@ -499,20 +463,6 @@ class SkipScanner {
   uint64_t nonspace_bits_{0};
 };
 
-template <typename JPStringType>
-ParseResult GetOnDemand(StringView json,
-                        const GenericJsonPointer<JPStringType> &path,
-                        StringView &target) {
-  SkipScanner scan;
-  size_t pos = 0;
-  long start = scan.GetOnDemand(json, pos, path);
-  if (start < 0) {
-    target = "";
-    return ParseResult(SonicError(-start), pos - 1);
-  }
-  target = StringView(json.data() + start, pos - start);
-  return ParseResult(kErrorNone, pos);
-}
-
+}  // namespace x86_common
 }  // namespace internal
 }  // namespace sonic_json

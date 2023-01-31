@@ -19,6 +19,26 @@ cc_library(
 )
 
 cc_binary(
+    name = "benchmark-arm",
+    srcs = glob([
+            "benchmark/*.cpp",
+            "benchmark/*.h",
+            "benchmark/*.hpp",
+    ]),
+    data = glob(["testdata/*.json"]),
+    deps = [
+        ":sonic-cpp",
+        "@google_benchmark//:benchmark",
+        "@rapidjson",
+        "@cJSON",
+        "@yyjson",
+        "@simdjson",
+    ],
+    copts = ['-O3', ' -march=armv8-a', '-DNDEBUG', '-std=c++17'],
+    linkopts = ['-lstdc++fs'],
+)
+
+cc_binary(
     name = "benchmark",
     srcs = glob([
             "benchmark/*.cpp",
@@ -82,6 +102,56 @@ cc_test(
     ],
     copts = common_copts + sanitize_copts + [
         '-O3', '-g', '-UNDEBUG', '-std=c++14',
+        '-fstack-protector-all',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+)
+
+cc_test(
+    name = "unittest-arm",
+    srcs = glob([
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
+    deps = [ 
+        ":string_view",
+        "@gtest//:gtest_main",
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-fsanitize-link-c++-runtime'
+    ],
+    copts = sanitize_copts + [
+        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=armv8-a',
+        '-fstack-protector-all',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+)
+
+cc_test(
+    name = "unittest-sse",
+    srcs = glob([
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
+    deps = [ 
+        ":string_view",
+        "@gtest//:gtest_main",
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-fsanitize-link-c++-runtime'
+    ],
+    copts = sanitize_copts + [
+        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=westmere',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ],
