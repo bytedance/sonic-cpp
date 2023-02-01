@@ -23,7 +23,7 @@ ExternalProject_Add(
 add_dependencies(bench google_benchmark)
 
 target_compile_features(bench PRIVATE cxx_std_17)
-target_link_libraries(bench simdjson yyjson cjson benchmark benchmark_main stdc++fs)
+target_link_libraries(bench simdjson yyjson cjson benchmark benchmark_main pthread stdc++fs)
 target_include_directories(bench 
     PRIVATE ${rapidjson_SOURCE_DIR}/include
     PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR} 
@@ -32,5 +32,8 @@ target_include_directories(bench
     PRIVATE ${yyjson_SOURCE_DIR}/src/
     PRIVATE ${simdjson_SOURCE_DIR}/singleheader/
 )
-target_link_directories(bench PRIVATE ${EP_PREFIX}/src/google_benchmark-build/src)
+target_link_directories(bench 
+    PRIVATE ${EP_PREFIX}/src/google_benchmark-build/src
+    PRIVATE ${simdjson_SOURCE_DIR}/
+)
 target_compile_options(bench PRIVATE ${COMPILE_FLAGS})
