@@ -54,3 +54,9 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(yyjson)
 
+FetchContent_Declare(
+    jsoncpp
+    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
+    GIT_TAG  master
+    GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(jsoncpp)

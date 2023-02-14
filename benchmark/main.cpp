@@ -28,6 +28,7 @@
 #include "simdjson.hpp"
 #include "sonic.hpp"
 #include "yyjson.hpp"
+#include "jsoncpp.hpp"
 
 static std::string get_json(const std::string_view file) {
   std::ifstream ifs;
@@ -225,6 +226,7 @@ int main(int argc, char **argv) {
       ADD_JSON_BMK(Rapidjson, METHOD); \
       ADD_JSON_BMK(YYjson, METHOD);    \
       ADD_JSON_BMK(SIMDjson, METHOD);  \
+      ADD_JSON_BMK(JsonCpp, METHOD);  \
     }                                  \
   } while (0)
 
