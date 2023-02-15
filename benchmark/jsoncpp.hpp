@@ -21,29 +21,26 @@
 
 class JsonCppStringResult : public StringResult<JsonCppStringResult> {
  public:
-  std::string_view str_impl() const {
-    return data.c_str();
-  }
+  std::string_view str_impl() const { return data.c_str(); }
   std::string data;
 };
 
-class JsonCppParseResult : public ParseResult<JsonCppParseResult, JsonCppStringResult> {
+class JsonCppParseResult
+    : public ParseResult<JsonCppParseResult, JsonCppStringResult> {
  public:
   Json::Value document;
 
-  JsonCppParseResult(std::string_view json) {
-    (void)json; 
-    
-  }
+  JsonCppParseResult(std::string_view json) { (void)json; }
   ~JsonCppParseResult() {}
 
   bool contains_impl(std::string_view key) const {
-    return document.isMember(key.data(), key.data()+key.size());
+    return document.isMember(key.data(), key.data() + key.size());
   }
 
   bool stringfy_impl(JsonCppStringResult &sr) const {
     Json::StreamWriterBuilder writer_builder;
-    std::unique_ptr<Json::StreamWriter> stream_writer(writer_builder.newStreamWriter());
+    std::unique_ptr<Json::StreamWriter> stream_writer(
+        writer_builder.newStreamWriter());
     std::ostringstream oss;
     int res = stream_writer->write(document, &oss);
     sr.data = oss.str();
@@ -72,8 +69,10 @@ class JsonCpp : public JsonBase<JsonCpp, JsonCppParseResult> {
  public:
   bool parse_impl(std::string_view json, JsonCppParseResult &pr) const {
     Json::CharReaderBuilder reader_builder;
-    std::unique_ptr<Json::CharReader> char_reader(reader_builder.newCharReader());
-    if (!char_reader->parse(json.data(), json.data()+json.size(), &pr.document, nullptr)) {
+    std::unique_ptr<Json::CharReader> char_reader(
+        reader_builder.newCharReader());
+    if (!char_reader->parse(json.data(), json.data() + json.size(),
+                            &pr.document, nullptr)) {
       return false;
     }
     return true;
