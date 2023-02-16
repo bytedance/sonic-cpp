@@ -49,9 +49,7 @@ class GenericDocument : public NodeType {
         own_alloc_(rhs.own_alloc_.release()),
         alloc_(rhs.alloc_),
         parse_result_(rhs.parse_result_),
-        str_(rhs.str_),
-        str_cap_(rhs.str_cap_),
-        strp_(rhs.strp_) {
+        str_(rhs.str_) {
     rhs.clear();
   }
 
@@ -72,8 +70,6 @@ class GenericDocument : public NodeType {
     alloc_ = rhs.alloc_;
     own_alloc_ = std::move(rhs.own_alloc_);
     str_ = rhs.str_;
-    str_cap_ = rhs.str_cap_;
-    strp_ = rhs.strp_;
 
     // Step3: clear rhs memory
     rhs.clear();
@@ -89,8 +85,6 @@ class GenericDocument : public NodeType {
     own_alloc_.swap(rhs.own_alloc_);
     std::swap(alloc_, rhs.alloc_);
     std::swap(str_, rhs.str_);
-    std::swap(str_cap_, rhs.str_cap_);
-    std::swap(strp_, rhs.strp_);
     return *this;
   }
 
@@ -237,25 +231,12 @@ class GenericDocument : public NodeType {
 
   friend class Parser;
 
-  // Note: it is a callback function in parse.parse_impl
-  void copyToRoot(DNode<Allocator>& node) {
-    // copy to inherited DNode member
-    NodeType::operator=(std::move(node));
-  }
-
   std::unique_ptr<Allocator> own_alloc_{nullptr};
   Allocator* alloc_{nullptr};  // maybe external allocator
   ParseResult parse_result_{};
 
-  // Node Buffer for internal stack
-  DNode<Allocator>* st_{nullptr};
-  size_t cap_{0};
-  long np_{0};
-
   // String Buffer for all parsed string values
   char* str_{nullptr};
-  size_t str_cap_{0};
-  long strp_{0};
 };
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
