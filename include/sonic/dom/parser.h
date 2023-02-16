@@ -679,24 +679,24 @@ class Parser {
     return;
   }
 
-  // parseLazyImpl only mark the json positions, and not parse any more, even
-  // the keys.
   template <typename LazySAX>
   sonic_force_inline ParseResult parseLazyImpl(const uint8_t *data, size_t len,
                                                LazySAX &sax) {
-    using Allocator = typename LazySAX::Allocator;
+#define sonic_set_raw()                                       \
+  {                                                           \
+    auto rptr = reinterpret_cast<const char *>(data + start); \
+    sax.Raw(StringView(rptr, pos - start));                   \
+  }
+
     size_t pos = 0;
     size_t cnt = 0;
-    uint8_t c = scan.SkipSpaceSafe(data, pos, len);
+    uint8_t c = 0;
     long start = 0;
+    const uint8_t *ksrc = nullptr;
     StringView key;
-    SonicError err = kErrorNone;
-    auto alloc = sax.GetAllocator();
-    bool allocated = false;
-    int skips = 0;
-    size_t sn = 0;
-    const uint8_t *src, *sdst;
+    internal::SkipStringResult ret;
 
+    c = scan.SkipSpaceSafe(data, pos, len);
     switch (c) {
       case '[': {
         sax.StartArray();
@@ -716,15 +716,15 @@ class Parser {
           return kErrorNone;
         }
         goto obj_key;
-      }
+      };
       default: {
         // TODO: fix the abstract.
         pos--;
         start = scan.SkipOne(data, pos, len);
         if (start < 0) goto skip_error;
-        sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+        sonic_set_raw();
         return kErrorNone;
-      }
+      };
     };
 
   obj_key:
@@ -732,30 +732,14 @@ class Parser {
       goto err_invalid_char;
     }
     // parse string in allocater if has esacped chars
-    src = data + pos;
-    sdst = src;
-    skips = internal::SkipString(data, pos, len);
-    sn = data + pos - 1 - src;
-    allocated = false;
-    if (!skips) {
+    ksrc = data + pos;
+    ret = internal::SkipString(data, pos, len);
+    if (ret == internal::kUnclosed) {
       return kParseErrorInvalidChar;
     }
-    if (skips == 2) {
-      // parse escaped strings
-      uint8_t *dst = (uint8_t *)alloc.Malloc(sn + 32);
-      sdst = dst;
-      std::memcpy(dst, src, sn);
-      sn = internal::parseStringInplace(dst, err);
-      if (err) {
-        // update the error positions
-        pos = (src - data) + (dst - sdst);
-        Allocator::Free((void *)(sdst));
-        return err;
-      }
-      allocated = true;
-    }
-    key = StringView(reinterpret_cast<const char *>(sdst), sn);
-    if (!sax.Key(key.data(), key.size(), allocated)) {
+    key =
+        StringView(reinterpret_cast<const char *>(ksrc), data + pos - 1 - ksrc);
+    if (!sax.Key(key, ret == internal::kEscaped)) {
       goto err_invalid_char;
     }
     c = scan.SkipSpaceSafe(data, pos, len);
@@ -764,7 +748,7 @@ class Parser {
     }
     start = scan.SkipOne(data, pos, len);
     if (start < 0) goto skip_error;
-    sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+    sonic_set_raw();
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
     if (c == ',') {
@@ -780,7 +764,7 @@ class Parser {
   arr_val:
     start = scan.SkipOne(data, pos, len);
     if (start < 0) goto skip_error;
-    sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+    sonic_set_raw();
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
     if (c == ',') {
@@ -796,6 +780,7 @@ class Parser {
     return ParseResult(kParseErrorInvalidChar, pos - 1);
   skip_error:
     return ParseResult(SonicError(-start), pos - 1);
+#undef sonic_set_raw
   }
 
 #undef sonic_check_err

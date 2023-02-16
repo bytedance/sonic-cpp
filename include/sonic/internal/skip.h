@@ -89,12 +89,15 @@ sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
   return '\0';
 }
 
+enum SkipStringResult {
+  kUnclosed = 0,
+  kNormal = 1,
+  kEscaped = 2,
+};
+
 // pos is the after the ending quote
-sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
-                                  size_t len) {
-  const static int kEscaped = 2;
-  const static int kNormal = 1;
-  const static int kUnclosed = 0;
+sonic_force_inline SkipStringResult SkipString(const uint8_t *data, size_t &pos,
+                                               size_t len) {
   uint64_t quote_bits;
   uint64_t escaped, bs_bits, prev_escaped = 0;
   bool found = false;
@@ -132,8 +135,9 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 }
 
 // return true if container is closed.
-sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
-                                      size_t len, uint8_t left, uint8_t right) {
+static sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
+                                             size_t len, uint8_t left,
+                                             uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
   const uint8_t *p;
@@ -500,9 +504,9 @@ class SkipScanner {
 };
 
 template <typename JPStringType>
-ParseResult GetOnDemand(StringView json,
-                        const GenericJsonPointer<JPStringType> &path,
-                        StringView &target) {
+inline ParseResult GetOnDemand(StringView json,
+                               const GenericJsonPointer<JPStringType> &path,
+                               StringView &target) {
   SkipScanner scan;
   size_t pos = 0;
   long start = scan.GetOnDemand(json, pos, path);

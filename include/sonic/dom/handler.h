@@ -19,7 +19,9 @@
 #include <string>
 
 #include "sonic/dom/type.h"
+#include "sonic/error.h"
 #include "sonic/internal/haswell.h"
+#include "sonic/internal/quote.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
 
@@ -263,21 +265,34 @@ class LazySAXHandler {
     return true;
   }
 
-  sonic_force_inline bool Key(const char *data, size_t len, size_t allocated) {
+  // Note: key is raw and may hav escaped chars.
+  sonic_force_inline bool Key(StringView raw_key, bool has_escaped) {
+    const char *kdata = raw_key.data();
+    size_t klen = raw_key.size();
+    if (sonic_unlikely(has_escaped)) {
+      // preallocate buffer with 32-bytes padding for SIMD loop
+      uint8_t *dst = (uint8_t *)(alloc_->Malloc(klen + 32));
+      std::memcpy(dst, kdata, klen);
+      SonicError err = kErrorNone;
+      klen = internal::parseStringInplace(dst, err);
+      if (err) {
+        Allocator::Free(dst);
+        return false;
+      }
+      kdata = const_cast<const char *>(reinterpret_cast<char *>(dst));
+    }
     new (stack_.PushSize<NodeType>(1)) NodeType();
     NodeType *key = stack_.Top<NodeType>();
-    key->setLength(len, allocated ? kStringFree : kStringCopy);
-    key->sv.p = data;
+    key->setLength(klen, has_escaped ? kStringFree : kStringCopy);
+    key->sv.p = kdata;
     return true;
   }
 
-  sonic_force_inline bool Raw(const char *data, size_t len) {
+  sonic_force_inline bool Raw(StringView raw) {
     new (stack_.PushSize<NodeType>(1)) NodeType();
-    stack_.Top<NodeType>()->setRaw(StringView(data, len));
+    stack_.Top<NodeType>()->setRaw(raw);
     return true;
   }
-
-  sonic_force_inline Allocator &GetAllocator() { return *alloc_; }
 
   static constexpr size_t kDefaultNum = 16;
   // allocator for node stack and string buffers
