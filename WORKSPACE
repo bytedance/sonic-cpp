@@ -43,6 +43,12 @@ new_git_repository(
 )
 
 git_repository(
+    name = "jsoncpp",
+    branch = "master",
+    remote = "https://github.com/open-source-parsers/jsoncpp",
+)
+
+git_repository(
     name = "gflags",
     branch = "master",
     remote = "https://github.com/gflags/gflags.git",

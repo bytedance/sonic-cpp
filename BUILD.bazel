@@ -33,6 +33,7 @@ cc_binary(
         "@cJSON",
         "@yyjson",
         "@simdjson",
+        "@jsoncpp//:jsoncpp",
     ],
     copts = common_copts + ['-DNDEBUG', '-std=c++17'],
     linkopts = ['-lstdc++fs'],

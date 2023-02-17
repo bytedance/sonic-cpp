@@ -23,6 +23,7 @@
 #include <string_view>
 
 #include "cjson.hpp"
+#include "jsoncpp.hpp"
 #include "ondemand.hpp"
 #include "rapidjson.hpp"
 #include "simdjson.hpp"
@@ -225,6 +226,7 @@ int main(int argc, char **argv) {
       ADD_JSON_BMK(Rapidjson, METHOD); \
       ADD_JSON_BMK(YYjson, METHOD);    \
       ADD_JSON_BMK(SIMDjson, METHOD);  \
+      ADD_JSON_BMK(JsonCpp, METHOD);   \
     }                                  \
   } while (0)
 
