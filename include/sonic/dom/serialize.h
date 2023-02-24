@@ -37,10 +37,17 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
     const NodeType* ptr;
   };
 
+  // fastpath for raw node
+  wb.Clear();
+  if (node->IsRaw()) {
+    StringView raw = node->GetRaw();
+    wb.PushUnsafe(raw.data(), raw.size());
+    return kErrorNone;
+  }
+
   /* preallocate buffer */
   constexpr size_t kExpectMinifyRatio = 18;
   constexpr size_t kNumberSize = 33;
-
   size_t node_nums = node->IsContainer() ? node->Size() : 1;
   size_t estimate = node_nums * kExpectMinifyRatio + 64;
   bool is_obj = node->IsObject();
@@ -54,7 +61,6 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   internal::Stack stk;
   ParentCtx* parent;
 
-  wb.Clear();
   wb.Reserve(estimate);
 
   bool is_single = (!node->IsContainer()) || node->Empty();
@@ -145,7 +151,7 @@ val_begin:
       break;
     }
     case kRaw: {
-      str_len = node->Size();
+      str_len = node->GetRaw().size();
       wb.Grow(str_len + 1);
       wb.PushUnsafe(node->GetRaw().data(), str_len);
       wb.PushUnsafe<char>(',');

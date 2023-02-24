@@ -290,7 +290,7 @@ class LazySAXHandler {
 
   sonic_force_inline bool Raw(StringView raw) {
     new (stack_.PushSize<NodeType>(1)) NodeType();
-    stack_.Top<NodeType>()->setRaw(raw);
+    stack_.Top<NodeType>()->setRaw(raw, alloc_);
     return true;
   }
 

@@ -18,6 +18,7 @@
 
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
+#include "sonic/dom/lazynode.h"
 #include "sonic/dom/parser.h"
 
 namespace sonic_json {
@@ -174,7 +175,7 @@ class GenericDocument : public NodeType {
       return;
     }
     // NOTE: must free dynamic nodes at first
-    reinterpret_cast<DNode<Allocator>*>(this)->~DNode();
+    this->~NodeType();
     Allocator::Free(str_);
     // Avoid Double Free
     str_ = nullptr;
@@ -183,6 +184,13 @@ class GenericDocument : public NodeType {
 
   template <unsigned parseFlags>
   GenericDocument& parseImpl(const char* json, size_t len) {
+    parseImplTag<parseFlags>(json, len, NodeType());
+    return *this;
+  }
+
+  template <unsigned parseFlags>
+  GenericDocument& parseImplTag(const char* json, size_t len,
+                                DNode<Allocator>) {
     Parser p;
     SAXHandler<NodeType> sax(*alloc_);
     parse_result_ = allocateStringBuffer(json, len);
@@ -198,6 +206,21 @@ class GenericDocument : public NodeType {
       return *this;
     }
     NodeType::operator=(std::move(sax.st_[0]));
+    return *this;
+  }
+
+  /* special for lazynode */
+  template <unsigned parseFlags>
+  GenericDocument& parseImplTag(const char* json, size_t len,
+                                LazyNode<Allocator>) {
+    Parser p;
+    LazySAXHandler<NodeType> sax(*alloc_);
+    parse_result_ = p.template ParseLazy<parseFlags>(json, len, sax);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
+    NodeType* root = sax.stack_.template Begin<NodeType>();
+    NodeType::operator=(std::move(*root));
     return *this;
   }
 
@@ -240,5 +263,6 @@ class GenericDocument : public NodeType {
 };
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
+using LazyDocument = GenericDocument<LazyNode<SONIC_DEFAULT_ALLOCATOR>>;
 
 }  // namespace sonic_json

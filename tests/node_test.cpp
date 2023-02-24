@@ -20,8 +20,10 @@
 
 #include "gtest/gtest.h"
 #include "sonic/dom/dynamicnode.h"
+#include "sonic/dom/lazynode.h"
 #include "sonic/dom/parser.h"
 #include "sonic/sonic.h"
+
 namespace {
 
 using namespace sonic_json;
@@ -129,8 +131,11 @@ using MAllocType = MemoryPoolAllocator<>;
 using SAllocType = SimpleAllocator;
 using DNodeMempoolNode = DNode<MAllocType>;
 using DNodeSimpleNode = DNode<SAllocType>;
+using LazyNodeMempoolNode = LazyNode<MAllocType>;
+using LazyNodeSimpleNode = LazyNode<SAllocType>;
 
-using NodeTypes = testing::Types<DNodeMempoolNode, DNodeSimpleNode>;
+using NodeTypes = testing::Types<DNodeMempoolNode, DNodeSimpleNode,
+                                 LazyNodeMempoolNode, LazyNodeSimpleNode>;
 TYPED_TEST_SUITE(NodeTest, NodeTypes);
 
 TYPED_TEST(NodeTest, BasciConstrcut) {
@@ -701,7 +706,8 @@ TYPED_TEST(NodeTest, PopBack) {
 template <typename T>
 class DNodeTest : public NodeTest<T> {};
 
-using DNodeTypes = testing::Types<DNodeMempoolNode, DNodeSimpleNode>;
+using DNodeTypes = testing::Types<DNodeMempoolNode, DNodeSimpleNode,
+                                  LazyNodeMempoolNode, LazyNodeSimpleNode>;
 TYPED_TEST_SUITE(DNodeTest, DNodeTypes);
 
 TYPED_TEST(DNodeTest, Reserve) {
@@ -784,8 +790,8 @@ TYPED_TEST(NodeTest, SourceAllocator) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;
 
-  Node a("hello");
-  Node b("world");
+  NodeType a("hello");
+  NodeType b("world");
   Allocator alloc;
 
   NodeType c(a, alloc);

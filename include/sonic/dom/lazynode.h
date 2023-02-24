@@ -1,19 +1,3 @@
-/*
- * Copyright 2022 ByteDance Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #pragma once
 
 #include <map>
@@ -23,6 +7,7 @@
 #include "sonic/allocator.h"
 #include "sonic/dom/genericnode.h"
 #include "sonic/dom/handler.h"
+#include "sonic/dom/parser.h"
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
@@ -33,24 +18,31 @@
 
 namespace sonic_json {
 
+// LazyNode is a lazy parse node, it will not parse the json string until you
+// access the node.
+// Note: Lazy is not thread safe and not reentrant, even if you use Get APIs.
 template <typename Allocator = SONIC_DEFAULT_ALLOCATOR>
-class DNode : public GenericNode<DNode<Allocator>> {
- public:
-  using NodeType = DNode;
-  using BaseNode = GenericNode<DNode<Allocator>>;
-  using AllocatorType = Allocator;
-  using MemberNode = typename NodeTraits<DNode>::MemberNode;
-  using MemberIterator = typename NodeTraits<DNode>::MemberIterator;
-  using ConstMemberIterator = typename NodeTraits<DNode>::ConstMemberIterator;
-  using ValueIterator = typename NodeTraits<DNode>::ValueIterator;
-  using ConstValueIterator = typename NodeTraits<DNode>::ConstValueIterator;
+class LazyNode : public GenericNode<LazyNode<Allocator>> {
+ private:
+  Allocator* alloc_ = nullptr;
 
-  friend class SAXHandler<DNode>;
-  friend class LazySAXHandler<DNode>;
+ public:
+  using NodeType = LazyNode;
+  using BaseNode = GenericNode<LazyNode<Allocator>>;
+  using AllocatorType = Allocator;
+  using MemberNode = typename NodeTraits<LazyNode>::MemberNode;
+  using MemberIterator = typename NodeTraits<LazyNode>::MemberIterator;
+  using ConstMemberIterator =
+      typename NodeTraits<LazyNode>::ConstMemberIterator;
+  using ValueIterator = typename NodeTraits<LazyNode>::ValueIterator;
+  using ConstValueIterator = typename NodeTraits<LazyNode>::ConstValueIterator;
+
+  friend class SAXHandler<LazyNode>;
+  friend class LazySAXHandler<LazyNode>;
 
   friend BaseNode;
   template <typename>
-  friend class DNode;
+  friend class LazyNode;
   template <unsigned serializeFlags, typename NodeType>
   friend SonicError internal::SerializeImpl(const NodeType*, WriteBuffer&);
 
@@ -60,9 +52,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @brief move constructor
    * @param rhs moved value, must be a rvalue reference
    */
-  DNode() noexcept : BaseNode() {}
-  DNode(DNode&& rhs) noexcept : BaseNode() { rawAssign(rhs); }
-  DNode(const DNode& rhs) = delete;
+  LazyNode() noexcept : BaseNode() {}
+  LazyNode(LazyNode&& rhs) noexcept : BaseNode() { rawAssign(rhs); }
+  LazyNode(const LazyNode& rhs) = delete;
 
   /**
    * @brief copy constructor
@@ -72,10 +64,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @param copyString false defautlly, copy const string or not.
    */
   template <typename SourceAllocator>
-  DNode(const DNode<SourceAllocator>& rhs, Allocator& alloc,
-        bool copyString = false)
+  LazyNode(const LazyNode<SourceAllocator>& rhs, Allocator& alloc,
+           bool copyString = false)
       : BaseNode() {
-    using rhsNodeType = DNode<SourceAllocator>;
+    using rhsNodeType = LazyNode<SourceAllocator>;
+    alloc_ = &alloc;
     switch (rhs.getBasicType()) {
       case kObject: {
         size_t count = rhs.Size();
@@ -83,10 +76,10 @@ class DNode : public GenericNode<DNode<Allocator>> {
         if (count > 0) {
           void* mem = containerMalloc<MemberNode>(count, alloc);
           rhsNodeType* rn = rhs.getObjChildrenFirst();
-          DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
+          LazyNode* ln = (LazyNode*)((char*)mem + sizeof(MetaNode));
           for (size_t i = 0; i < count * 2; i += 2) {
-            new (ln + i) DNode(*(rn + i), alloc, copyString);
-            new (ln + i + 1) DNode(*(rn + i + 1), alloc, copyString);
+            new (ln + i) LazyNode(*(rn + i), alloc, copyString);
+            new (ln + i + 1) LazyNode(*(rn + i + 1), alloc, copyString);
           }
           setChildren(mem);
         } else {
@@ -99,10 +92,10 @@ class DNode : public GenericNode<DNode<Allocator>> {
         this->a.len = rhs.getTypeAndLen();  // Copy size and type.
         if (a_size > 0) {
           rhsNodeType* rn = rhs.getArrChildrenFirst();
-          void* mem = containerMalloc<DNode>(a_size, alloc);
-          DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
+          void* mem = containerMalloc<LazyNode>(a_size, alloc);
+          LazyNode* ln = (LazyNode*)((char*)mem + sizeof(MetaNode));
           for (size_t i = 0; i < a_size; ++i) {
-            new (ln + i) DNode(*(rn + i), alloc, copyString);
+            new (ln + i) LazyNode(*(rn + i), alloc, copyString);
           }
           setChildren(mem);
           setCapacity(a_size);
@@ -130,7 +123,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
         break;
       }
       default:
-        std::memcpy(&(this->data), &rhs, sizeof(this->data));
+        // NOTE: not copy the alloc_ pointer here.
+        std::memcpy(&(this->data), &rhs, sizeof(BaseNode));
         break;
     }
   }
@@ -138,27 +132,79 @@ class DNode : public GenericNode<DNode<Allocator>> {
   /**
    * @brief destructor
    */
-  ~DNode() {
+  ~LazyNode() {
     if (!Allocator::kNeedFree) {
       return;
     }
     destroy();
   }
 
-  DNode& operator=(const DNode& rhs) = delete;
-  DNode& operator=(DNode& rhs) = delete;
+  // Check APIs
+#define LAZY_CONST_API(name, bool)       \
+  sonic_force_inline bool name() const { \
+    checkOrLoad();                       \
+    return BaseNode::name();             \
+  }
+
+#define LAZY_API(name, bool)       \
+  sonic_force_inline bool name() { \
+    checkOrLoad();                 \
+    return BaseNode::name();       \
+  }
+
+  LAZY_CONST_API(IsNull, bool);
+  LAZY_CONST_API(IsBool, bool);
+  LAZY_CONST_API(IsString, bool);
+  LAZY_CONST_API(IsNumber, bool);
+  LAZY_CONST_API(IsTrue, bool);
+  LAZY_CONST_API(IsFalse, bool);
+  LAZY_CONST_API(IsDouble, bool);
+  LAZY_CONST_API(IsInt64, bool);
+  LAZY_CONST_API(IsUint64, bool);
+  LAZY_CONST_API(Empty, bool);
+  LAZY_CONST_API(IsObject, bool);
+  LAZY_CONST_API(IsArray, bool);
+
+  // sonic_force_inline bool IsObject() const noexcept {
+  //   if (this->IsRaw() && first() == '{') {
+  //     return true;
+  //   }
+  //   return BaseNode::IsObject();
+  // }
+
+  // sonic_force_inline bool IsArray() const noexcept {
+  //   if (this->IsRaw() && first() == '[') {
+  //     return true;
+  //   }
+  //   return BaseNode::IsArray();
+  // }
+
+  // Get APIs
+  LAZY_CONST_API(GetString, std::string);
+  LAZY_CONST_API(GetStringView, StringView);
+  LAZY_CONST_API(GetInt64, int64_t);
+  LAZY_CONST_API(GetUint64, uint64_t);
+  LAZY_CONST_API(GetDouble, double);
+
+  size_t Size() const {
+    checkOrLoad();
+    return BaseNode::Size();
+  }
+
+  LazyNode& operator=(const LazyNode& rhs) = delete;
+  LazyNode& operator=(LazyNode& rhs) = delete;
   /**
    * @brief move assignment
    * @param rhs rvalue reference to right hand side
-   * @return DNode& this reference
+   * @return LazyNode& this reference
    */
-  DNode& operator=(DNode&& rhs) {
+  LazyNode& operator=(LazyNode&& rhs) {
     if (sonic_likely(this != &rhs)) {
       // Can't destroy "this" before assigning "rhs", otherwise "rhs"
       // could be used after free if it's an sub-node of "this",
       // hence the temporary danse.
       // Copied from RapidJSON.
-      DNode temp;
+      LazyNode temp;
       temp.rawAssign(rhs);
       this->destroy();
       rawAssign(temp);
@@ -175,7 +221,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval false not equals to
    */
   template <typename SourceAllocator>
-  bool operator==(const DNode<SourceAllocator>& rhs) const noexcept {
+  bool operator==(const LazyNode<SourceAllocator>& rhs) const noexcept {
     if (this->getBasicType() != rhs.getBasicType()) {
       return false;
     }
@@ -225,8 +271,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
         if (this->GetType() != rhs.GetType()) {
           return false;
         }
-        // Exactly equal for double.
-        return !std::memcmp(this, &rhs, sizeof(rhs));
+        // NOTE: memcmp the basenode.
+        return !std::memcmp(this, &rhs, sizeof(BaseNode));
 
       default:
         return this->GetType() == rhs.GetType();
@@ -238,7 +284,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @brief operator!=
    */
   template <typename SourceAllocator>
-  bool operator!=(const DNode<SourceAllocator>& rhs) const noexcept {
+  bool operator!=(const LazyNode<SourceAllocator>& rhs) const noexcept {
     return !(*this == rhs);
   }
 
@@ -247,6 +293,20 @@ class DNode : public GenericNode<DNode<Allocator>> {
   using BaseNode::operator[];
   using BaseNode::FindMember;
   using BaseNode::HasMember;
+
+  LAZY_CONST_API(MemberBegin, ConstMemberIterator);
+  LAZY_CONST_API(MemberEnd, ConstMemberIterator);
+  LAZY_CONST_API(CMemberBegin, ConstMemberIterator);
+  LAZY_CONST_API(CMemberEnd, ConstMemberIterator);
+  LAZY_API(MemberBegin, MemberIterator);
+  LAZY_API(MemberEnd, MemberIterator);
+
+  LAZY_CONST_API(Begin, ConstValueIterator);
+  LAZY_CONST_API(End, ConstValueIterator);
+  LAZY_CONST_API(CBegin, ConstValueIterator);
+  LAZY_CONST_API(CEnd, ConstValueIterator);
+  LAZY_API(Begin, ValueIterator);
+  LAZY_API(End, ValueIterator);
 
   /**
    * @brief Create a map to trace all members of this object.
@@ -295,22 +355,67 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @param rhs source node.
    * @param alloc reference of allocator which maintains this node's memory
    * @param copyString whether copy const string in source node, default is not.
-   * @return DNode& reference to this node to support streaming APIs
+   * @return LazyNode& reference to this node to support streaming APIs
    * @node This function will recursively. If json-tree is too depth, this
    * function maybe cause stackoveflow.
    */
   template <typename SourceAllocator>
-  DNode& CopyFrom(const DNode<SourceAllocator>& rhs, Allocator& alloc,
-                  bool copyString = false) {
+  LazyNode& CopyFrom(const LazyNode<SourceAllocator>& rhs, Allocator& alloc,
+                     bool copyString = false) {
     this->destroy();
-    new (this) DNode(rhs, alloc, copyString);
+    new (this) LazyNode(rhs, alloc, copyString);
     return *this;
   }
 
-  /**
-   * @brief move another node to this.
-   * @param rhs source node
-   */
+  void LoadLazy() const {
+    LazyNode* self = const_cast<LazyNode*>(this);
+    self->LoadLazy();
+  }
+
+  void LoadLazy() {
+    if (!this->IsRaw()) {
+      return;
+    }
+
+    // use temp node to make it free after load, if type is kRawFree.
+    NodeType temp(std::move(*this));
+    StringView raw = temp.GetRaw();
+    char c = *raw.data();
+
+    // lazily load the JSON object or array.
+    if (c == '[' || c == '{') {
+      Parser p;
+      LazySAXHandler<NodeType> sax(*alloc_);
+      // TODO: maybe add ParseLazy(sax) API.
+      ParseResult ret = p.ParseLazy(raw.data(), raw.size(), sax);
+      if (ret.Error()) {
+        return;
+      }
+      *this = std::move(*sax.stack_.template Begin<NodeType>());
+      return;
+    }
+
+    // parse other primitive JSON types.
+    // TODO: elimiate the allocation for numbers or literals.
+    switch (c) {
+      case 't':
+        ParseTrue(raw, *this);
+        break;
+      case 'f':
+        ParseFalse(raw, *this);
+        break;
+      case 'n':
+        ParseNull(raw, *this);
+        break;
+      case '"':
+        ParseString(raw, *this, *alloc_);
+        break;
+      default:
+        ParseNumber(raw, *this);
+        break;
+    }
+    return;
+  }
 
  private:
   using MSType = StringView;
@@ -333,91 +438,93 @@ class DNode : public GenericNode<DNode<Allocator>> {
   };
 
   // Set APIs
-  DNode& setNullImpl() {
+  LazyNode& setNullImpl() {
     this->destroy();
     new (this) BaseNode(kNull);
     return *this;
   }
 
-  DNode& setBoolImpl(bool b) {
+  LazyNode& setBoolImpl(bool b) {
     this->destroy();
     new (this) BaseNode(b);
     return *this;
   }
 
-  DNode& setObjectImpl() {
+  LazyNode& setObjectImpl() {
     this->destroy();
     new (this) BaseNode(kObject);
     setChildren(nullptr);
     return *this;
   }
 
-  DNode& setArrayImpl() {
+  LazyNode& setArrayImpl() {
     this->destroy();
     new (this) BaseNode(kArray);
     setChildren(nullptr);
     return *this;
   }
 
-  DNode& setIntImpl(int i) {
+  LazyNode& setIntImpl(int i) {
     this->destroy();
     new (this) BaseNode(i);
     return *this;
   }
 
-  DNode& setUintImpl(unsigned int i) {
+  LazyNode& setUintImpl(unsigned int i) {
     this->destroy();
     new (this) BaseNode(i);
     return *this;
   }
 
-  DNode& setInt64Impl(int64_t i) {
+  LazyNode& setInt64Impl(int64_t i) {
     this->destroy();
     new (this) BaseNode(i);
     return *this;
   }
 
-  DNode& setUint64Impl(uint64_t i) {
+  LazyNode& setUint64Impl(uint64_t i) {
     this->destroy();
     new (this) BaseNode(i);
     return *this;
   }
 
-  DNode& setDoubleImpl(double d) {
+  LazyNode& setDoubleImpl(double d) {
     this->destroy();
     new (this) BaseNode(d);
     return *this;
   }
 
-  DNode& setStringImpl(const char* s, size_t len) {
+  LazyNode& setStringImpl(const char* s, size_t len) {
     this->destroy();
     new (this) BaseNode(s, len);
     return *this;
   }
 
-  DNode& setStringImpl(const char* s, size_t len, Allocator& alloc) {
+  LazyNode& setStringImpl(const char* s, size_t len, Allocator& alloc) {
     this->destroy();
     new (this) BaseNode(s, len, alloc);
     return *this;
   }
 
-  DNode& setRawImpl(const char* s, size_t len, Allocator*) {
+  LazyNode& setRawImpl(const char* s, size_t len, Allocator* alloc) {
     this->destroy();
     this->raw.p = s;
     this->setLength(len, kRawCopy);
+    alloc_ = alloc;
     return *this;
   }
 
-  DNode& popBackImpl() {
-    getArrChildrenFirstUnsafe()[this->Size() - 1].~DNode();
+  LazyNode& popBackImpl() {
+    getArrChildrenFirstUnsafe()[this->Size() - 1].~LazyNode();
     this->subLength(1);
     return *this;
   }
 
-  DNode& reserveImpl(size_t new_cap, Allocator& alloc) {
+  LazyNode& reserveImpl(size_t new_cap, Allocator& alloc) {
+    checkOrLoad();
     if (new_cap > this->Capacity()) {
-      setChildren(containerRealloc<DNode>(children(), this->Capacity(), new_cap,
-                                          alloc));
+      setChildren(containerRealloc<LazyNode>(children(), this->Capacity(),
+                                             new_cap, alloc));
     }
     return *this;
   }
@@ -438,15 +545,16 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return ConstValueIterator(getArrChildrenFirst()) + this->Size();
   }
 
-  DNode& backImpl() const noexcept {
+  LazyNode& backImpl() const noexcept {
     return *(getArrChildrenFirst() + this->Size() - 1);
   }
 
   size_t capacityImpl() const noexcept {
+    checkOrLoad();
     return children() != nullptr ? meta()->cap : 0;
   }
 
-  DNode& memberReserveImpl(size_t new_cap, Allocator& alloc) {
+  LazyNode& memberReserveImpl(size_t new_cap, Allocator& alloc) {
     if (new_cap > this->Capacity()) {
       void* old_ptr = children();
       size_t old_cap = this->Capacity();
@@ -519,34 +627,34 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return (MetaNode*)(this->a.next.children);
   }
 
-  sonic_force_inline DNode* getArrChildrenFirst() const {
+  sonic_force_inline LazyNode* getArrChildrenFirst() const {
     sonic_assert(this->IsArray());
     if (nullptr == children()) {
       return nullptr;
     }
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return (LazyNode*)((char*)this->a.next.children +
+                       sizeof(MetaNode) / sizeof(char));
   }
 
-  sonic_force_inline DNode* getArrChildrenFirstUnsafe() const {
+  sonic_force_inline LazyNode* getArrChildrenFirstUnsafe() const {
     sonic_assert(this->IsArray());
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return (LazyNode*)((char*)this->a.next.children +
+                       sizeof(MetaNode) / sizeof(char));
   }
 
-  sonic_force_inline DNode* getObjChildrenFirst() const {
+  sonic_force_inline LazyNode* getObjChildrenFirst() const {
     sonic_assert(this->IsObject());
     if (nullptr == children()) {
       return nullptr;
     }
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return (LazyNode*)((char*)this->a.next.children +
+                       sizeof(MetaNode) / sizeof(char));
   }
 
-  sonic_force_inline DNode* getObjChildrenFirstUnsafe() const {
+  sonic_force_inline LazyNode* getObjChildrenFirstUnsafe() const {
     sonic_assert(this->IsObject());
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return (LazyNode*)((char*)this->a.next.children +
+                       sizeof(MetaNode) / sizeof(char));
   }
 
   sonic_force_inline void setChildren(void* new_child) {
@@ -596,22 +704,23 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return const_cast<MemberIterator>(it);
   }
 
-  sonic_force_inline DNode& findValueImpl(StringView key) const noexcept {
+  sonic_force_inline LazyNode& findValueImpl(StringView key) const noexcept {
     auto m = findMemberImpl(key);
     if (m != this->MemberEnd()) {
       return m->value;
     }
-    static DNode tmp{};
+    static LazyNode tmp{};
     tmp.SetNull();
     return tmp;
   }
 
-  DNode& findValueImpl(size_t idx) const noexcept {
+  LazyNode& findValueImpl(size_t idx) const noexcept {
+    checkOrLoad();
     return *(getArrChildrenFirst() + idx);
   }
 
-  MemberIterator addMemberImpl(StringView key, DNode& value, Allocator& alloc,
-                               bool copyKey) {
+  MemberIterator addMemberImpl(StringView key, LazyNode& value,
+                               Allocator& alloc, bool copyKey) {
     constexpr size_t k_default_obj_cap = 16;
     size_t count = this->Size();
     if (count >= this->Capacity()) {
@@ -627,13 +736,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
     }
 
     // add member to the last pos
-    DNode name;
+    LazyNode name;
     if (copyKey) {
       name.SetString(key, alloc);
     } else {
       name.SetString(key);
     }
-    DNode* last = this->getObjChildrenFirst() + count * 2;
+    LazyNode* last = this->getObjChildrenFirst() + count * 2;
     last->rawAssign(name);         // MemberEnd()->name
     (last + 1)->rawAssign(value);  // MemberEnd()->value
     this->addLength(1);
@@ -671,8 +780,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
     MemberIterator m_tail = memberBeginUnsafe() + (this->Size() - 1);
     // TODO: destroy() then memcpy.
     if (m != m_tail) {
-      DNode* m_name = (DNode*)(&(m->name));
-      DNode* tail_name = (DNode*)(&(m_tail->name));
+      LazyNode* m_name = (LazyNode*)(&(m->name));
+      LazyNode* tail_name = (LazyNode*)(&(m_tail->name));
       *m_name = std::move(*tail_name);
       m->value = std::move(m_tail->value);
       // maintain map
@@ -691,8 +800,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
         map->emplace(std::make_pair(m->name.GetStringView(), pos));
       }
     } else {
-      m->name.~DNode();
-      m->value.~DNode();
+      m->name.~LazyNode();
+      m->value.~LazyNode();
     }
 
     this->subLength(1);
@@ -714,8 +823,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
       return this->MemberEnd();
     }
     for (MemberIterator it = first; it != last; ++it) {
-      it->name.~DNode();
-      it->value.~DNode();
+      it->name.~LazyNode();
+      it->value.~LazyNode();
     }
     if (first != last || last != end) {
       std::memmove(static_cast<void*>(&(*first)), static_cast<void*>(&(*last)),
@@ -725,7 +834,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return first;
   }
 
-  DNode& pushBackImpl(DNode& value, Allocator& alloc) {
+  LazyNode& pushBackImpl(LazyNode& value, Allocator& alloc) {
     constexpr size_t k_default_array_cap = 16;
     sonic_assert(this->IsArray());
     // reseve capacity
@@ -733,12 +842,12 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (this->Size() >= cap) {
       size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;
       void* old_ptr = this->a.next.children;
-      DNode* new_child =
-          (DNode*)containerRealloc<DNode>(old_ptr, cap, new_cap, alloc);
+      LazyNode* new_child =
+          (LazyNode*)containerRealloc<LazyNode>(old_ptr, cap, new_cap, alloc);
       this->a.next.children = new_child;
     }
     // add value to the last pos
-    DNode& last = *(this->End());
+    LazyNode& last = *(this->End());
     last.rawAssign(value);
     this->addLength(1);
     return *this;
@@ -751,9 +860,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
     sonic_assert(end <= this->End());
 
     ValueIterator pos = this->Begin() + (start - this->Begin());
-    for (ValueIterator it = pos; it != end; ++it) it->~DNode();
+    for (ValueIterator it = pos; it != end; ++it) it->~LazyNode();
     std::memmove(static_cast<void*>(pos), end,
-                 (this->End() - end) * sizeof(DNode));
+                 (this->End() - end) * sizeof(LazyNode));
     this->subLength(end - start);
     return start;
   }
@@ -763,11 +872,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return internal::SerializeImpl<serializeFlags>(this, wb);
   }
 
-  sonic_force_inline DNode* nextImpl() { return this + 1; }
+  sonic_force_inline LazyNode* nextImpl() { return this + 1; }
 
-  sonic_force_inline const DNode* cnextImpl() const { return this + 1; }
+  sonic_force_inline const LazyNode* cnextImpl() const { return this + 1; }
 
-  // delete DNode's children or copied string
+  // delete LazyNode's children or copied string
   void destroy() {
     if (!Allocator::kNeedFree) {
       return;
@@ -775,8 +884,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
     switch (this->GetType()) {
       case kObject: {
         if (children()) {
-          DNode* node = getObjChildrenFirstUnsafe();
-          DNode* e = node + this->Size() * 2;
+          LazyNode* node = getObjChildrenFirstUnsafe();
+          LazyNode* e = node + this->Size() * 2;
           for (; node < e; node += 2) {
             node->destroy();
             (node + 1)->destroy();
@@ -804,26 +913,36 @@ class DNode : public GenericNode<DNode<Allocator>> {
     }
   }
 
-  sonic_force_inline void rawAssign(DNode& rhs) {
+  sonic_force_inline void rawAssign(LazyNode& rhs) {
     this->data = rhs.data;
+    this->alloc_ = rhs.alloc_;
     rhs.setType(kNull);
   }
 
-  DNode& clearImpl() {
+  LazyNode& clearImpl() {
     this->destroy();
     this->setLength(0);
     setChildren(nullptr);
     return *this;
   }
   sonic_force_inline uint64_t getTypeAndLen() const { return this->sv.len; }
+
+  sonic_force_inline void checkOrLoad() const {
+    if (this->IsRaw()) {
+      this->LoadLazy();
+    }
+  }
+
+  sonic_force_inline char first() const {
+    sonic_assert(this->IsRaw());
+    return this->GetRaw().data()[0];
+  }
 };
 
-using Node = DNode<SONIC_DEFAULT_ALLOCATOR>;
-
 template <typename Allocator>
-struct NodeTraits<DNode<Allocator>> {
+struct NodeTraits<LazyNode<Allocator>> {
   using alloc_type = Allocator;
-  using NodeType = DNode<Allocator>;
+  using NodeType = LazyNode<Allocator>;
   using MemberNode = MemberNodeT<NodeType>;
   using MemberIterator = MemberNode*;
   using ConstMemberIterator = const MemberNode*;

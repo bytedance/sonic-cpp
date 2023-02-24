@@ -30,8 +30,7 @@ static inline ParseResult ParseLazy(NodeType &node, StringView json,
                                     Allocator &alloc) {
   LazySAXHandler<NodeType> sax(alloc);
   Parser p;
-  ParseResult ret = p.ParseLazy(reinterpret_cast<const uint8_t *>(json.data()),
-                                json.size(), sax);
+  ParseResult ret = p.ParseLazy(json.data(), json.size(), sax);
   if (ret.Error()) {
     return ret;
   }

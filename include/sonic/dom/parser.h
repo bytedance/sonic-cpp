@@ -820,7 +820,9 @@ template <typename NodeType, typename Allocator>
 inline ParseResult ParseString(StringView json, NodeType &node,
                                Allocator &alloc) {
   SKIP_SPACE();
+  pos++;  //  skip the start quote
   uint8_t *buf = (uint8_t *)(alloc.Malloc(len - pos + 32));
+  uint8_t *old = buf;
   if (buf == nullptr) {
     return kErrorNoMem;
   }
@@ -831,11 +833,12 @@ inline ParseResult ParseString(StringView json, NodeType &node,
   SonicError err = kErrorNone;
   size_t n = internal::parseStringInplace(buf, err);
   if (err != kErrorNone) {
-    alloc.Free(buf);
+    Allocator::Free(old);
     return ParseResult(err, pos);
   }
-  node.SetString(StringView(reinterpret_cast<char *>(buf), n), alloc);
-  alloc.Free(buf);
+  // string value not contains the start quote.
+  node.setLength(n, kStringFree);
+  node.sv.p = reinterpret_cast<char *>(old);
   return ParseResult(kErrorNone, pos);
 }
 

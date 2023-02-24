@@ -46,6 +46,15 @@ enum TypeFlag {
   // allocator arg
   kStringConst = ((uint8_t)(2 << 3)) | kString,  // xxx10_100, 20
 
+  // kRawCopy: as kStringCopy, but for raw json
+  kRawCopy = kRaw,  // xxx00_101, 5
+
+  // kRawFree: as kStringFree, but for raw json
+  kRawFree = ((uint8_t)(1 << 3)) | kRaw,  // xxx01_101, 13
+
+  // kRawConst: as kStringConst, but for raw json
+  kRawConst = ((uint8_t)(2 << 3)) | kRaw,  // xxx10_101, 21
+
 };  // 8 bits
 
 enum TypeInfo {

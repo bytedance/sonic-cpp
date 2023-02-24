@@ -41,6 +41,8 @@ class MemberNodeT {
 template <typename derived_t>
 struct NodeTraits;
 
+struct RawJson : public StringView {};
+
 /**
  * @brief Basic class represents a JSON value.
  * @tparam NodeType: the Derived class.
@@ -166,6 +168,14 @@ class GenericNode {
   }
 
   /**
+   * @brief Constructor for creating a raw json node.Doesn't COPY the json.
+   */
+  explicit GenericNode(RawJson json) noexcept {
+    setLength(json.size(), kRawConst);
+    raw.p = json.data();
+  }
+
+  /**
    * @brief Constructor for creating string node. Makes a string copy.
    * @param s     string pointer
    * @param len   string length
@@ -185,6 +195,13 @@ class GenericNode {
   }
 
   /**
+   * @brief Constructor for creating a raw json node.Doesn't COPY the json.
+   */
+  explicit GenericNode(RawJson json, alloc_type& alloc) noexcept {
+    RawJsonCopy(json.data(), json.size(), alloc);
+  }
+
+  /**
    * @brief Copy string data to memory allocated from alloc, then store pointer
    * and size into node.
    * @param s     string pointer
@@ -194,13 +211,29 @@ class GenericNode {
    * string.
    */
   void StringCopy(const char* s, size_t len, alloc_type& alloc) {
-    sv.p = (char*)(alloc.Malloc(len + 1));
-    if (sv.p) {
-      std::memcpy(const_cast<char*>(sv.p), s, len);
-      const_cast<char*>(sv.p)[len] = '\0';
+    char* p = (char*)(alloc.Malloc(len + 1));
+    if (p) {
+      std::memcpy(p, s, len);
+      p[len] = '\0';
       setLength(len, kStringFree);
+      sv.p = p;
     } else {
       setEmptyString();
+    }
+  }
+
+  /**
+   * @brief Copy  to memory allocated from alloc, then store pointer
+   */
+  void RawJsonCopy(const char* json, size_t len, alloc_type& alloc) {
+    char* r = (char*)(alloc.Malloc(len + 1));
+    if (r) {
+      std::memcpy(r, json, len);
+      r[len] = '\0';
+      setLength(len, kRawFree);
+      raw.p = r;
+    } else {
+      setEmptyRawJson();
     }
   }
 
@@ -303,7 +336,7 @@ class GenericNode {
    * @return true if it is an object or array.
    */
   sonic_force_inline bool IsContainer() const noexcept {
-    return (t.t & kContainerMask) == static_cast<uint8_t>(kContainerMask);
+    return IsObject() || IsArray();
   }
 
   /**
@@ -311,7 +344,7 @@ class GenericNode {
    * @retval true if this node is true, otherwise, false.
    */
   sonic_force_inline bool GetBool() const noexcept {
-    sonic_assert(IsBool());
+    sonic_assert(downCast()->IsBool());
     return GetType() == kTrue;
   }
 
@@ -320,7 +353,7 @@ class GenericNode {
    * @return std::string
    */
   sonic_force_inline std::string GetString() const {
-    sonic_assert(IsString());
+    sonic_assert(downCast()->IsString());
     return std::string(sv.p, Size());
   }
 
@@ -329,7 +362,7 @@ class GenericNode {
    * @return StringView
    */
   sonic_force_inline StringView GetStringView() const noexcept {
-    sonic_assert(IsString());
+    sonic_assert(downCast()->IsString());
     return StringView(sv.p, Size());
   }
 
@@ -338,8 +371,8 @@ class GenericNode {
    * @return StringView that represents the raw json.
    */
   sonic_force_inline StringView GetRaw() const noexcept {
-    sonic_assert(IsRaw());
-    return StringView(raw.p, Size());
+    sonic_assert(downCast()->IsRaw());
+    return StringView(raw.p, RawJsonLength());
   }
 
   /**
@@ -355,7 +388,7 @@ class GenericNode {
    * @return int64_t
    */
   sonic_force_inline int64_t GetInt64() const noexcept {
-    sonic_assert(IsInt64());
+    sonic_assert(downCast()->IsInt64());
     return n.i64;
   }
   /**
@@ -363,7 +396,7 @@ class GenericNode {
    * @return uint64_t
    */
   sonic_force_inline uint64_t GetUint64() const noexcept {
-    sonic_assert(IsUint64());
+    sonic_assert(downCast()->IsUint64());
     return n.u64;
   }
   /**
@@ -371,7 +404,7 @@ class GenericNode {
    * @return double
    */
   sonic_force_inline double GetDouble() const noexcept {
-    sonic_assert(IsNumber());
+    sonic_assert(downCast()->IsNumber());
     if (IsDouble()) return n.f64;
     if (IsUint64())
       return static_cast<double>(
@@ -552,10 +585,14 @@ class GenericNode {
    * @return size_t
    */
   size_t Size() const noexcept {
-    sonic_assert(this->IsContainer() || this->IsString() || this->IsRaw());
+    sonic_assert(downCast()->IsContainer() || downCast()->IsString());
     return sv.len >> kInfoBits;
   }
 
+  size_t RawJsonLength() const noexcept {
+    sonic_assert(downCast()->IsRaw());
+    return sv.len >> kInfoBits;
+  }
   /**
    * @brief Check string, array or object is empty.
    * @retval true is empty
@@ -563,7 +600,7 @@ class GenericNode {
    * @note The type of this node must be string, array or object.
    */
   bool Empty() const noexcept {
-    sonic_assert(this->IsContainer() || this->IsString());
+    sonic_assert(downCast()->IsContainer() || downCast()->IsString());
     return 0 == Size();
   }
 
@@ -572,7 +609,7 @@ class GenericNode {
    * @return void
    */
   void Clear() noexcept {
-    sonic_assert(this->IsContainer());
+    sonic_assert(downCast()->IsContainer());
     downCast()->clearImpl();
   }
 
@@ -581,7 +618,7 @@ class GenericNode {
    * @return MemberIterator
    */
   MemberIterator MemberBegin() noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->memberBeginImpl();
   }
 
@@ -590,7 +627,7 @@ class GenericNode {
    * @return MemberIterator
    */
   ConstMemberIterator MemberBegin() const noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->cmemberBeginImpl();
   }
 
@@ -599,7 +636,7 @@ class GenericNode {
    * @return MemberIterator
    */
   ConstMemberIterator CMemberBegin() const noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->cmemberBeginImpl();
   }
 
@@ -608,7 +645,7 @@ class GenericNode {
    * @return MemberIterator
    */
   MemberIterator MemberEnd() noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->memberEndImpl();
   }
 
@@ -617,7 +654,7 @@ class GenericNode {
    * @return MemberIterator
    */
   ConstMemberIterator MemberEnd() const noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->cmemberEndImpl();
   }
 
@@ -626,7 +663,7 @@ class GenericNode {
    * @return MemberIterator
    */
   ConstMemberIterator CMemberEnd() const noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->cmemberEndImpl();
   }
 
@@ -637,7 +674,7 @@ class GenericNode {
    * @retval others Reference to the expected node.
    */
   sonic_force_inline NodeType& operator[](StringView key) noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->findValueImpl(key);
   }
 
@@ -648,7 +685,7 @@ class GenericNode {
    * @retval others Reference to the expected node.
    */
   sonic_force_inline const NodeType& operator[](StringView key) const noexcept {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->findValueImpl(key);
   }
 
@@ -784,7 +821,7 @@ class GenericNode {
   template <typename ValueType>
   MemberIterator AddMember(StringView key, ValueType&& value, alloc_type& alloc,
                            bool copyKey = true) {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->addMemberImpl(key, value, alloc, copyKey);
   }
 
@@ -795,7 +832,7 @@ class GenericNode {
    * @return NodeType& Reference to this object to support streaming APIs
    */
   NodeType& MemberReserve(size_t new_cap, alloc_type& alloc) {
-    sonic_assert(this->IsObject());
+    sonic_assert(downCast()->IsObject());
     return downCast()->memberReserveImpl(new_cap, alloc);
   }
 
@@ -826,7 +863,7 @@ class GenericNode {
    * @note If NodeType doesn't support, this function will return Size()
    */
   size_t Capacity() const noexcept {
-    sonic_assert(this->IsContainer());
+    sonic_assert(downCast()->IsContainer());
     return downCast()->capacityImpl();
   }
 
@@ -835,7 +872,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ValueIterator Begin() noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->beginImpl();
   }
 
@@ -844,7 +881,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ConstValueIterator Begin() const noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->cbeginImpl();
   }
 
@@ -853,7 +890,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ConstValueIterator CBegin() const noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->cbeginImpl();
   }
 
@@ -862,7 +899,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ValueIterator End() noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->endImpl();
   }
 
@@ -871,7 +908,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ConstValueIterator End() const noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->cendImpl();
   }
 
@@ -880,7 +917,7 @@ class GenericNode {
    * @return ValueIterator
    */
   ConstValueIterator CEnd() const noexcept {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->cendImpl();
   }
 
@@ -889,8 +926,8 @@ class GenericNode {
    * @return NodeType&
    */
   NodeType& Back() noexcept {
-    sonic_assert(this->IsArray());
-    sonic_assert(!this->Empty());
+    sonic_assert(downCast()->IsArray());
+    sonic_assert(!downCast()->Empty());
     return downCast()->backImpl();
   }
 
@@ -899,8 +936,8 @@ class GenericNode {
    * @return NodeType&
    */
   const NodeType& Back() const noexcept {
-    sonic_assert(this->IsArray());
-    sonic_assert(!this->Empty());
+    sonic_assert(downCast()->IsArray());
+    sonic_assert(!downCast()->Empty());
     return downCast()->backImpl();
   }
 
@@ -910,8 +947,8 @@ class GenericNode {
    * @return NodeType&
    */
   NodeType& operator[](size_t idx) noexcept {
-    sonic_assert(this->IsArray());
-    sonic_assert(!this->Empty());
+    sonic_assert(downCast()->IsArray());
+    sonic_assert(!downCast()->Empty());
     return downCast()->findValueImpl(idx);
   }
 
@@ -921,8 +958,8 @@ class GenericNode {
    * @return NodeType&
    */
   const NodeType& operator[](size_t idx) const noexcept {
-    sonic_assert(this->IsArray());
-    sonic_assert(!this->Empty());
+    sonic_assert(downCast()->IsArray());
+    sonic_assert(!downCast()->Empty());
     return downCast()->findValueImpl(idx);
   }
 
@@ -934,7 +971,7 @@ class GenericNode {
    */
   // TODO: Check when new_cap less than size() or capacity @Xie Gengxin
   NodeType& Reserve(size_t new_cap, alloc_type& alloc) {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->reserveImpl(new_cap, alloc);
   }
 
@@ -948,7 +985,7 @@ class GenericNode {
    */
   template <typename ValueType>
   NodeType& PushBack(ValueType&& value, alloc_type& alloc) {
-    sonic_assert(this->IsArray());
+    sonic_assert(downCast()->IsArray());
     return downCast()->pushBackImpl(value, alloc);
   }
 
@@ -957,8 +994,8 @@ class GenericNode {
    * @return NodeType& reference for this node to support streaming APIs
    */
   NodeType& PopBack() noexcept {
-    sonic_assert(this->IsArray());
-    sonic_assert(!this->Empty());
+    sonic_assert(downCast()->IsArray());
+    sonic_assert(!downCast()->Empty());
     return downCast()->popBackImpl();
   }
 
@@ -1025,11 +1062,11 @@ class GenericNode {
   }
 
   sonic_force_inline void addLength(size_t c) noexcept {
-    sonic_assert(IsContainer() || IsString());
+    sonic_assert(downCast()->IsContainer() || IsString());
     this->sv.len += (c << kTotalTypeBits);
   }
   sonic_force_inline void subLength(size_t c) noexcept {
-    sonic_assert(IsContainer() || IsString());
+    sonic_assert(downCast()->IsContainer() || IsString());
     this->sv.len -= (c << kTotalTypeBits);
   }
 
@@ -1048,12 +1085,18 @@ class GenericNode {
       setEmptyString();
     }
   }
-  NodeType& setRaw(StringView s) {
-    return downCast()->setRawImpl(s.data(), s.size());
+  NodeType& setRaw(StringView s, alloc_type* alloc) {
+    return downCast()->setRawImpl(s.data(), s.size(), alloc);
   }
+
   void setEmptyString() noexcept {
     sv.p = "";
     setLength(0, kStringConst);
+  }
+
+  void setEmptyRawJson() noexcept {
+    raw.p = "";
+    setLength(0, kRawConst);
   }
 
   sonic_force_inline int64_t getIntMax() const {
@@ -1073,6 +1116,8 @@ class GenericNode {
   friend NodeType;
   friend class SAXHandler<NodeType>;
   friend class LazySAXHandler<NodeType>;
+  template <typename _Node, typename _Alloc>
+  friend ParseResult ParseString(StringView json, _Node& node, _Alloc& alloc);
 
   union ContainerNext {
     size_t ofs;
