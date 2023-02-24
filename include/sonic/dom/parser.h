@@ -34,10 +34,18 @@
 
 namespace sonic_json {
 
+sonic_force_inline bool hasTrailingChars(StringView json, size_t &pos) {
+  internal::SkipSpace(json, pos);
+  return pos < json.size();
+}
+
 class Parser {
  public:
   explicit Parser() noexcept = default;
-  // sonic_force_inline Parser(JsonInput& input) : input_(input) {}
+  Parser(StringView json)
+      : json_buf_(const_cast<uint8_t *>(
+            reinterpret_cast<const uint8_t *>(json.data()))),
+        len_(json.size()) {}
   Parser(Parser &&other) noexcept = default;
   sonic_force_inline Parser(const Parser &other) = delete;
   sonic_force_inline Parser &operator=(const Parser &other) = delete;
@@ -50,7 +58,7 @@ class Parser {
     json_buf_ = reinterpret_cast<uint8_t *>(data);
     len_ = len;
     parseImpl<parseFlags>(sax);
-    if (!err_ && hasTrailingChars()) {
+    if (!err_ && hasTrailingChars(StringView(data, len), pos_)) {
       err_ = kParseErrorInvalidChar;
     }
     return ParseResult{err_, static_cast<size_t>(pos_)};
@@ -58,26 +66,18 @@ class Parser {
 
   // parseLazyImpl only mark the json positions, and not parse any more, even
   // the keys.
-  template <typename LazySAX>
-  sonic_force_inline ParseResult ParseLazy(const uint8_t *data, size_t len,
+  template <unsigned parseFlags = kParseDefault, typename LazySAX>
+  sonic_force_inline ParseResult ParseLazy(const char *data, size_t len,
                                            LazySAX &sax) {
-    return parseLazyImpl(data, len, sax);
+    return parseLazyImpl(reinterpret_cast<const uint8_t *>(data), len, sax);
   }
 
  private:
-  sonic_force_inline bool hasTrailingChars() {
-    while (pos_ < len_) {
-      if (!internal::IsSpace(json_buf_[pos_])) return true;
-      pos_++;
-    }
-    return false;
-  }
 
   sonic_force_inline void setParseError(SonicError err) { err_ = err; }
 
   template <typename SAX>
   sonic_force_inline void parseNull(SAX &sax) {
-    const static uint32_t kNullBin = 0x6c6c756e;
     if (internal::EqBytes4(json_buf_ + pos_ - 1, kNullBin) && sax.Null()) {
       pos_ += 3;
       return;
@@ -87,8 +87,6 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline void parseFalse(SAX &sax) {
-    const static uint32_t kFalseBin =
-        0x65736c61;  // the binary of 'alse' in false
     if (internal::EqBytes4(json_buf_ + pos_, kFalseBin) && sax.Bool(false)) {
       pos_ += 4;
       return;
@@ -98,7 +96,6 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline void parseTrue(SAX &sax) {
-    constexpr static uint32_t kTrueBin = 0x65757274;
     if (internal::EqBytes4(json_buf_ + pos_ - 1, kTrueBin) && sax.Bool(true)) {
       pos_ += 3;
       return;
@@ -679,7 +676,7 @@ class Parser {
     return;
   }
 
-  template <typename LazySAX>
+  template <unsigned parseFlags = kParseDefault, typename LazySAX>
   sonic_force_inline ParseResult parseLazyImpl(const uint8_t *data, size_t len,
                                                LazySAX &sax) {
 #define sonic_set_raw()                                       \
@@ -695,6 +692,10 @@ class Parser {
     const uint8_t *ksrc = nullptr;
     StringView key;
     internal::SkipStringResult ret;
+
+    if (len == 0) {
+      return kParseErrorEof;
+    }
 
     c = scan.SkipSpaceSafe(data, pos, len);
     switch (c) {
@@ -718,7 +719,6 @@ class Parser {
         goto obj_key;
       };
       default: {
-        // TODO: fix the abstract.
         pos--;
         start = scan.SkipOne(data, pos, len);
         if (start < 0) goto skip_error;
@@ -786,12 +786,20 @@ class Parser {
 #undef sonic_check_err
 
  private:
+  template <typename NodeType>
+  friend ParseResult ParseNumber(StringView json, NodeType &node);
+
   sonic_force_inline void reset() {
     pos_ = 0;
     err_ = kErrorNone;
     len_ = 0;
   };
+
   constexpr static size_t kJsonPaddingSize = SONICJSON_PADDING;
+  constexpr static uint32_t kNullBin = 0x6c6c756e;
+  constexpr static uint32_t kFalseBin =
+      0x65736c61;  // the binary of 'alse' in false
+  constexpr static uint32_t kTrueBin = 0x65757274;
 
   uint8_t *json_buf_{nullptr};
   size_t len_{0};
@@ -799,5 +807,121 @@ class Parser {
   SonicError err_{kErrorNone};
   internal::SkipScanner scan{};
 };
+
+#define SKIP_SPACE()                 \
+  size_t pos = 0, len = json.size(); \
+  if (len == 0) {                    \
+    return kParseErrorEof;           \
+  }                                  \
+  internal::SkipSpace(json, pos);
+
+// Parse a JSON string into a Node
+template <typename NodeType, typename Allocator>
+inline ParseResult ParseString(StringView json, NodeType &node,
+                               Allocator &alloc) {
+  SKIP_SPACE();
+  uint8_t *buf = (uint8_t *)(alloc.Malloc(len - pos + 32));
+  if (buf == nullptr) {
+    return kErrorNoMem;
+  }
+  memcpy(buf, json.data() + pos, len - pos);
+  buf[len - pos] = '\0';  // null terminate
+
+  // parse string in allocated buffer
+  SonicError err = kErrorNone;
+  size_t n = internal::parseStringInplace(buf, err);
+  if (err != kErrorNone) {
+    alloc.Free(buf);
+    return ParseResult(err, pos);
+  }
+  node.SetString(StringView(reinterpret_cast<char *>(buf), n), alloc);
+  alloc.Free(buf);
+  return ParseResult(kErrorNone, pos);
+}
+
+template <typename NodeType>
+inline ParseResult ParseTrue(StringView json, NodeType &node) {
+  SKIP_SPACE();
+  if (len - pos < 4) {
+    return kParseErrorEof;
+  }
+  const char *data = json.data() + pos;
+  if (std::memcmp(data, "true", 4) != 0) {
+    return kParseErrorInvalidChar;
+  }
+  pos += 4;
+  if (hasTrailingChars(json, pos)) {
+    return kParseErrorInvalidChar;
+  }
+  node.SetBool(true);
+  return kErrorNone;
+}
+
+template <typename NodeType>
+inline ParseResult ParseFalse(StringView json, NodeType &node) {
+  SKIP_SPACE();
+  if (len - pos < 4) {
+    return kParseErrorEof;
+  }
+  if (std::memcmp(json.data() + pos, "false", 5) != 0) {
+    return kParseErrorInvalidChar;
+  }
+  pos += 5;
+  if (hasTrailingChars(json, pos)) {
+    return kParseErrorInvalidChar;
+  }
+  node.SetBool(false);
+  return kErrorNone;
+}
+
+template <typename NodeType>
+inline ParseResult ParseNull(StringView json, NodeType &node) {
+  SKIP_SPACE();
+  if (len - pos < 4) {
+    return kParseErrorEof;
+  }
+  if (std::memcmp(json.data() + pos, "null", 4) != 0) {
+    return kParseErrorInvalidChar;
+  }
+  pos += 4;
+  if (hasTrailingChars(json, pos)) {
+    return kParseErrorInvalidChar;
+  }
+  node.SetNull();
+  return kErrorNone;
+}
+
+template <typename NodeType>
+inline ParseResult ParseNumber(StringView json, NodeType &node) {
+  SKIP_SPACE();
+  const char *data = json.data() + pos;
+  len -= pos;
+  char buf[32] = {0};
+  if (len < 32) {
+    std::memcpy(buf, data, len);
+    data = buf;
+  }
+  struct NumberSAX {
+    NodeType &node;
+    bool Int(int64_t i) {
+      node.SetInt64(i);
+      return true;
+    }
+    bool Uint(uint64_t u) {
+      node.SetUint64(u);
+      return true;
+    }
+    bool Double(double d) {
+      node.SetDouble(d);
+      return true;
+    }
+  } sax{node};
+  Parser p(StringView(data, len));
+  p.pos_++;
+  p.parseNumber(sax);
+  return p.err_;
+}
+
+#undef SKIP_SPACE
 
 }  // namespace sonic_json
