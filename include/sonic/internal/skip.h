@@ -42,6 +42,25 @@ static sonic_force_inline bool IsSpace(uint8_t ch) {
   return ch == ' ' || ch == '\r' || ch == '\n' || ch == '\t';
 }
 
+static sonic_force_inline bool IsValueEnd(const uint8_t *data, size_t len,
+                                          size_t pos) {
+  uint8_t ch = data[pos];
+  return pos == len || ch == ',' || ch == ']' || ch == '}';
+}
+
+sonic_force_inline void SkipSpace(StringView json, size_t &pos) {
+  while (pos < json.size() && IsSpace(json[pos])) {
+    pos++;
+  }
+}
+
+sonic_force_inline void SkipSpace(const uint8_t *data, size_t len,
+                                  size_t &pos) {
+  while (pos < len && IsSpace(data[pos])) {
+    pos++;
+  }
+}
+
 sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
                                           uint64_t &prev_instring,
                                           uint64_t &prev_escaped) {
@@ -127,11 +146,11 @@ sonic_force_inline SkipStringResult SkipString(const uint8_t *data, size_t &pos,
       continue;
     }
     if (data[pos++] == '"') {
-      break;
+      return found ? kEscaped : kNormal;
     }
   };
-  if (pos >= len) return kUnclosed;
-  return found ? kEscaped : kNormal;
+  return kUnclosed;
+  // return found ? kEscaped : kNormal;
 }
 
 // return true if container is closed.
@@ -196,19 +215,22 @@ sonic_force_inline bool SkipLiteral(const uint8_t *data, size_t &pos,
     case 't':
       if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
         pos += 3;
-        return true;
+        SkipSpace(data, len, pos);
+        return IsValueEnd(data, len, pos);
       };
       break;
     case 'n':
       if (start + 4 <= end && EqBytes4(start, kNullBin)) {
         pos += 3;
-        return true;
+        SkipSpace(data, len, pos);
+        return IsValueEnd(data, len, pos);
       };
       break;
     case 'f':
       if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {
         pos += 4;
-        return true;
+        SkipSpace(data, len, pos);
+        return IsValueEnd(data, len, pos);
       }
   }
   return false;
@@ -305,10 +327,9 @@ class SkipScanner {
     }
 
   tail:
-    while (pos < len && IsSpace(data[pos++]))
-      ;
-    // if not found, still return the space chars
-    return data[pos - 1];
+    while (pos < len && IsSpace(data[pos])) pos++;
+    // if not found, still return the null char
+    return pos < len ? data[pos++] : 0;
   }
 
   sonic_force_inline SonicError GetArrayElem(const uint8_t *data, size_t &pos,
