@@ -524,20 +524,5 @@ class SkipScanner {
   uint64_t nonspace_bits_{0};
 };
 
-template <typename JPStringType>
-inline ParseResult GetOnDemand(StringView json,
-                               const GenericJsonPointer<JPStringType> &path,
-                               StringView &target) {
-  SkipScanner scan;
-  size_t pos = 0;
-  long start = scan.GetOnDemand(json, pos, path);
-  if (start < 0) {
-    target = "";
-    return ParseResult(SonicError(-start), pos - 1);
-  }
-  target = StringView(json.data() + start, pos - start);
-  return ParseResult(kErrorNone, pos);
-}
-
 }  // namespace internal
 }  // namespace sonic_json

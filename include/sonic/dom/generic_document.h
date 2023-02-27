@@ -230,7 +230,7 @@ class GenericDocument : public NodeType {
       const GenericJsonPointer<JPStringType>& path) {
     // get the target json field
     StringView target;
-    parse_result_ = internal::GetOnDemand(StringView(json, len), path, target);
+    parse_result_ = GetOnDemand(StringView(json, len), path, target);
     if (sonic_unlikely(HasParseError())) {
       return *this;
     }

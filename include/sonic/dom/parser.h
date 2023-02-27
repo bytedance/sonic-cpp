@@ -39,6 +39,22 @@ sonic_force_inline bool hasTrailingChars(StringView json, size_t &pos) {
   return pos < json.size();
 }
 
+template <typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
+inline ParseResult GetOnDemand(StringView json,
+                               const GenericJsonPointer<JPStringType> &path,
+                               StringView &target) {
+  using namespace internal;
+  SkipScanner scan;
+  size_t pos = 0;
+  long start = scan.GetOnDemand(json, pos, path);
+  if (start < 0) {
+    target = "";
+    return ParseResult(SonicError(-start), pos - 1);
+  }
+  target = StringView(json.data() + start, pos - start);
+  return ParseResult(kErrorNone, pos);
+}
+
 class Parser {
  public:
   explicit Parser() noexcept = default;
