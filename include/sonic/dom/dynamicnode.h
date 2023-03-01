@@ -37,7 +37,7 @@ template <typename Allocator = SONIC_DEFAULT_ALLOCATOR>
 class DNode : public GenericNode<DNode<Allocator>> {
  public:
   using NodeType = DNode;
-  using BaseNode = GenericNode<DNode<Allocator>>;
+  using BaseNode = GenericNode<DNode>;
   using AllocatorType = Allocator;
   using MemberNode = typename NodeTraits<DNode>::MemberNode;
   using MemberIterator = typename NodeTraits<DNode>::MemberIterator;

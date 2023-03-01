@@ -800,4 +800,122 @@ TYPED_TEST(NodeTest, SourceAllocator) {
   EXPECT_TRUE(c.GetStringView() == a.GetStringView());
 }
 
+template <bool UpdateExistedKey>
+void UpdateTestHelper(const std::string& s_dst, const std::string& s_src,
+                      const std::string& s_expect) {
+  using Doc = sonic_json::Document;
+  using Node = typename sonic_json::Document::NodeType;
+
+  Doc expect;
+  expect.Parse(s_expect);
+  {
+    Doc dst, src;
+    dst.Parse(s_dst);
+    src.Parse(s_src);
+
+    Update<UpdateExistedKey>((Node&)(dst), (Node&)(src), dst.GetAllocator());
+    EXPECT_TRUE(dst == expect) << "dst: " << s_dst << std::endl
+                               << "src: " << s_src << std::endl
+                               << "expect: " << s_expect << std::endl
+                               << "actual: " << dst.Dump() << std::endl;
+  }
+  {
+    Doc dst, src;
+    dst.Parse(s_dst);
+    EXPECT_FALSE(dst.HasParseError()) << "dst: " << s_dst << std::endl;
+    src.Parse(s_src);
+    EXPECT_FALSE(src.HasParseError()) << "src: " << s_src << std::endl;
+
+    dst.UpdateFrom<UpdateExistedKey>(src, dst.GetAllocator());
+    EXPECT_TRUE(dst == expect) << "dst: " << s_dst << std::endl
+                               << "src: " << s_src << std::endl
+                               << "expect: " << s_expect << std::endl
+                               << "actual: " << dst.Dump() << std::endl;
+  }
+}
+
+TEST(NodeTest, Update) {
+  UpdateTestHelper<true>(R"({"a":1})", R"({"a":2})", R"({"a":2})");
+  UpdateTestHelper<true>(R"({"a":1})", R"({"b":2})", R"({"a":1, "b":2})");
+  UpdateTestHelper<true>(R"("a")", R"("b")", R"("b")");
+  UpdateTestHelper<true>(R"({"a":1})", R"({"a":{"b":1, "b":1}})",
+                         R"({"a":{"b":1, "b":1}})");
+  UpdateTestHelper<true>(R"({"a":[1,2,3], "b":[], "c":{}})", R"({"a":[]})",
+                         R"({"a":[], "b":[], "c":{}})");
+
+  UpdateTestHelper<false>(R"({"a":1})", R"({"a":2})", R"({"a":1})");
+  UpdateTestHelper<false>(R"({"a":1})", R"({"b":2})", R"({"a":1, "b":2})");
+  UpdateTestHelper<false>(R"("a")", R"("b")", R"("a")");
+  UpdateTestHelper<false>(R"({"a":1})", R"({"c":{"b":1, "b":1}})",
+                          R"({"a":1, "c":{"b":1, "b":1}})");
+}
+
+void MergeTestHelper(const std::string& original, const std::string& patch,
+                     const std::string& result) {
+  using Doc = sonic_json::Document;
+  Doc o, p, r;
+  o.Parse(original);
+  EXPECT_FALSE(o.HasParseError()) << "original: " << original << std::endl;
+  p.Parse(patch);
+  EXPECT_FALSE(p.HasParseError()) << "patch: " << patch << std::endl;
+  r.Parse(result);
+  EXPECT_FALSE(r.HasParseError()) << "result: " << result << std::endl;
+
+  o.MergePatch(p, o.GetAllocator());
+  EXPECT_TRUE(o == r) << "original: " << original << std::endl
+                      << "patch: " << patch << std::endl
+                      << "result: " << result << std::endl
+                      << "actual: " << o.Dump() << std::endl;
+}
+
+TEST(NodeTest, Merge) {
+  MergeTestHelper(R"({"a":"b"})", R"({"a":"c"})", R"({"a":"c"})");
+  MergeTestHelper(R"({"a":"b"})", R"({"b":"c"})", R"({"a":"b","b":"c"})");
+  MergeTestHelper(R"({"a":"b"})", R"({"a":null})", R"({})");
+  MergeTestHelper(R"({"a":"b", "b":"c"})", R"({"a":null})", R"({"b":"c"})");
+  MergeTestHelper(R"({"a":["b"]})", R"({"a":"c"})", R"({"a":"c"})");
+  MergeTestHelper(R"({"a":"c"})", R"({"a":["b"]})", R"({"a":["b"]})");
+  MergeTestHelper(R"({"a":{"b":"c"}})", R"({"a":{"b":"d", "c":null}})",
+                  R"({"a":{"b":"d"}})");
+  MergeTestHelper(R"({"a":[{"b":"c"}]})", R"({"a":[1]})", R"({"a":[1]})");
+  MergeTestHelper(R"(["a","b"])", R"(["c", "d"])", R"(["c", "d"])");
+  MergeTestHelper(R"({"a":"b"})", R"(["c"])", R"(["c"])");
+  MergeTestHelper(R"({"a":"foo"})", R"(null)", R"(null)");
+  MergeTestHelper(R"({"a":"foo"})", R"("bar")", R"("bar")");
+  MergeTestHelper(R"({"e":null})", R"({"a":1})", R"({"e":null, "a":1})");
+  MergeTestHelper(R"([1,2])", R"({"a":"b", "c":null})", R"({"a":"b"})");
+  MergeTestHelper(R"({})", R"({"a":{"bb":{"ccc":null}}})",
+                  R"({"a":{"bb":{}}})");
+}
+
+void DiffTestHelper(const std::string& from, const std::string& to,
+                    const std::string& expect) {
+  using Doc = sonic_json::Document;
+  Doc f, t, e;
+  EXPECT_FALSE(f.Parse(from).HasParseError()) << from << std::endl;
+  EXPECT_FALSE(t.Parse(to).HasParseError()) << to << std::endl;
+  EXPECT_FALSE(e.Parse(expect).HasParseError()) << expect << std::endl;
+  Doc patch = Diff(f, t);
+  EXPECT_TRUE(patch == e) << "From json: " << from << std::endl
+                          << "To json: " << to << std::endl
+                          << "Exepct json: " << expect << std::endl
+                          << "Patch ans: " << patch.Dump() << std::endl;
+}
+
+TEST(NodeTest, Diff) {
+  DiffTestHelper(R"({"a":"b"})", R"({"a":"c"})", R"({"a":"c"})");
+  DiffTestHelper(R"({"a":"b"})", R"({"a":"b","b":"c"})", R"({"b":"c"})");
+  DiffTestHelper(R"({"a":"b"})", R"({})", R"({"a":null})");
+  DiffTestHelper(R"({"a":["b"]})", R"({"a":"c"})", R"({"a":"c"})");
+  DiffTestHelper(R"({"a":"c"})", R"({"a":["b"]})", R"({"a":["b"]})");
+  DiffTestHelper(R"({"a":{"b":"c","c":"d"}})", R"({"a":{"b":"d"}})",
+                 R"({"a":{"b":"d","c":null}})");
+  DiffTestHelper(R"({"a":[{"b":"c"}]})", R"({"a":[1]})", R"({"a":[1]})");
+  DiffTestHelper(R"(["a","b"])", R"(["c","d"])", R"(["c","d"])");
+  DiffTestHelper(R"({"a":"b"})", R"(["c"])", R"(["c"])");
+  DiffTestHelper(R"({"a":"foo"})", R"(null)", R"(null)");
+  DiffTestHelper(R"({"a":"foo"})", R"("bar")", R"("bar")");
+  DiffTestHelper(R"({})", R"({"a":{"bb":{"ccc":null}}})",
+                 R"({"a":{"bb":{"ccc":null}}})");
+}
 }  // namespace
