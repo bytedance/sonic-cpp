@@ -89,7 +89,12 @@ class SpinLock {
         break;
       }
       while (lock_.load(std::memory_order_relaxed)) {
+#if defined(__x86_64__) || defined(_M_AMD64)
         __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(_M_ARM64)
+        asm volatile("yield");
+#else
+#endif
       }
     }
   }

@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#include "sonic/internal/arch/simd_base.h"
+
 namespace sonic_json {
 namespace internal {
 inline bool ParseFloatingNormalFast(uint64_t& d_raw, int exp10, uint64_t man,
@@ -36,7 +38,7 @@ inline bool ParseFloatingNormalFast(uint64_t& d_raw, int exp10, uint64_t man,
     sig2 = internal::kPow10M128Tab[idx][1];
     // TODO:
   }
-  lz = internal::haswell::leading_zeroes(man);
+  lz = internal::LeadingZeroes(man);
   sig1 = man << lz;
   exp2 = ((217706 * exp10 - 4128768) >> 16) - lz;
 

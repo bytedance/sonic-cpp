@@ -18,17 +18,23 @@
 #pragma once
 
 #include <immintrin.h>
+#include <sonic/macro.h>
 
 #include <cstdint>
 
-#if !__AVX2__
-#error "AVX2 instruction set required. Missing option -mavx2 ?"
+#if defined(__clang__)
+#pragma clang attribute push(__attribute__((target("avx2"))), \
+                             apply_to = function)
+#elif defined(__GNUG__)
+#pragma GCC push_options
+#pragma GCC target("avx2")
+#else
+#error "Only g++ and clang is supported!"
 #endif
-
-#include "sonic/macro.h"
 
 namespace sonic_json {
 namespace internal {
+namespace avx2 {
 namespace simd {
 
 #define REPEAT32_ARGS(typ)                                                    \
@@ -108,7 +114,7 @@ struct base128 {
     return Child(_mm_set1_epi8(_value));
   }
   static sonic_force_inline Child repeat_16(REPEAT16_ARGS(T)) {
-    return Child(REPEAT16_ARGS(), REPEAT16_ARGS());
+    return Child(REPEAT16_ARGS());
   }
   template <int N = 1>
   sonic_force_inline Child prev(const Child prev_chunk) const {
@@ -135,8 +141,14 @@ struct simd128<bool> : base128<bool> {
 template <typename T>
 struct num128 : base128<T> {
   using Base = base128<T>;
-  using Base::Base;
-  static sonic_force_inline simd128<T> zero() { return _mm_setzero_si128(); }
+  // using Base::Base;
+  sonic_force_inline num128() : base128<T>() {}
+  sonic_force_inline num128(const __m128i _value) : base128<T>(_value) {}
+  sonic_force_inline num128(const T _value) : base128<T>(splat(_value)) {}
+  sonic_force_inline num128(const T values[16]) : base128<T>(load(values)) {}
+  sonic_force_inline num128(REPEAT16_ARGS(T))
+      : base128<T>(_mm_setr_epi8(REPEAT16_ARGS())) {}
+  static sonic_force_inline num128<T> zero() { return _mm_setzero_si128(); }
 
   // Addition/subtraction are the same for signed and unsigned
   sonic_force_inline simd128<T> operator+(const simd128<T> other) const {
@@ -183,7 +195,15 @@ struct simd128<int8_t> : num128<int8_t> {
 template <>
 struct simd128<uint8_t> : num128<uint8_t> {
   using Base = num128<uint8_t>;
-  using Base::Base;
+  // using Base::Base;
+  sonic_force_inline simd128() : num128<uint8_t>() {}
+  sonic_force_inline simd128(const __m128i _value) : num128<uint8_t>(_value) {}
+  sonic_force_inline simd128(const uint8_t _value)
+      : num128<uint8_t>(splat(_value)) {}
+  sonic_force_inline simd128(const uint8_t values[16])
+      : num128<uint8_t>(load(values)) {}
+  sonic_force_inline simd128(REPEAT16_ARGS(uint8_t))
+      : num128<uint8_t>(_mm_setr_epi8(REPEAT16_ARGS())) {}
 
   // Saturated math
   sonic_force_inline simd128<uint8_t> saturating_add(
@@ -419,7 +439,14 @@ struct simd256<bool> : base256<bool> {
 template <typename T>
 struct num256 : base256<T> {
   using Base = base256<T>;
-  using Base::Base;
+  // using Base::Base;
+  sonic_force_inline num256() : base256<T>() {}
+  sonic_force_inline num256(const __m256i _value) : base256<T>(_value) {}
+  sonic_force_inline num256(const T _value) : base256<T>(splat(_value)) {}
+  sonic_force_inline num256(const T values[32]) : base256<T>(load(values)) {}
+  sonic_force_inline num256(REPEAT32_ARGS(T))
+      : base256<T>(_mm256_setr_epi8(REPEAT32_ARGS())) {}
+
   static sonic_force_inline simd256<T> zero() { return _mm256_setzero_si256(); }
 
   // Addition/subtraction are the same for signed and unsigned
@@ -455,7 +482,16 @@ struct num256 : base256<T> {
 template <>
 struct simd256<int8_t> : num256<int8_t> {
   using Base = num256<int8_t>;
-  using Base::Base;
+  // using Base::Base;
+  sonic_force_inline simd256() : num256<int8_t>() {}
+  sonic_force_inline simd256(const __m256i _value) : num256<int8_t>(_value) {}
+  sonic_force_inline simd256(const int8_t _value)
+      : num256<int8_t>(splat(_value)) {}
+  sonic_force_inline simd256(const int8_t values[32])
+      : num256<int8_t>(load(values)) {}
+  sonic_force_inline simd256(REPEAT32_ARGS(int8_t))
+      : num256<int8_t>(_mm256_setr_epi8(REPEAT32_ARGS())) {}
+
   // Order-sensitive comparisons
   sonic_force_inline simd256<int8_t> max_val(
       const simd256<int8_t> other) const {
@@ -479,7 +515,15 @@ struct simd256<int8_t> : num256<int8_t> {
 template <>
 struct simd256<uint8_t> : num256<uint8_t> {
   using Base = num256<uint8_t>;
-  using Base::Base;
+  // using Base::Base;
+  sonic_force_inline simd256() : num256<uint8_t>() {}
+  sonic_force_inline simd256(const __m256i _value) : num256<uint8_t>(_value) {}
+  sonic_force_inline simd256(const uint8_t _value)
+      : num256<uint8_t>(splat(_value)) {}
+  sonic_force_inline simd256(const uint8_t values[32])
+      : num256<uint8_t>(load(values)) {}
+  sonic_force_inline simd256(REPEAT32_ARGS(uint8_t))
+      : num256<uint8_t>(_mm256_setr_epi8(REPEAT32_ARGS())) {}
 
   // Saturated math
   sonic_force_inline simd256<uint8_t> saturating_add(
@@ -630,5 +674,12 @@ struct simd8x64 {
 #undef REPEAT32_ARGS
 #undef REPEAT16_ARGS
 }  // namespace simd
+}  // namespace avx2
 }  // namespace internal
 }  // namespace sonic_json
+
+#if defined(__clang__)
+#pragma clang attribute pop
+#elif defined(__GNUG__)
+#pragma GCC pop_options
+#endif

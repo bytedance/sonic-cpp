@@ -17,12 +17,23 @@
 
 #pragma once
 
-#include "sonic/internal/simd.h"
-#include "sonic/macro.h"
+#include <sonic/macro.h>
+
+#include "simd.h"
+
+#if defined(__clang__)
+#pragma clang attribute push(__attribute__((target("avx2"))), \
+                             apply_to = function)
+#elif defined(__GNUG__)
+#pragma GCC push_options
+#pragma GCC target("avx2")
+#else
+#error "Only g++ and clang is supported!"
+#endif
 
 namespace sonic_json {
 namespace internal {
-namespace haswell {
+namespace avx2 {
 
 using namespace simd;
 
@@ -30,7 +41,7 @@ using namespace simd;
 // but the algorithms do not end up using the returned value.
 // Sadly, sanitizers are not smart enough to figure it out.
 
-sonic_force_inline int trailing_zeroes(uint64_t input_num) {
+sonic_force_inline int TrailingZeroes(uint64_t input_num) {
   ////////
   // You might expect the next line to be equivalent to
   // return (int)_tzcnt_u64(input_num);
@@ -40,7 +51,7 @@ sonic_force_inline int trailing_zeroes(uint64_t input_num) {
 }
 
 /* result might be undefined when input_num is zero */
-sonic_force_inline uint64_t clear_lowest_bit(uint64_t input_num) {
+sonic_force_inline uint64_t ClearLowestBit(uint64_t input_num) {
 #if __BMI__
   return _blsr_u64(input_num);
 #else
@@ -49,21 +60,21 @@ sonic_force_inline uint64_t clear_lowest_bit(uint64_t input_num) {
 }
 
 /* result might be undefined when input_num is zero */
-sonic_force_inline int leading_zeroes(uint64_t input_num) {
+sonic_force_inline int LeadingZeroes(uint64_t input_num) {
   return __builtin_clzll(input_num);
 }
 
-sonic_force_inline long long int count_ones(uint64_t input_num) {
+sonic_force_inline long long int CountOnes(uint64_t input_num) {
   return __builtin_popcountll(input_num);
 }
 
-sonic_force_inline bool add_overflow(uint64_t value1, uint64_t value2,
-                                     uint64_t* result) {
+sonic_force_inline bool AddOverflow(uint64_t value1, uint64_t value2,
+                                    uint64_t* result) {
   return __builtin_uaddll_overflow(
       value1, value2, reinterpret_cast<unsigned long long*>(result));
 }
 
-sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
+sonic_force_inline uint64_t PrefixXor(const uint64_t bitmask) {
   // There should be no such thing with a processor supporting avx2
   // but not clmul.
 #if __PCLMUL__
@@ -77,17 +88,17 @@ sonic_force_inline uint64_t prefix_xor(const uint64_t bitmask) {
 #endif
 }
 
-sonic_force_inline bool is_ascii(const simd8x64<uint8_t>& input) {
+sonic_force_inline bool IsAscii(const simd8x64<uint8_t>& input) {
   return input.reduce_or().is_ascii();
 }
 
 template <size_t ChunkSize>
-sonic_force_inline void xmemcpy(void* dst_, const void* src_, size_t chunks) {
+sonic_force_inline void Xmemcpy(void* dst_, const void* src_, size_t chunks) {
   std::memcpy(dst_, src_, chunks * ChunkSize);
 }
 
 template <>
-sonic_force_inline void xmemcpy<32>(void* dst_, const void* src_,
+sonic_force_inline void Xmemcpy<32>(void* dst_, const void* src_,
                                     size_t chunks) {
   uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
   const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
@@ -121,7 +132,7 @@ sonic_force_inline void xmemcpy<32>(void* dst_, const void* src_,
 }
 
 template <>
-sonic_force_inline void xmemcpy<16>(void* dst_, const void* src_,
+sonic_force_inline void Xmemcpy<16>(void* dst_, const void* src_,
                                     size_t chunks) {
   uint8_t* dst = reinterpret_cast<uint8_t*>(dst_);
   const uint8_t* src = reinterpret_cast<const uint8_t*>(src_);
@@ -160,6 +171,12 @@ sonic_force_inline void xmemcpy<16>(void* dst_, const void* src_,
   }
 }
 
-}  // namespace haswell
+}  // namespace avx2
 }  // namespace internal
 }  // namespace sonic_json
+
+#if defined(__clang__)
+#pragma clang attribute pop
+#elif defined(__GNUG__)
+#pragma GCC pop_options
+#endif
