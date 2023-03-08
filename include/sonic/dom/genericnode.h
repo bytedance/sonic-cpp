@@ -51,9 +51,6 @@ struct NodeTraits;
 template <bool UpdateExistentKey, typename T, typename S, typename Allocator,
           typename>
 static inline void Update(T&, const S&, Allocator&);
-//
-// template <typename T, typename S, typename Allocator, bool=false>
-// static inline void Merge(T&, const S&, Allocator&);
 
 // Copied from http://coliru.stacked-crooked.com/a/8dd19d21817cadf5
 template <template <typename...> class C, typename... Ts>
@@ -1061,19 +1058,26 @@ class GenericNode {
 
   /**
    * @brief Json Merge patch, rfc7386
+   * @param copy_const_string whether copy the strings that are managed by
+   *    user.
    */
   template <typename PatchType,
             typename std::enable_if<
                 is_base_of_template<PatchType, GenericNode>::value,
                 bool>::type = false>
-  void MergePatch(const PatchType& patch, Allocator& alloc) {
-    return Merge(*(downCast()), patch, alloc);
+  void MergePatch(const PatchType& patch, alloc_type& alloc,
+          bool copy_const_string=false) {
+    return Merge(*(downCast()), patch, alloc, copy_const_string);
   }
 
   /**
    * @brief updates from another object. Copying non-existent key. Updating\n
    *        existent key \b deeply if template parameter is true.
    * @tparam UpdateExistentKey overwritting existent key
+   * @param src the source node
+   * @param alloc Allocator that manage the memory of *this
+   * @param copy_const_string whether copy the strings that are managed by
+   *    user.
    * @note cases: \n
    *   {"a":"b"} .UPDATE. {"a":"c} => {"a":"c"} (UpdateExistedKey == true) \n
    *   {"a":"b"} .UPDATE. {"a":"c} => {"a":"b"} (UpdateExistedKey == false) \n
@@ -1083,8 +1087,10 @@ class GenericNode {
   template <bool UpdateExistentKey = true, typename S,
             typename std::enable_if<is_base_of_template<S, GenericNode>::value,
                                     bool>::type = false>
-  void UpdateFrom(const S& src, Allocator& alloc) {
-    return Update<UpdateExistentKey>(*(downCast()), src, alloc);
+  void UpdateFrom(const S& src, alloc_type& alloc,
+          bool copy_const_string=false) {
+    return Update<UpdateExistentKey>(*(downCast()), src, alloc,
+            copy_const_string);
   }
 
  protected:
@@ -1235,7 +1241,8 @@ template <
     typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
                                 is_base_of_template<P, GenericNode>::value,
                             bool>::type = false>
-static inline void Merge(T& original, const P& patch, Allocator& alloc) {
+static inline void Merge(T& original, const P& patch, Allocator& alloc,
+        bool copy_const_string=false) {
   if (patch.IsObject()) {
     if (!original.IsObject()) {
       original.SetObject();
@@ -1258,7 +1265,7 @@ static inline void Merge(T& original, const P& patch, Allocator& alloc) {
       }
     }
   } else {
-    original.CopyFrom(patch, alloc);
+    original.CopyFrom(patch, alloc, copy_const_string);
   }
 }
 
@@ -1267,10 +1274,11 @@ template <
     typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
                                 is_base_of_template<S, GenericNode>::value,
                             bool>::type = false>
-static inline void Update(T& original, const S& src, Allocator& alloc) {
+static inline void Update(T& original, const S& src, Allocator& alloc,
+        bool copy_const_string=false) {
   if (src.IsObject()) {
     if (!original.IsObject()) {
-      original.CopyFrom(src, alloc);
+      original.CopyFrom(src, alloc, copy_const_string);
     } else {
       original.CreateMap(alloc);
       for (auto itr = src.MemberBegin(), e = src.MemberEnd(); itr != e; ++itr) {
@@ -1284,63 +1292,8 @@ static inline void Update(T& original, const S& src, Allocator& alloc) {
       }
     }
   } else if (UpdateExistentKey) {
-    original.CopyFrom(src, alloc);
+    original.CopyFrom(src, alloc, copy_const_string);
   }
-}
-
-/*
- * @brief diff from one json to another
- * @prarm alloc Memory allocator for patch
- */
-template <
-    typename T, typename U, typename V, typename Allocator,
-    typename std::enable_if<is_base_of_template<T, GenericNode>::value &&
-                                is_base_of_template<U, GenericNode>::value &&
-                                is_base_of_template<V, GenericNode>::value,
-                            bool>::type = false>
-static bool Diff(const T& from, const U& to, V& patch, Allocator& alloc) {
-  if (from.GetType() != to.GetType()) {
-    if (from.IsString() && from == to) {
-      return false;
-    }
-    patch.CopyFrom(to, alloc);
-    return true;
-  }
-
-  bool is_diff = false;
-  switch (from.GetType()) {
-    case kObject:
-      patch.SetObject();
-      for (auto it = from.MemberBegin(), e = from.MemberEnd(); it != e; ++it) {
-        auto m = to.FindMember(it->name.GetStringView());
-        if (m != to.MemberEnd()) {
-          V tmp;
-          bool b = Diff(it->value, m->value, tmp, alloc);
-          if (b) {
-            is_diff = true;
-            patch.AddMember(it->name.GetStringView(), tmp, alloc);
-          }
-        } else {    // target doesn't have this key
-          V tmp{};  // Null
-          patch.AddMember(it->name.GetStringView(), tmp, alloc);
-        }
-      }
-      for (auto it = to.MemberBegin(), e = to.MemberEnd(); it != e; ++it) {
-        auto m = from.FindMember(it->name.GetStringView());
-        if (m == from.MemberEnd()) {  // only need add non-existed key to patch
-          V tmp{};
-          tmp.CopyFrom(it->value, alloc);
-          patch.AddMember(it->name.GetStringView(), tmp, alloc);
-        }
-      }
-      break;
-    default:
-      if (from != to) {
-        patch.CopyFrom(to, alloc);
-        is_diff = true;
-      }
-  }
-  return is_diff;
 }
 
 }  // namespace sonic_json
