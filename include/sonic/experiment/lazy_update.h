@@ -66,7 +66,7 @@ static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
     StringView key = iter->name.GetStringView();
     auto match = target.FindMember(key);
     if (match == target.MemberEnd()) {
-      target.AddMember(key, iter->value, alloc);
+      target.AddMember(key, std::move(iter->value), alloc);
     } else {
       err = UpdateNodeLazy(match->value, iter->value, alloc);
       if (err) return err;

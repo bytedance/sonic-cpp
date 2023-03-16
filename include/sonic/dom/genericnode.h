@@ -773,16 +773,14 @@ class GenericNode {
 
   /**
    * @brief Add a new member for this object.
-   * @tparam ValueType the type of member's value
    * @param key new member's name, must be string
-   * @param value rvalue or lvalue reference for value, must be NodeType
+   * @param value rvalue of the added value node
    * @param copyKey copy the key's string when creating the key node if copyKey
    * is true.
    * @return NodeType& Reference of the added member.
    * @note value will be moved.
    */
-  template <typename ValueType>
-  MemberIterator AddMember(StringView key, ValueType&& value, alloc_type& alloc,
+  MemberIterator AddMember(StringView key, NodeType&& value, alloc_type& alloc,
                            bool copyKey = true) {
     sonic_assert(this->IsObject());
     return downCast()->addMemberImpl(key, value, alloc, copyKey);
@@ -941,13 +939,12 @@ class GenericNode {
   /**
    * @brief Push an element into an array.
    * @tparam ValueType push node type
-   * @param value rvalue or lvalue reference of push node.
+   * @param value rvalue reference of the pushed node.
    * @param alloc allocator reference that manages array memory
    * @return NodeType& Reference to this.
    * @note value will be moved.
    */
-  template <typename ValueType>
-  NodeType& PushBack(ValueType&& value, alloc_type& alloc) {
+  NodeType& PushBack(NodeType&& value, alloc_type& alloc) {
     sonic_assert(this->IsArray());
     return downCast()->pushBackImpl(value, alloc);
   }
