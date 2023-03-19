@@ -302,14 +302,14 @@ class MemoryPoolAllocator {
   //! Allocates a memory block. (concept Allocator)
   void* Malloc(size_t size) {
     sonic_assert(shared_->refcount > 0);
-    if (!size) return NULL;
+    if (!size) return nullptr;
 
     size = SONIC_ALIGN(size);
     LOCK_GUARD;
     if (sonic_unlikely(shared_->chunkHead->size + size >
                        shared_->chunkHead->capacity))
       if (!AddChunk(chunk_capacity_ > size ? chunk_capacity_ : size))
-        return NULL;
+        return nullptr;
 
     void* buffer = GetChunkBuffer(shared_) + shared_->chunkHead->size;
     shared_->chunkHead->size += size;
@@ -318,7 +318,7 @@ class MemoryPoolAllocator {
 
   //! Resizes a memory block (concept Allocator)
   void* Realloc(void* originalPtr, size_t originalSize, size_t newSize) {
-    if (originalPtr == 0) return Malloc(newSize);
+    if (originalPtr == nullptr) return Malloc(newSize);
 
     sonic_assert(shared_->refcount > 0);
     if (newSize == 0) return nullptr;
@@ -387,7 +387,7 @@ class MemoryPoolAllocator {
   }
 
   static inline void* AlignBuffer(void* buf, size_t& size) {
-    sonic_assert(buf != 0);
+    sonic_assert(buf != nullptr);
     const uintptr_t mask = sizeof(void*) - 1;
     const uintptr_t ubuf = reinterpret_cast<uintptr_t>(buf);
     if (sonic_unlikely(ubuf & mask)) {
@@ -422,7 +422,7 @@ class MapAllocator {
   MapAllocator(const MapAllocator& rhs) : alloc_(rhs.alloc_) {}
 
   pointer allocate(size_type n, const void* = nullptr) {
-    return (T*)alloc_->Malloc(n * sizeof(T));
+    return static_cast<pointer>(alloc_->Malloc(n * sizeof(T)));
   }
 
   void deallocate(void* p, size_type) { alloc_->Free(p); }
@@ -435,7 +435,7 @@ class MapAllocator {
     return *this;
   }
 
-  void construct(pointer p, const T& val) { new ((T*)p) T(val); }
+  void construct(pointer p, const T& val) { new (p) T(val); }
   void destroy(pointer p) { p->~T(); }
   size_type max_size() const { return size_t(-1); }
 
