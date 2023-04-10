@@ -16,20 +16,22 @@
 
 #pragma once
 
+#include <sonic/macro.h>
+
 #include "../avx2/quote.h"
 #include "../sse/quote.h"
-
-#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
 __attribute__((target("default"))) inline size_t parseStringInplace(
     uint8_t *&, SonicError &) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
                                                       char *) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
@@ -38,8 +40,9 @@ __attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
   return sse::parseStringInplace(src, err);
 }
 
-__attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src, size_t nb,
-                                                     char *dst) {
+__attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
+                                                           size_t nb,
+                                                           char *dst) {
   return sse::Quote(src, nb, dst);
 }
 
@@ -48,8 +51,9 @@ __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
   return avx2::parseStringInplace(src, err);
 }
 
-__attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src, size_t nb,
-                                                    char *dst) {
+__attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
+                                                          size_t nb,
+                                                          char *dst) {
   return avx2::Quote(src, nb, dst);
 }
 

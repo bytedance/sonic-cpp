@@ -45,7 +45,6 @@ using VecType = simd::simd256<uint8_t>;
 
 #include "../common/x86_common/quote.inc.h"
 
-
 }  // namespace avx2
 }  // namespace internal
 }  // namespace sonic_json

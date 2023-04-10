@@ -17,9 +17,10 @@
 
 #pragma once
 
-#include <cstdint>
 #include <immintrin.h>
 #include <sonic/macro.h>
+
+#include <cstdint>
 
 SONIC_PUSH_HASWELL
 

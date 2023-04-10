@@ -17,9 +17,10 @@
 #pragma once
 
 #include <sonic/macro.h>
-#include <cstdint>
-#include "../sse/str2int.h"
 
+#include <cstdint>
+
+#include "../sse/str2int.h"
 
 namespace sonic_json {
 namespace internal {

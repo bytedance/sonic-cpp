@@ -17,9 +17,10 @@
 
 #pragma once
 
+#include <sonic/macro.h>
+
 #include <cstdint>
 #include <cstring>
-#include <sonic/macro.h>
 
 #include "../common/unicode_common.h"
 #include "base.h"

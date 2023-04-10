@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <sonic/macro.h>
+
 #include "../avx2/skip.h"
 #include "../sse/skip.h"
-
-#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
@@ -30,29 +30,32 @@ using sse::GetNextToken;  // !!!Not efficency
 
 __attribute__((target("default"))) inline int SkipString(const uint8_t*,
                                                          size_t&, size_t) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline bool SkipContainer(const uint8_t*,
                                                              size_t&, size_t,
                                                              uint8_t, uint8_t) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline uint8_t skip_space(const uint8_t*,
                                                              size_t&, size_t&,
                                                              uint64_t&) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline uint8_t skip_space_safe(
     const uint8_t*, size_t&, size_t, size_t&, uint64_t&) {
+  static_assert(!!!"Not Implemented!");
   return 0;
 }
 
-__attribute__((target(SONIC_WESTMERE))) inline int SkipString(const uint8_t* data,
-                                                        size_t& pos,
-                                                        size_t len) {
+__attribute__((target(SONIC_WESTMERE))) inline int SkipString(
+    const uint8_t* data, size_t& pos, size_t len) {
   return sse::SkipString(data, pos, len);
 }
 
@@ -73,9 +76,8 @@ __attribute__((target(SONIC_WESTMERE))) inline uint8_t skip_space_safe(
   return sse::skip_space_safe(data, pos, len, nonspace_bits_end, nonspace_bits);
 }
 
-__attribute__((target(SONIC_HASWELL))) inline int SkipString(const uint8_t* data,
-                                                       size_t& pos,
-                                                       size_t len) {
+__attribute__((target(SONIC_HASWELL))) inline int SkipString(
+    const uint8_t* data, size_t& pos, size_t len) {
   return avx2::SkipString(data, pos, len);
 }
 

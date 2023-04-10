@@ -15,8 +15,8 @@
  */
 
 #pragma once
-#include "sonic_cpu_feature.h"
 #include "../../macro.h"
+#include "sonic_cpu_feature.h"
 
 #ifndef SONIC_DYNAMIC_DISPATCH
 #define SONIC_STATIC_DISPATCH

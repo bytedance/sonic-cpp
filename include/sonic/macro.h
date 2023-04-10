@@ -57,15 +57,14 @@
 #define SONIC_HASWELL_STR(s) "arch=haswell"
 
 #if defined(__clang__)
-#define SONIC_PUSH_TARGET(_target)\
-  _Pragma(SONIC_STRINGIFY(clang attribute push(__attribute__((target(_target))), apply_to = function)))
-#define SONIC_POP_TARGET\
-  _Pragma("clang attribute pop")
+#define SONIC_PUSH_TARGET(_target)              \
+  _Pragma(SONIC_STRINGIFY(clang attribute push( \
+      __attribute__((target(_target))), apply_to = function)))
+#define SONIC_POP_TARGET _Pragma("clang attribute pop")
 #elif defined(__GNUG__)
-#define SONIC_PUSH_TARGET(_target)\
+#define SONIC_PUSH_TARGET(_target) \
   _Pragma("GCC push_options") _Pragma(SONIC_STRINGIFY(GCC target(_target)))
-#define SONIC_POP_TARGET\
-  _Pragma("GCC pop_options")
+#define SONIC_POP_TARGET _Pragma("GCC pop_options")
 #endif
 
 #define SONIC_PUSH_WESTMERE SONIC_PUSH_TARGET(SONIC_WESTMERE)

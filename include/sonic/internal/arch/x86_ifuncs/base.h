@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <sonic/macro.h>
+
 #include "../avx2/base.h"
 #include "../sse/base.h"
-
-#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
@@ -32,35 +32,37 @@ using sse::TrailingZeroes;
 
 __attribute__((target("default"))) inline void Xmemcpy_32(void*, const void*,
                                                           size_t) {
+  static_assert(!!!"Not Implemented!");
   return;
 }
 
 __attribute__((target("default"))) inline void Xmemcpy_16(void*, const void*,
                                                           size_t) {
+  static_assert(!!!"Not Implemented!");
   return;
 }
 
 __attribute__((target(SONIC_WESTMERE))) inline void Xmemcpy_32(void* dst,
-                                                         const void* src,
-                                                         size_t chunks) {
+                                                               const void* src,
+                                                               size_t chunks) {
   return sse::Xmemcpy<32>(dst, src, chunks);
 }
 
 __attribute__((target(SONIC_WESTMERE))) inline void Xmemcpy_16(void* dst,
-                                                         const void* src,
-                                                         size_t chunks) {
+                                                               const void* src,
+                                                               size_t chunks) {
   return sse::Xmemcpy<16>(dst, src, chunks);
 }
 
 __attribute__((target(SONIC_HASWELL))) inline void Xmemcpy_32(void* dst,
-                                                        const void* src,
-                                                        size_t chunks) {
+                                                              const void* src,
+                                                              size_t chunks) {
   return avx2::Xmemcpy<32>(dst, src, chunks);
 }
 
 __attribute__((target(SONIC_HASWELL))) inline void Xmemcpy_16(void* dst,
-                                                        const void* src,
-                                                        size_t chunks) {
+                                                              const void* src,
+                                                              size_t chunks) {
   return avx2::Xmemcpy<16>(dst, src, chunks);
 }
 
