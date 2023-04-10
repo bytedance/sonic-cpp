@@ -16,14 +16,10 @@
 
 #pragma once
 #include "sonic_cpu_feature.h"
+#include "../../macro.h"
 
 #ifndef SONIC_DYNAMIC_DISPATCH
 #define SONIC_STATIC_DISPATCH
-#endif
-
-#ifndef SONIC_STRINGIFY
-#define SONIC_STRINGIFY(s) SONIC_STRINGIFY2(s)
-#define SONIC_STRINGIFY2(s) #s
 #endif
 
 #if defined(SONIC_STATIC_DISPATCH)

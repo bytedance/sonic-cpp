@@ -20,15 +20,7 @@
 
 #include <cstdint>
 
-#if defined(__clang__)
-#pragma clang attribute push( \
-    __attribute__((target("pclmul,sse,sse2,sse4.1"))), apply_to = function)
-#elif defined(__GNUG__)
-#pragma GCC push_options
-#pragma GCC target("pclmul,sse,sse2,sse4.1")
-#else
-#error "Only g++ and clang is supported!"
-#endif
+SONIC_PUSH_WESTMERE
 
 namespace sonic_json {
 namespace internal {
@@ -154,8 +146,4 @@ sonic_force_inline uint64_t simd_str2int(const char* c, int& man_nd) {
 }  // namespace internal
 }  // namespace sonic_json
 
-#if defined(__clang__)
-#pragma clang attribute pop
-#elif defined(__GNUG__)
-#pragma GCC pop_options
-#endif
+SONIC_POP_TARGET

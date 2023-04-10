@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "../avx2/quote.h"
 #include "../sse/quote.h"
-#include "ifunc_macro.h"
-#pragma once
+
+#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
@@ -31,22 +33,22 @@ __attribute__((target("default"))) inline char *Quote(const char *, size_t,
   return 0;
 }
 
-__attribute__((target(WESTMERE))) inline size_t parseStringInplace(
+__attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
     uint8_t *&src, SonicError &err) {
   return sse::parseStringInplace(src, err);
 }
 
-__attribute__((target(WESTMERE))) inline char *Quote(const char *src, size_t nb,
+__attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src, size_t nb,
                                                      char *dst) {
   return sse::Quote(src, nb, dst);
 }
 
-__attribute__((target(HASWELL))) inline size_t parseStringInplace(
+__attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
     uint8_t *&src, SonicError &err) {
   return avx2::parseStringInplace(src, err);
 }
 
-__attribute__((target(HASWELL))) inline char *Quote(const char *src, size_t nb,
+__attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src, size_t nb,
                                                     char *dst) {
   return avx2::Quote(src, nb, dst);
 }

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "../sse/str2int.h"
-#include "ifunc_macro.h"
 #pragma once
+
+#include "../sse/str2int.h"
 
 namespace sonic_json {
 namespace internal {

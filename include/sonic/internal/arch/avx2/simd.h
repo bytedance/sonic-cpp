@@ -17,20 +17,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <immintrin.h>
 #include <sonic/macro.h>
 
-#include <cstdint>
-
-#if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("avx2"))), \
-                             apply_to = function)
-#elif defined(__GNUG__)
-#pragma GCC push_options
-#pragma GCC target("avx2")
-#else
-#error "Only g++ and clang is supported!"
-#endif
+SONIC_PUSH_HASWELL
 
 namespace sonic_json {
 namespace internal {
@@ -678,8 +669,4 @@ struct simd8x64 {
 }  // namespace internal
 }  // namespace sonic_json
 
-#if defined(__clang__)
-#pragma clang attribute pop
-#elif defined(__GNUG__)
-#pragma GCC pop_options
-#endif
+SONIC_POP_TARGET

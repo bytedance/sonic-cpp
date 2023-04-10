@@ -28,15 +28,7 @@
 #include "simd.h"
 #include "unicode.h"
 
-#if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("avx2"))), \
-                             apply_to = function)
-#elif defined(__GNUG__)
-#pragma GCC push_options
-#pragma GCC target("avx2")
-#else
-#error "Only g++ and clang is supported!"
-#endif
+SONIC_PUSH_HASWELL
 
 #if defined(VEC_FULL_MASK) || defined(VEC_LEN)
 #error "VEC_FULL_MASK and VEC_LEN has been defined! This may cause error."
@@ -53,6 +45,7 @@ using VecType = simd::simd256<uint8_t>;
 
 #include "../common/x86_common/quote.inc.h"
 
+
 }  // namespace avx2
 }  // namespace internal
 }  // namespace sonic_json
@@ -60,8 +53,4 @@ using VecType = simd::simd256<uint8_t>;
 #undef VEC_FULL_MASK
 #undef VEC_LEN
 
-#if defined(__clang__)
-#pragma clang attribute pop
-#elif defined(__GNUG__)
-#pragma GCC pop_options
-#endif
+SONIC_POP_TARGET

@@ -15,7 +15,6 @@
  */
 
 #include "../sse/itoa.h"
-#include "ifunc_macro.h"
 #pragma once
 
 namespace sonic_json {

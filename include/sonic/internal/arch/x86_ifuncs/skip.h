@@ -18,7 +18,8 @@
 
 #include "../avx2/skip.h"
 #include "../sse/skip.h"
-#include "ifunc_macro.h"
+
+#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
@@ -49,47 +50,47 @@ __attribute__((target("default"))) inline uint8_t skip_space_safe(
   return 0;
 }
 
-__attribute__((target(WESTMERE))) inline int SkipString(const uint8_t* data,
+__attribute__((target(SONIC_WESTMERE))) inline int SkipString(const uint8_t* data,
                                                         size_t& pos,
                                                         size_t len) {
   return sse::SkipString(data, pos, len);
 }
 
-__attribute__((target(WESTMERE))) inline bool SkipContainer(
+__attribute__((target(SONIC_WESTMERE))) inline bool SkipContainer(
     const uint8_t* data, size_t& pos, size_t len, uint8_t left, uint8_t right) {
   return sse::SkipContainer(data, pos, len, left, right);
 }
 
-__attribute__((target(WESTMERE))) inline uint8_t skip_space(
+__attribute__((target(SONIC_WESTMERE))) inline uint8_t skip_space(
     const uint8_t* data, size_t& pos, size_t& nonspace_bits_end,
     uint64_t& nonspace_bits) {
   return sse::skip_space(data, pos, nonspace_bits_end, nonspace_bits);
 }
 
-__attribute__((target(WESTMERE))) inline uint8_t skip_space_safe(
+__attribute__((target(SONIC_WESTMERE))) inline uint8_t skip_space_safe(
     const uint8_t* data, size_t& pos, size_t len, size_t& nonspace_bits_end,
     uint64_t& nonspace_bits) {
   return sse::skip_space_safe(data, pos, len, nonspace_bits_end, nonspace_bits);
 }
 
-__attribute__((target(HASWELL))) inline int SkipString(const uint8_t* data,
+__attribute__((target(SONIC_HASWELL))) inline int SkipString(const uint8_t* data,
                                                        size_t& pos,
                                                        size_t len) {
   return avx2::SkipString(data, pos, len);
 }
 
-__attribute__((target(HASWELL))) inline bool SkipContainer(
+__attribute__((target(SONIC_HASWELL))) inline bool SkipContainer(
     const uint8_t* data, size_t& pos, size_t len, uint8_t left, uint8_t right) {
   return avx2::SkipContainer(data, pos, len, left, right);
 }
 
-__attribute__((target(HASWELL))) inline uint8_t skip_space(
+__attribute__((target(SONIC_HASWELL))) inline uint8_t skip_space(
     const uint8_t* data, size_t& pos, size_t& nonspace_bits_end,
     uint64_t& nonspace_bits) {
   return avx2::skip_space(data, pos, nonspace_bits_end, nonspace_bits);
 }
 
-__attribute__((target(HASWELL))) inline uint8_t skip_space_safe(
+__attribute__((target(SONIC_HASWELL))) inline uint8_t skip_space_safe(
     const uint8_t* data, size_t& pos, size_t len, size_t& nonspace_bits_end,
     uint64_t& nonspace_bits) {
   return avx2::skip_space_safe(data, pos, len, nonspace_bits_end,
