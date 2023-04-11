@@ -89,7 +89,17 @@ class SpinLock {
         break;
       }
       while (lock_.load(std::memory_order_relaxed)) {
+        // use pause or yield instruction will slow down lock acquisition
+        // on contended locks.
+#ifndef SONIC_SPINLOCK_NO_PAUSE
+
+#if defined(__x86_64__) || defined(_M_AMD64)
         __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(_M_ARM64)
+        asm volatile("yield");
+#endif
+
+#endif
       }
     }
   }

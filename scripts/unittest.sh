@@ -3,19 +3,61 @@ set -e
 
 CUR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 
-export UNIT_TEST_TARGET=unittest-clang
-case $1 in
-    --help)
-        echo "bash unittest.sh [-g|-c], -g build gcc unittest target, -c build clang unittest target"
+usage() {
+    echo "
+Usage:
+    -g, --gcc       compiler is gcc
+    -c, --clang     compiler is clang
+    -h, --help      display this message
+    --arch={arm|haswell|westmere} target architecture, default is haswell
+    --dispatch={dynamic|static} sonic dispatch mode, default is static
+
+    example: bash unittest.sh -g --arch=westmere --dispatch=static
+"
+}
+
+UNIT_TEST_ARCH=haswell
+UNIT_TEST_DISPATCH=static
+UNIT_TEST_SANITIZER=gcc
+
+PARSED_ARGUMENTS=$(getopt -o gch --long gcc,clang,help,arch::,dispatch:: -- "$@")
+VALID_ARGUMENTS=$?
+if [ "$VALID_ARGUMENTS" != "0" ]; then
+    usage
+    exit
+fi
+eval set -- "$PARSED_ARGUMENTS"
+while true
+do
+    case "$1" in
+    -g|--gcc)
+        UNIT_TEST_SANITIZER=gcc
+        shift ;;
+    -c|--clang)
+        UNIT_TEST_SANITIZER=clang
+        shift ;;
+    -h|--help)
+        usage
+        exit
         ;;
-    -g)
-        export UNIT_TEST_TARGET=unittest-gcc
-        ;;
-    -c)
-        export UNIT_TEST_TARGET=unittest-clang
-        ;;
+    --arch)
+        case "$2" in
+            "") shift 2 ;;
+            *) UNIT_TEST_ARCH="$2" shift 2 ;;
+        esac ;;
+    --dispatch)
+        case "$2" in
+            "") shift 2 ;;
+            *) UNIT_TEST_DISPATCH="$2" shift 2 ;;
+        esac ;;
+    --) shift ; break ;;
     *)
-esac
+        echo "Cannot recongize option: " $1
+        usage
+        exit
+        ;;
+    esac
+done
 
 BAZEL=bazel
 if ! type bazel >/dev/null 2>&1; then
@@ -26,6 +68,14 @@ fi
 
 ${BAZEL} build :benchmark
 ${BAZEL} build :benchmark --copt="-DSONIC_DEBUG"
-${BAZEL} build :${UNIT_TEST_TARGET} --copt="-DSONIC_DEBUG"
-${BAZEL} run :${UNIT_TEST_TARGET} --copt="-DSONIC_LOCKED_ALLOCATOR"
-${BAZEL} run :${UNIT_TEST_TARGET} --copt="-DSONIC_NOT_VALIDATE_UTF8"
+
+# default target
+set -x
+${BAZEL} build :unittest --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} --copt="-DSONIC_DEBUG"
+
+${BAZEL} run :unittest --//:sonic_arch=$UNIT_TEST_ARCH \
+    --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} \
+    --//:sonic_dispatch=${UNIT_TEST_DISPATCH} \
+    --copt="-DSONIC_LOCKED_ALLOCATOR"
+
+set +x

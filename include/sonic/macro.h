@@ -45,3 +45,27 @@
 #include <cassert>
 #define sonic_assert(x) assert((x));
 #endif
+
+#ifndef SONIC_STRINGIFY
+#define SONIC_STRINGIFY(s) SONIC_STRINGIFY2(s)
+#define SONIC_STRINGIFY2(s) #s
+#endif
+
+#define SONIC_WESTMERE "pclmul,sse4.2"
+#define SONIC_HASWELL "avx2"
+#define SONIC_WESTMERE_STR(s) "arch=westmere"
+#define SONIC_HASWELL_STR(s) "arch=haswell"
+
+#if defined(__clang__)
+#define SONIC_PUSH_TARGET(_target)              \
+  _Pragma(SONIC_STRINGIFY(clang attribute push( \
+      __attribute__((target(_target))), apply_to = function)))
+#define SONIC_POP_TARGET _Pragma("clang attribute pop")
+#elif defined(__GNUG__)
+#define SONIC_PUSH_TARGET(_target) \
+  _Pragma("GCC push_options") _Pragma(SONIC_STRINGIFY(GCC target(_target)))
+#define SONIC_POP_TARGET _Pragma("GCC pop_options")
+#endif
+
+#define SONIC_PUSH_WESTMERE SONIC_PUSH_TARGET(SONIC_WESTMERE)
+#define SONIC_PUSH_HASWELL SONIC_PUSH_TARGET(SONIC_HASWELL)

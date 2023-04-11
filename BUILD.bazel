@@ -1,7 +1,72 @@
 package(default_visibility = ["//visibility:public"])
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
 common_copts = ['-mavx2', '-mbmi', '-mpclmul']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
+
+avx2_copts = ['-mavx2', '-mbmi', '-mpclmul']
+sse_copts = ['-msse', '-msse2', '-msse4.1', '-mpclmul']
+arm_copts = ['-march-armv8-a']
+benchmark_copts = ['-O3', '-DNDEBUG', '-std=c++17']
+static_dispatch_copts = []
+dynamic_dispatch_copts = ['-DSONIC_DYNAMIC_DISPATCH=1']
+no_san_linkopts = []
+gcc_san_linkopts = ['-lasan']
+clang_san_linkopts = ['-fsanitize-link-c++-runtime']
+
+string_flag(
+    name = "sonic_arch",
+    build_setting_default = "haswell",
+)
+
+string_flag(
+    name = "sonic_dispatch",
+    build_setting_default = "static",
+)
+
+string_flag(
+    name = "sonic_sanitizer",
+    build_setting_default = "no",
+)
+
+config_setting(
+    name = "arm_build",
+    flag_values = {":sonic_arch": "arm"},
+)
+
+config_setting(
+    name = "sse_build",
+    flag_values = {":sonic_arch": "westmere"},
+)
+config_setting(
+    name = "avx2_build",
+    flag_values = {":sonic_arch": "haswell"},
+)
+
+config_setting(
+    name = "static_dispatch",
+    flag_values = {":sonic_dispatch": "static"},
+)
+
+config_setting(
+    name = "dynamic_dispatch",
+    flag_values = {":sonic_dispatch": "dynamic"},
+)
+
+config_setting(
+    name = "no_san",
+    flag_values = {":sonic_sanitizer": "no"},
+)
+
+config_setting(
+    name = "gcc_san",
+    flag_values = {":sonic_sanitizer": "gcc"},
+)
+
+config_setting(
+    name = "clang_san",
+    flag_values = {":sonic_sanitizer": "clang"},
+)
 
 cc_library(
     name = "string_view",
@@ -35,12 +100,21 @@ cc_binary(
         "@simdjson",
         "@jsoncpp//:jsoncpp",
     ],
-    copts = common_copts + ['-DNDEBUG', '-std=c++17'],
+    # copts = common_copts + ['-DNDEBUG', '-std=c++17'],
+    copts = select({
+                "arm_build": arm_copts + benchmark_copts,
+                "sse_build": sse_copts + benchmark_copts,
+                "avx2_build": avx2_copts + benchmark_copts,
+            }) +\
+            select({
+                "static_dispatch": static_dispatch_copts,
+                "dynamic_dispatch": dynamic_dispatch_copts,
+            }),
     linkopts = ['-lstdc++fs'],
 )
 
 cc_test(
-    name = "unittest-gcc",
+    name = "unittest",
     srcs = glob([
         "tests/*.cpp",
         "include/sonic/*",
@@ -51,16 +125,31 @@ cc_test(
         "@gtest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
-    linkopts = sanitize_copts + [
-        '-lstdc++fs',
-        '-fstack-protector-all',
-        '-lasan'
-    ],
-    copts = common_copts + sanitize_copts + [
+    linkopts = [ '-lstdc++fs', '-fstack-protector-all',] +\
+        select({
+            "no_san": [],
+            "gcc_san": sanitize_copts + gcc_san_linkopts,
+            "clang_san": sanitize_copts + clang_san_linkopts,
+        }),
+    copts = [
         '-O3', '-g', '-UNDEBUG', '-std=c++14',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
-    ],
+    ]  + \
+        select({
+            "no_san": [],
+            "gcc_san": sanitize_copts,
+            "clang_san": sanitize_copts,
+        }) + \
+        select({
+            "arm_build": arm_copts + benchmark_copts,
+            "sse_build": sse_copts + benchmark_copts,
+            "avx2_build": avx2_copts + benchmark_copts,
+        }) +\
+        select({
+            "static_dispatch": static_dispatch_copts,
+            "dynamic_dispatch": dynamic_dispatch_copts,
+        }),
 )
 
 cc_test(
@@ -79,10 +168,59 @@ cc_test(
     linkopts = sanitize_copts + [
         '-lstdc++fs',
         '-fstack-protector-all',
-        '-fsanitize-link-c++-runtime'
     ],
     copts = common_copts + sanitize_copts + [
         '-O3', '-g', '-UNDEBUG', '-std=c++14',
+        '-fstack-protector-all',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+)
+
+cc_test(
+    name = "unittest-arm",
+    srcs = glob([
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
+    deps = [ 
+        ":string_view",
+        "@gtest//:gtest_main",
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-fsanitize-link-c++-runtime'
+    ],
+    copts = sanitize_copts + [
+        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=armv8-a',
+        '-fstack-protector-all',
+        '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+)
+
+cc_test(
+    name = "unittest-sse",
+    srcs = glob([
+            "tests/*.h",
+            "tests/*.cpp",
+            "include/sonic/*",
+            "include/sonic/**/*",
+        ]),
+    deps = [ 
+        ":string_view",
+        "@gtest//:gtest_main",
+    ],
+    data = glob([ "testdata/*.json"]),
+    linkopts = sanitize_copts + [
+        '-lstdc++fs',
+        '-fstack-protector-all',
+        '-fsanitize-link-c++-runtime'
+    ],
+    copts = sanitize_copts + [
+        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=westmere',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ],
@@ -112,3 +250,4 @@ cc_test(
         '-fprofile-arcs', '-ftest-coverage',
     ],
 )
+

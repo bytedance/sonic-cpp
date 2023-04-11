@@ -20,9 +20,9 @@
 #include "sonic/dom/flags.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
+#include "sonic/internal/arch/simd_quote.h"
 #include "sonic/internal/ftoa.h"
 #include "sonic/internal/itoa.h"
-#include "sonic/internal/quote.h"
 #include "sonic/writebuffer.h"
 
 namespace sonic_json {

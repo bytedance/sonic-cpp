@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-#include "sonic/internal/haswell.h"
+#include "sonic/internal/arch/simd_base.h"
 
 namespace sonic_json {
 
@@ -803,7 +803,7 @@ static sonic_force_inline bool AtofEiselLemire64(uint64_t mant, int exp10,
   }
 
   /* Calculate the 2-base exponent of float */
-  uint32_t clz = haswell::leading_zeroes(mant);
+  uint32_t clz = LeadingZeroes(mant);
   mant <<= clz;
   /* lg10/lg2 ≈ 217706>>16 */
   uint64_t ret_exp2 =

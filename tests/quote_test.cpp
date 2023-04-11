@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "sonic/internal/quote.h"
-
 #include <gtest/gtest.h>
+#include <sonic/internal/arch/simd_quote.h>
 
 #include <cstring>
 #include <iostream>

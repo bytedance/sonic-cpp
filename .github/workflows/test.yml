@@ -7,13 +7,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        llvm_version:
-          - '11'
-          - '13.0.0'
-          - '15'
-        tool:
-          - 'cmake'
-          - 'bazel'
+        llvm_version: ['11', '13.0.0', '15']
+        tool: ['cmake', 'bazel']
+        arch: [westmere, haswell]
+        exclude:
+            - tool: 'cmake'
+              arch: westmere
     env:
       CC: clang
       CXX: clang++
@@ -38,10 +37,10 @@ jobs:
         with:
           cmake-version: "latest"
 
-      - name: Run Test Use Bazel
+      - name: Run ${{ matrix.arch }} Test Use Bazel
         if: matrix.tool == 'bazel'
         run : |
-          bash ./scripts/unittest.sh -c
+          bash ./scripts/unittest.sh -c --arch=${{ matrix.arch }}
 
       - name: Run Test Use CMake
         if: matrix.tool == 'cmake'
@@ -53,12 +52,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc_version:
-          - '9'
-          - '12'
-        tool:
-          - 'cmake'
-          - 'bazel'
+        gcc_version: ['9', '12']
+        tool: ['cmake', 'bazel']
+        arch: [westmere, haswell]
+        dispatch: [static, dynamic]
+        exclude:
+          - tool: 'bazel'
+            arch: haswell
+            dispatch: dynamic
+          - tool: 'cmake'
+            dispatch: dynamic
+          - tool: 'cmake'
+            arch: westmere
+
     env:
       CC: gcc-${{ matrix.gcc_version }}
       CXX: g++-${{ matrix.gcc_version}}
@@ -82,10 +88,10 @@ jobs:
         with:
           cmake-version: "latest"
 
-      - name: Run Test Use Bazel
+      - name: Run ${{ matrix.arch }} ${{ matrix.dispatch }} Test Use Bazel
         if: matrix.tool == 'bazel'
         run : |
-          bash ./scripts/unittest.sh -g
+          bash ./scripts/unittest.sh -g --arch=${{ matrix.arch }} --dispatch=${{ matrix.dispatch }}
 
       - name: Run Test Use CMake
         if: matrix.tool == 'cmake'
