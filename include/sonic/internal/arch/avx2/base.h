@@ -75,8 +75,13 @@ sonic_force_inline uint64_t PrefixXor(const uint64_t bitmask) {
       _mm_clmulepi64_si128(_mm_set_epi64x(0ULL, bitmask), all_ones, 0);
   return _mm_cvtsi128_si64(result);
 #else
-#error "PCLMUL instruction set required. Missing option -mpclmul ?"
-  return 0;
+  bitmask ^= bitmask << 1;
+  bitmask ^= bitmask << 2;
+  bitmask ^= bitmask << 4;
+  bitmask ^= bitmask << 8;
+  bitmask ^= bitmask << 16;
+  bitmask ^= bitmask << 32;
+  return bitmask;
 #endif
 }
 

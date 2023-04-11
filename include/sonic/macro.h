@@ -51,7 +51,7 @@
 #define SONIC_STRINGIFY2(s) #s
 #endif
 
-#define SONIC_WESTMERE "pclmul,sse4.2"
+#define SONIC_WESTMERE "sse4.2"
 #define SONIC_HASWELL "avx2"
 #define SONIC_WESTMERE_STR(s) "arch=westmere"
 #define SONIC_HASWELL_STR(s) "arch=haswell"
