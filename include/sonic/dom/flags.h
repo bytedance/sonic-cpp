@@ -19,7 +19,8 @@
 // ParseFlag is one-hot encoded for different parsing option.
 // User can define customed flags through combinations.
 enum ParseFlag {
-  kParseDefault = 0,
+  kParseDefault   = 0,
+  kParseRawNumber = 1,
 };
 
 // SerializeFlags is one-hot encoded for different serializing option.

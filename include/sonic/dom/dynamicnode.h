@@ -385,10 +385,10 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return *this;
   }
 
-  DNode& setRawImpl(const char* s, size_t len) {
+  DNode& setRawImpl(StringView s, TypeFlag flag) {
     this->destroy();
-    this->raw.p = s;
-    this->setLength(len, kRaw);
+    this->raw.p = s.data();
+    this->setLength(s.size(), flag);
     return *this;
   }
 

@@ -91,10 +91,12 @@ class SAXHandler {
     st_ = nullptr;
   };
 
-#define SONIC_ADD_NODE()       \
-  {                            \
-    if (!node()) return false; \
-  }
+#define SONIC_ADD_NODE()   do {        \
+    if (sonic_unlikely(np_ >= cap_)) { \
+      return false;                    \
+    }                                  \
+    np_++;                             \
+  } while(0) 
 
   sonic_force_inline bool Null() noexcept {
     SONIC_ADD_NODE();
@@ -123,6 +125,12 @@ class SAXHandler {
   sonic_force_inline bool Double(double val) noexcept {
     SONIC_ADD_NODE();
     new (&st_[np_ - 1]) NodeType(val);
+    return true;
+  }
+
+  sonic_force_inline bool RawNumber(StringView num) noexcept {
+    SONIC_ADD_NODE();
+    st_[np_ - 1].setRaw(num, kRawNumber);
     return true;
   }
 
@@ -190,15 +198,6 @@ class SAXHandler {
   }
 
 #undef SONIC_ADD_NODE
-
-  sonic_force_inline bool node() noexcept {
-    if (sonic_likely(np_ < cap_)) {
-      np_++;
-      return true;
-    } else {
-      return false;
-    }
-  }
 
   NodeType *st_{nullptr};
   size_t np_{0};
@@ -273,7 +272,7 @@ class LazySAXHandler {
 
   sonic_force_inline bool Raw(const char *data, size_t len) {
     new (stack_.PushSize<NodeType>(1)) NodeType();
-    stack_.Top<NodeType>()->setRaw(StringView(data, len));
+    stack_.Top<NodeType>()->setRaw(StringView(data, len), kRaw);
     return true;
   }
 

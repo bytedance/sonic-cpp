@@ -1033,21 +1033,26 @@ class GenericNode {
   sonic_force_inline TypeFlag getBasicType() const noexcept {
     return static_cast<TypeFlag>(t.t & kBasicTypeMask);
   }
+
   sonic_force_inline void setLength(size_t len) noexcept {
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(t.t);
   }
+
   sonic_force_inline void setLength(size_t len, TypeFlag flag) noexcept {
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(flag);
   }
+
   sonic_force_inline void setType(TypeFlag flag) noexcept {
     sv.len = static_cast<uint64_t>(flag);
     if (IsString()) {
       setEmptyString();
     }
   }
-  NodeType& setRaw(StringView s) {
-    return downCast()->setRawImpl(s.data(), s.size());
+
+  NodeType& setRaw(StringView s, TypeFlag flag) {
+    return downCast()->setRawImpl(s, flag);
   }
+
   void setEmptyString() noexcept {
     sv.p = "";
     setLength(0, kStringConst);
