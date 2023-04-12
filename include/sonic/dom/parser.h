@@ -210,14 +210,14 @@ class Parser {
       np++;
     }
 
-    // check leading zero
+    // skip integer part, check leading zero at first
     if (*np == '0') {
       np++;
       SONIC_MUST(!is_digit(*np));
+    } else {
+      SONIC_MUST(is_digit(*np));
+      while (is_digit(*np)) np++;
     }
-
-    // skip integer part
-    while (is_digit(*np)) np++;
 
     // skip fraction part
     if (*np == '.') {

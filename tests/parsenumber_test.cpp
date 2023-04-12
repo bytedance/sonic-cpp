@@ -71,9 +71,10 @@ void TestParseDouble(double num, const std::string& input) {
   TestParseRawNumber(input);
 }
 
+template <unsigned parseFlags>
 void TestParseError(const std::string& input, size_t off, SonicError err) {
   Document doc;
-  doc.Parse(input.data(), input.size());
+  doc.template Parse<parseFlags>(input.data(), input.size());
   EXPECT_TRUE(doc.HasParseError()) << input;
   EXPECT_EQ(doc.GetParseError(), err) << input;
   // TODO: test offset
@@ -81,11 +82,12 @@ void TestParseError(const std::string& input, size_t off, SonicError err) {
 }
 
 void TestParseInf(size_t off, const std::string& input) {
-  TestParseError(input, off, kParseErrorInfinity);
+  TestParseError<kParseDefault>(input, off, kParseErrorInfinity);
 }
 
 void TestParseInval(size_t off, const std::string& input) {
-  TestParseError(input, off, kParseErrorInvalidChar);
+  TestParseError<kParseDefault>(input, off, kParseErrorInvalidChar);
+  TestParseError<kParseRawNumber>(input, off, kParseErrorInvalidChar);
 }
 
 TEST(ParserTest, ParseNumber) {
