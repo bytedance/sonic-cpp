@@ -192,8 +192,8 @@ class Parser {
   template <typename SAX>
   sonic_force_inline void parseRawNumber(SAX &sax) {
 
-#define SONIC_MUST_DIGIT(np) do {  \
-  if (!is_digit(*(np))) {          \
+#define SONIC_MUST(exp) do {  \
+  if (!(exp)) {          \
     pos_ = (np) - json_buf_;       \
     err_ = kParseErrorInvalidChar; \
     return;                        \
@@ -213,12 +213,7 @@ class Parser {
     // check leading zero
     if (*np == '0') {
       np++;
-      if (!is_digit(*np)) {
-        pos_ = np - json_buf_;
-        err_ = kParseErrorInvalidChar;
-        return;
-      } 
-      goto raw_num;
+      SONIC_MUST(!is_digit(*np));
     }
 
     // skip integer part
@@ -227,20 +222,22 @@ class Parser {
     // skip fraction part
     if (*np == '.') {
       np++;
-      SONIC_MUST_DIGIT(np);
+      SONIC_MUST(is_digit(*np));
       while (is_digit(*np)) np++;
     }
 
     // skip exponent part
     if (*np == 'e' || *np == 'E') {
       np++;
-      SONIC_MUST_DIGIT(np);
+      if (*np == '-' || *np == '+') {
+        np++;
+      }
+      SONIC_MUST(is_digit(*np));
       while (is_digit(*np)) np++;
     }
-#undef SONIC_MUST_DIGIT
+#undef SONIC_MUST
 
     // set the raw number
-raw_num:
     pos_ = np - json_buf_;
     sax.RawNumber(StringView(start,
       reinterpret_cast<const char*>(np) - start)); 

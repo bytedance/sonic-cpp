@@ -130,6 +130,7 @@ class SAXHandler {
 
   sonic_force_inline bool RawNumber(StringView num) noexcept {
     SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
     st_[np_ - 1].setRaw(num, kRawNumber);
     return true;
   }

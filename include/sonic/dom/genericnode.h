@@ -233,6 +233,15 @@ class GenericNode {
   sonic_force_inline bool IsRaw() const noexcept {
     return getBasicType() == kRaw;
   }
+
+  /**
+   * @brief  Check this node is a raw number.
+   * @return true if it is raw number.
+   */
+  sonic_force_inline bool IsRawNumber() const noexcept {
+    return GetType() == kRawNumber;
+  }
+
   /**
    * @brief  Check this node is a number.
    * @return true if it is a number.

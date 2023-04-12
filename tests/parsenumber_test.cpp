@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "sonic/dom/flags.h"
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/generic_document.h"
 
@@ -29,12 +30,22 @@ namespace {
 
 using namespace sonic_json;
 
+void TestParseRawNumber(const std::string& input) {
+    Document doc;
+    doc.template Parse<kParseRawNumber>(input);
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    EXPECT_TRUE(doc.IsRawNumber()) << input;
+    EXPECT_EQ(input, doc.GetRaw()) << input;
+}
+
 void TestParseSigned(int64_t num, const std::string& input) {
   Document doc;
   doc.Parse(input.data(), input.size());
   EXPECT_FALSE(doc.HasParseError()) << input;
   EXPECT_TRUE(doc.IsInt64()) << input;
   EXPECT_EQ(num, doc.GetInt64()) << input;
+
+  TestParseRawNumber(input);
 }
 
 void TestParseUnsigned(uint64_t num, const std::string& input) {
@@ -43,6 +54,7 @@ void TestParseUnsigned(uint64_t num, const std::string& input) {
   EXPECT_FALSE(doc.HasParseError()) << input;
   EXPECT_TRUE(doc.IsUint64()) << input;
   EXPECT_EQ(num, doc.GetUint64()) << input;
+  TestParseRawNumber(input);
 }
 
 void TestParseDouble(double num, const std::string& input) {
@@ -55,6 +67,8 @@ void TestParseDouble(double num, const std::string& input) {
   }
   // test native atof
   { EXPECT_DOUBLE_EQ(num, internal::AtofNative(input.data(), input.size())); }
+
+  TestParseRawNumber(input);
 }
 
 void TestParseError(const std::string& input, size_t off, SonicError err) {
