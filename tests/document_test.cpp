@@ -544,18 +544,18 @@ TYPED_TEST(DocumentTest, Length) {
 
 template <typename Document, unsigned parseFlags = kParseDefault>
 void testSerialize(const std::string& json) {
-    Document doc;
-    doc.template Parse<parseFlags>(json);
-    EXPECT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc.GetErrorOffset(), json.size());
+  Document doc;
+  doc.template Parse<parseFlags>(json);
+  EXPECT_FALSE(doc.HasParseError());
+  EXPECT_EQ(doc.GetErrorOffset(), json.size());
 
-    WriteBuffer wb;
-    auto err = doc.Serialize(wb);
-    EXPECT_EQ(err, kErrorNone);
-    EXPECT_STREQ(wb.ToString(), json.c_str());
+  WriteBuffer wb;
+  auto err = doc.Serialize(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), json.c_str());
 
-    std::string got = doc.Dump();
-    EXPECT_STREQ(got.c_str(), json.c_str());
+  std::string got = doc.Dump();
+  EXPECT_STREQ(got.c_str(), json.c_str());
 }
 
 TYPED_TEST(DocumentTest, SerializeOK) {

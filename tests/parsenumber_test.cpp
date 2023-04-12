@@ -22,8 +22,8 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "sonic/dom/flags.h"
 #include "sonic/dom/dynamicnode.h"
+#include "sonic/dom/flags.h"
 #include "sonic/dom/generic_document.h"
 
 namespace {
@@ -31,11 +31,11 @@ namespace {
 using namespace sonic_json;
 
 void TestParseRawNumber(const std::string& input) {
-    Document doc;
-    doc.template Parse<kParseRawNumber>(input);
-    EXPECT_FALSE(doc.HasParseError()) << input;
-    EXPECT_TRUE(doc.IsRawNumber()) << input;
-    EXPECT_EQ(input, doc.GetRaw()) << input;
+  Document doc;
+  doc.template Parse<kParseRawNumber>(input);
+  EXPECT_FALSE(doc.HasParseError()) << input;
+  EXPECT_TRUE(doc.IsRawNumber()) << input;
+  EXPECT_EQ(input, doc.GetRaw()) << input;
 }
 
 void TestParseSigned(int64_t num, const std::string& input) {

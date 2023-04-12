@@ -191,20 +191,20 @@ class Parser {
   // whole validate number here.
   template <typename SAX>
   sonic_force_inline void parseRawNumber(SAX &sax) {
-
-#define SONIC_MUST(exp) do {  \
-  if (!(exp)) {          \
-    pos_ = (np) - json_buf_;       \
-    err_ = kParseErrorInvalidChar; \
-    return;                        \
-  }                                \
-} while(0)
+#define SONIC_MUST(exp)              \
+  do {                               \
+    if (!(exp)) {                    \
+      pos_ = (np)-json_buf_;         \
+      err_ = kParseErrorInvalidChar; \
+      return;                        \
+    }                                \
+  } while (0)
 
     using internal::is_digit;
-  
+
     const uint8_t *np = json_buf_ + pos_ - 1;
-    const char *start = reinterpret_cast<const char*>(np);
-  
+    const char *start = reinterpret_cast<const char *>(np);
+
     // check sign
     if (*np == '-') {
       np++;
@@ -239,13 +239,13 @@ class Parser {
 
     // set the raw number
     pos_ = np - json_buf_;
-    sax.RawNumber(StringView(start,
-      reinterpret_cast<const char*>(np) - start)); 
+    sax.RawNumber(
+        StringView(start, reinterpret_cast<const char *>(np) - start));
     return;
   }
 
   template <unsigned parseFlags, typename SAX>
-  sonic_force_inline void parseNumber(SAX &sax) {  
+  sonic_force_inline void parseNumber(SAX &sax) {
     using internal::is_digit;
 
     // check the parseNumberFlags
@@ -253,7 +253,7 @@ class Parser {
       parseRawNumber(sax);
       return;
     }
-  
+
 #define FLOATING_LONGEST_DIGITS 17
 #define RETURN_SET_ERROR_CODE(error_code) \
   {                                       \

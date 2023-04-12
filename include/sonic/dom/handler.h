@@ -91,12 +91,13 @@ class SAXHandler {
     st_ = nullptr;
   };
 
-#define SONIC_ADD_NODE()   do {        \
+#define SONIC_ADD_NODE()               \
+  do {                                 \
     if (sonic_unlikely(np_ >= cap_)) { \
       return false;                    \
     }                                  \
     np_++;                             \
-  } while(0) 
+  } while (0)
 
   sonic_force_inline bool Null() noexcept {
     SONIC_ADD_NODE();
