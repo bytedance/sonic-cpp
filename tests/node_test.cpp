@@ -198,6 +198,26 @@ TYPED_TEST(NodeTest, CopyConstrcut) {
   }
 }
 
+TYPED_TEST(NodeTest, RawNumberNode) {
+  using NodeType = TypeParam;
+  using Allocator = typename NodeType::alloc_type;
+
+  Allocator alloc;
+  NodeType node(RawNumber(StringView("1234")), alloc);
+  EXPECT_TRUE(node.IsRawNumber());
+  EXPECT_EQ(node.GetRawNumber(), RawNumber(StringView("1234")));
+
+  WriteBuffer wb;
+  SonicError err = node.Serialize(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "1234");
+
+  NodeType empty(RawNumber(StringView()), alloc);
+  NodeType error(RawNumber(StringView("123.")), alloc);
+  EXPECT_TRUE(error.IsNull());
+  EXPECT_TRUE(empty.IsNull());
+}
+
 TYPED_TEST(NodeTest, MoveConstrcut) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;
@@ -244,7 +264,7 @@ TYPED_TEST(NodeTest, Equal) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;
   Allocator a;
-  NodeType node1, node2;
+  NodeType node1, node2, node3;
   {
     TestFixture::Add100Nodes(node1, a);
     node2.CopyFrom(node1, a);
@@ -286,6 +306,17 @@ TYPED_TEST(NodeTest, Equal) {
     node2.CopyFrom(NodeType(0.0), a);
     EXPECT_FALSE(node1 == node2);
     EXPECT_FALSE(node2 == node1);
+  }
+
+  {
+    node1.CopyFrom(NodeType(RawNumber(StringView("123456")), a), a);
+    EXPECT_NE(node1, node2);
+    node2.CopyFrom(node1, a);
+    EXPECT_EQ(node1, node2);
+    node3.CopyFrom(NodeType(RawNumber(StringView("123456")), a), a);
+    EXPECT_EQ(node2, node3);
+    node1.CopyFrom(NodeType(RawNumber(StringView("12345")), a), a);
+    EXPECT_NE(node2, node1);
   }
 }
 

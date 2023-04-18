@@ -17,6 +17,7 @@
 #pragma once
 
 #include "sonic/macro.h"
+#include "sonic/string_view.h"
 
 namespace sonic_json {
 enum TypeFlag {
@@ -67,6 +68,12 @@ enum TypeInfo {
   kOthersBits = 56,
   kLengthMask = (0xFFFFFFFFFFFFFFFF << 8),
   kContainerMask = 0x6,  // 00000110
+};
+
+// RawNumber is a wrapper type for JSON number.
+class RawNumber : public StringView {
+ public:
+  RawNumber(StringView s) : StringView(s) {}
 };
 
 }  // namespace sonic_json

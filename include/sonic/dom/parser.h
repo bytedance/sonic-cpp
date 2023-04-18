@@ -200,7 +200,7 @@ class Parser {
     }                                \
   } while (0)
 
-    using internal::is_digit;
+    using internal::IsDigit;
 
     const uint8_t *np = json_buf_ + pos_ - 1;
     const char *start = reinterpret_cast<const char *>(np);
@@ -213,17 +213,17 @@ class Parser {
     // skip integer part, check leading zero at first
     if (*np == '0') {
       np++;
-      SONIC_MUST(!is_digit(*np));
+      SONIC_MUST(!IsDigit(*np));
     } else {
-      SONIC_MUST(is_digit(*np));
-      while (is_digit(*np)) np++;
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
     }
 
     // skip fraction part
     if (*np == '.') {
       np++;
-      SONIC_MUST(is_digit(*np));
-      while (is_digit(*np)) np++;
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
     }
 
     // skip exponent part
@@ -232,21 +232,21 @@ class Parser {
       if (*np == '-' || *np == '+') {
         np++;
       }
-      SONIC_MUST(is_digit(*np));
-      while (is_digit(*np)) np++;
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
     }
 #undef SONIC_MUST
 
     // set the raw number
     pos_ = np - json_buf_;
-    sax.RawNumber(
+    sax.NumberRaw(
         StringView(start, reinterpret_cast<const char *>(np) - start));
     return;
   }
 
   template <unsigned parseFlags, typename SAX>
   sonic_force_inline void parseNumber(SAX &sax) {
-    using internal::is_digit;
+    using internal::IsDigit;
 
     // check the parseNumberFlags
     if ((parseFlags & kParseRawNumber) != 0) {
@@ -324,7 +324,7 @@ class Parser {
           i++;
           if (s[i] == '-' || s[i] == '+') i++;
           CHECK_DIGIT();
-          while (is_digit(s[i])) {
+          while (IsDigit(s[i])) {
             i++;
           }
           SET_DOUBLE_AND_RETURN(0.0 * sgn);
@@ -334,7 +334,7 @@ class Parser {
         i++;
         if (s[i] == '-' || s[i] == '+') i++;
         CHECK_DIGIT();
-        while (is_digit(s[i])) {
+        while (IsDigit(s[i])) {
           i++;
         }
         SET_DOUBLE_AND_RETURN(0.0 * sgn);
@@ -355,7 +355,7 @@ class Parser {
         i = digit_start;
         man = 0;
         man_nd = 0;
-        while (is_digit(s[i])) {
+        while (IsDigit(s[i])) {
           if (man_nd < 19) {
             man = man * 10 + s[i] - '0';
             man_nd++;
@@ -439,7 +439,7 @@ class Parser {
       man = man * pow10[fract_len] + sum;
       man_nd += fract_len;
       i += fract_len;
-      while (man_nd < FLOATING_LONGEST_DIGITS && is_digit(s[i])) {
+      while (man_nd < FLOATING_LONGEST_DIGITS && IsDigit(s[i])) {
         man = man * 10 + s[i] - '0';
         man_nd++;
         i++;
@@ -449,7 +449,7 @@ class Parser {
 
     exp10 -= (i - exp10_s);
 
-    while (is_digit(s[i])) {
+    while (IsDigit(s[i])) {
       trunc = 1;
       i++;
     }
@@ -470,7 +470,7 @@ class Parser {
     }
     CHECK_DIGIT();
 
-    while (is_digit(s[i])) {
+    while (IsDigit(s[i])) {
       if (sonic_likely(exp < 10000)) {
         exp = exp * 10 + (s[i] - '0');
       }

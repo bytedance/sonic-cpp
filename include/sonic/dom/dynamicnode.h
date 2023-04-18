@@ -118,6 +118,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
         }
         break;
       }
+      case kRaw: {
+        // RawNumber will always be copied.
+        if (rhs.GetType() == kRawNumber) {
+          this->setRawImpl(rhs.GetRawNumber(), kRawNumber, alloc);
+        }
+        break;
+      }
       default:
         std::memcpy(&(this->data), &rhs, sizeof(this->data));
         break;
@@ -128,9 +135,6 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @brief destructor
    */
   ~DNode() {
-    if (!Allocator::kNeedFree) {
-      return;
-    }
     destroy();
   }
 
@@ -211,6 +215,10 @@ class DNode : public GenericNode<DNode<Allocator>> {
         }
         // Exactly equal for double.
         return !std::memcmp(this, &rhs, sizeof(rhs));
+
+      case kRawNumber:
+      case kRaw:
+        return this->GetRaw() == rhs.GetRaw();
 
       default:
         return this->GetType() == rhs.GetType();
@@ -385,7 +393,19 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return *this;
   }
 
+  DNode& setRawImpl(StringView s, TypeFlag flag, Allocator& alloc) {
+    sonic_assert(flag == kRawNumber);
+    void* p = alloc.Malloc(s.size() + 1);
+    if (p == nullptr) {
+      return setRawImpl(StringView(), flag);
+    }
+    // TODO(liuq19): optimize small number copy instead of using memcpy.
+    std::memcpy(p, s.data(), s.size());
+    return setRawImpl(StringView((char*)(p), s.size()), flag);
+  }
+
   DNode& setRawImpl(StringView s, TypeFlag flag) {
+    sonic_assert(s.size() > 0);
     this->destroy();
     this->raw.p = s.data();
     this->setLength(s.size(), flag);
@@ -778,7 +798,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
         break;
       }
       case kStringFree:
-        Allocator::Free((void*)(this->sv.p));
+      case kRawNumber:
+        Allocator::Free(this->getPtr());
         break;
       default:
         break;
@@ -796,6 +817,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     setChildren(nullptr);
     return *this;
   }
+
   sonic_force_inline uint64_t getTypeAndLen() const { return this->sv.len; }
 };
 

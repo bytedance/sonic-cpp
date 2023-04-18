@@ -881,8 +881,6 @@ static sonic_force_inline bool AtofEiselLemire64(uint64_t mant, int exp10,
   return true;
 }
 
-static sonic_force_inline bool is_digit(char c) { return '0' <= c && c <= '9'; }
-
 #define DECIMAL_MAX_DNUM 800
 /* decimical shift witout overflow, e.g. 9 << 61 overflow */
 #define MAX_SHIFT 60

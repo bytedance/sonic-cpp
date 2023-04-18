@@ -16,13 +16,68 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+
+#include "sonic/macro.h"
 
 namespace sonic_json {
 namespace internal {
 
 static sonic_force_inline bool IsSpace(uint8_t ch) {
   return ch == ' ' || ch == '\r' || ch == '\n' || ch == '\t';
+}
+
+static sonic_force_inline bool IsDigit(char c) { return '0' <= c && c <= '9'; }
+
+// SkipNumberSafe will validate the number defined from JSON RFC.
+// And return the ending position.
+static sonic_force_inline size_t SkipNumberSafe(const char *digits,
+                                                size_t len) {
+#define SONIC_MUST(exp)          \
+  do {                           \
+    if (np >= end || (!(exp))) { \
+      return 0;                  \
+    }                            \
+  } while (0)
+
+  const char *np = digits;
+  const char *end = np + len;
+
+  // check sign, '+/d' is not allowed in JSON RFC
+  if (np < end && *np == '-') {
+    np++;
+  }
+
+  // skip integer part, check leading zero at first
+  if (np < end && *np == '0') {
+    np++;
+    if (np < end && IsDigit(*np)) {
+      return 0;
+    }
+  } else {
+    SONIC_MUST(IsDigit(*np));
+    while (np < end && IsDigit(*np)) np++;
+  }
+
+  // skip fraction part
+  if (np < end && *np == '.') {
+    np++;
+    SONIC_MUST(IsDigit(*np));
+    while (np < end && IsDigit(*np)) np++;
+  }
+
+  // skip exponent part
+  if (np < end && (*np == 'e' || *np == 'E')) {
+    np++;
+    if (np < end && (*np == '-' || *np == '+')) {
+      np++;
+    }
+    SONIC_MUST(IsDigit(*np));
+    while (np < end && IsDigit(*np)) np++;
+  }
+#undef SONIC_MUST
+  return np - digits;
 }
 
 }  // namespace internal
