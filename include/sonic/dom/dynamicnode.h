@@ -134,9 +134,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   /**
    * @brief destructor
    */
-  ~DNode() {
-    destroy();
-  }
+  ~DNode() { destroy(); }
 
   DNode& operator=(const DNode& rhs) = delete;
   DNode& operator=(DNode& rhs) = delete;
