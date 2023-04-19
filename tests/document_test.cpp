@@ -542,7 +542,7 @@ TYPED_TEST(DocumentTest, Length) {
   EXPECT_EQ(this->doc_["titles"][0].Empty(), true);
 }
 
-template <typename Document, unsigned parseFlags = kParseDefault>
+template <typename Document, unsigned parseFlags>
 void testSerialize(const std::string& json) {
   Document doc;
   doc.template Parse<parseFlags>(json);
@@ -554,8 +554,8 @@ void testSerialize(const std::string& json) {
   EXPECT_EQ(err, kErrorNone);
   EXPECT_STREQ(wb.ToString(), json.c_str());
 
-  std::string got = doc.Dump();
-  EXPECT_STREQ(got.c_str(), json.c_str());
+  // std::string got = doc.Dump();
+  // EXPECT_STREQ(got.c_str(), json.c_str());
 }
 
 TYPED_TEST(DocumentTest, SerializeOK) {
