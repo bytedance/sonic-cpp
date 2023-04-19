@@ -19,5 +19,6 @@ if [ $# -gt 0 ]; then
     COPT=$1
 fi
 
+$BAZEL clean
 $BAZEL coverage --combined_report=lcov unittest-gcc-coverage
 mv -f "${TOP_DIR}"/bazel-out/_coverage/_coverage_report.dat "${TOP_DIR}"/coverage.dat
