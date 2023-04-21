@@ -51,7 +51,7 @@ do
             *)
                 echo "Invalid argument for --arch: $2"
                 usage
-                exit
+                exit 1
                 ;;
         esac ;;
     --dispatch)
@@ -63,14 +63,15 @@ do
             *)
                 echo "Invalid argument for --dispatch: $2"
                 usage
-                exit
+                exit 1
                 ;;
         esac ;;
     --) shift ; break ;;
     *)
         echo "Invalid option: $1"
         usage
-        exit ;;
+        exit 1
+        ;;
     esac
 done
 
