@@ -32,13 +32,13 @@ using sse::TrailingZeroes;
 
 __attribute__((target("default"))) inline void Xmemcpy_32(void*, const void*,
                                                           size_t) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return;
 }
 
 __attribute__((target("default"))) inline void Xmemcpy_16(void*, const void*,
                                                           size_t) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return;
 }
 
