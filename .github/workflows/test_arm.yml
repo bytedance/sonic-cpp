@@ -1,0 +1,66 @@
+name: Test_On_Arm
+on: [push, pull_request]
+
+jobs:
+  test-llvm:
+    runs-on: arm
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm_version: ['11', '13.0.0', '15']
+        tool: ['bazel']
+        arch: [arm]
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: ${{ matrix.llvm_version }}
+
+      - name: Setup bazel
+        if: matrix.tool == 'bazel'
+        uses: jwlawson/actions-setup-bazel@v1
+        with:
+          bazel-version: "latest"
+
+      - name: Run ${{ matrix.arch }} Test Use Bazel
+        if: matrix.tool == 'bazel'
+        run : |
+          bash ./scripts/unittest.sh -c --arch=${{ matrix.arch }}
+
+  test-gcc:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc_version: ['9', '12']
+        tool: ['bazel']
+        arch: [arm]
+        dispatch: [static]
+
+    env:
+      CC: gcc-${{ matrix.gcc_version }}
+      CXX: g++-${{ matrix.gcc_version}}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install GCC
+        run: |
+          sudo apt-get install -y gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
+
+      - name: Setup bazel
+        if: matrix.tool == 'bazel'
+        uses: jwlawson/actions-setup-bazel@v1
+        with:
+          bazel-version: "latest"
+
+      - name: Run ${{ matrix.arch }} ${{ matrix.dispatch }} Test Use Bazel
+        if: matrix.tool == 'bazel'
+        run : |
+          bash ./scripts/unittest.sh -g --arch=${{ matrix.arch }} --dispatch=${{ matrix.dispatch }}
