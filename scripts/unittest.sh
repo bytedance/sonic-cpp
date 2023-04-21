@@ -32,9 +32,11 @@ do
     case "$1" in
     -g|--gcc)
         UNIT_TEST_SANITIZER=gcc
+        export CC=gcc
         shift ;;
     -c|--clang)
         UNIT_TEST_SANITIZER=clang
+        export CC=clang
         shift ;;
     -h|--help)
         usage
