@@ -30,27 +30,27 @@ using sse::GetNextToken;  // !!!Not efficency
 
 __attribute__((target("default"))) inline int SkipString(const uint8_t*,
                                                          size_t&, size_t) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline bool SkipContainer(const uint8_t*,
                                                              size_t&, size_t,
                                                              uint8_t, uint8_t) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline uint8_t skip_space(const uint8_t*,
                                                              size_t&, size_t&,
                                                              uint64_t&) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline uint8_t skip_space_safe(
     const uint8_t*, size_t&, size_t, size_t&, uint64_t&) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 

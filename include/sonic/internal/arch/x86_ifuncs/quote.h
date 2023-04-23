@@ -25,13 +25,13 @@ namespace sonic_json {
 namespace internal {
 __attribute__((target("default"))) inline size_t parseStringInplace(
     uint8_t *&, SonicError &) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
                                                       char *) {
-  static_assert(!!!"Not Implemented!");
+  // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 

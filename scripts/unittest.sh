@@ -43,18 +43,32 @@ do
     --arch)
         case "$2" in
             "") shift 2 ;;
-            *) UNIT_TEST_ARCH="$2" shift 2 ;;
+            arm|haswell|westmere)
+                UNIT_TEST_ARCH="$2"
+                shift 2 ;;
+            *)
+                echo "Invalid argument for --arch: $2"
+                usage
+                exit 1
+                ;;
         esac ;;
     --dispatch)
         case "$2" in
             "") shift 2 ;;
-            *) UNIT_TEST_DISPATCH="$2" shift 2 ;;
+            dynamic|static)
+                UNIT_TEST_DISPATCH="$2"
+                shift 2 ;;
+            *)
+                echo "Invalid argument for --dispatch: $2"
+                usage
+                exit 1
+                ;;
         esac ;;
     --) shift ; break ;;
     *)
-        echo "Cannot recongize option: " $1
+        echo "Invalid option: $1"
         usage
-        exit
+        exit 1
         ;;
     esac
 done
@@ -66,16 +80,17 @@ if ! type bazel >/dev/null 2>&1; then
 	BAZEL="${CUR_DIR}/bin/bazel"
 fi
 
-${BAZEL} build :benchmark
-${BAZEL} build :benchmark --copt="-DSONIC_DEBUG"
-
 # default target
 set -x
-${BAZEL} build :unittest --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} --copt="-DSONIC_DEBUG"
 
 ${BAZEL} run :unittest --//:sonic_arch=$UNIT_TEST_ARCH \
     --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} \
     --//:sonic_dispatch=${UNIT_TEST_DISPATCH} \
-    --copt="-DSONIC_LOCKED_ALLOCATOR"
+    --copt="-DSONIC_LOCKED_ALLOCATOR" -s
+
+${BAZEL} build :unittest --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} --copt="-DSONIC_DEBUG"
+
+${BAZEL} build :benchmark
+${BAZEL} build :benchmark --copt="-DSONIC_DEBUG"
 
 set +x
