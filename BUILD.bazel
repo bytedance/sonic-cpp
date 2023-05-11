@@ -6,7 +6,7 @@ sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 
 avx2_copts = ['-mavx2', '-mbmi', '-mpclmul']
 sse_copts = ['-msse', '-msse2', '-msse4.1', '-msse4.2','-mpclmul']
-arm_copts = ['-march-armv8-a']
+arm_copts = ['-march=armv8-a']
 benchmark_copts = ['-O3', '-DNDEBUG', '-std=c++17']
 static_dispatch_copts = []
 dynamic_dispatch_copts = ['-DSONIC_DYNAMIC_DISPATCH=1']
