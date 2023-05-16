@@ -149,7 +149,7 @@ class SimpleChunkPolicy {
 
 class AdaptiveChunkPolicy {
  public:
-  AdaptiveChunkPolicy(size_t chunk_cap = SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY)
+  AdaptiveChunkPolicy(size_t chunk_cap = SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY)
       : min_chunk_size_(chunk_cap) {}
 
   inline size_t ChunkSize(size_t need_alloc_size) {
