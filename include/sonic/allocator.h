@@ -73,10 +73,6 @@ class SimpleAllocator {
   (((x) + static_cast<size_t>(7u)) & ~static_cast<size_t>(7u))
 #endif
 
-#ifndef SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY
-#define SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY (64 * 1024)
-#endif
-
 // SpinLock is copied from https://rigtorp.se/spinlock/
 class SpinLock {
  private:
@@ -112,7 +108,70 @@ class SpinLock {
 #define LOCK_GUARD
 #endif
 
-template <typename BaseAllocator = SimpleAllocator>
+#ifdef SONIC_ADAPTIVE_MEMORYPOOL
+#define SONIC_MEMPOOL_CHUNK_POLICY AdaptiveChunkPolicy
+#endif
+
+#ifndef SONIC_MEMPOOL_CHUNK_POLICY
+#define SONIC_MEMPOOL_CHUNK_POLICY SimpleChunkPolicy
+#endif
+
+#ifndef SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY
+#define SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY (64 * 1024)
+#endif
+
+#ifndef SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY
+#define SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY \
+  SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY
+#endif
+
+#ifndef SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY
+#ifdef SONIC_ADAPTIVE_MEMORYPOOL
+#define SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY (1024)
+#else
+#define SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY
+#endif
+#endif
+
+class SimpleChunkPolicy {
+ public:
+  SimpleChunkPolicy(size_t chunk_cap = SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY)
+      : min_chunk_size_(chunk_cap) {}
+
+  inline size_t ChunkSize(size_t need_alloc_size) {
+    return min_chunk_size_ > need_alloc_size ? min_chunk_size_
+                                             : need_alloc_size;
+  }
+
+ private:
+  size_t min_chunk_size_;
+};
+
+class AdaptiveChunkPolicy {
+ public:
+  AdaptiveChunkPolicy(size_t chunk_cap = SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY)
+      : min_chunk_size_(chunk_cap) {}
+
+  inline size_t ChunkSize(size_t need_alloc_size) {
+    if (min_chunk_size_ < need_alloc_size &&
+        min_chunk_size_ < SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY) {
+      size_t p =
+          1ULL << (64 - __builtin_clzll(
+                            need_alloc_size));  // size > 0 && never shift 64
+      min_chunk_size_ = p < SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY
+                            ? p
+                            : SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY;
+    }
+    return min_chunk_size_ > need_alloc_size ? min_chunk_size_
+                                             : need_alloc_size;
+  }
+
+ private:
+  size_t min_chunk_size_;
+};
+
+template <typename BaseAllocator = SimpleAllocator,
+          typename ChunkPolicy = SONIC_MEMPOOL_CHUNK_POLICY>
 class MemoryPoolAllocator {
   //! Chunk header for perpending to each chunk.
   /*! Chunks are stored as a singly linked list.
@@ -144,9 +203,6 @@ class MemoryPoolAllocator {
     return reinterpret_cast<uint8_t*>(shared->chunkHead) + SIZEOF_CHUNK_HEADER;
   }
 
-  static const size_t kDefaultChunkCapacity =
-      SONIC_ALLOCATOR_DEFAULT_CHUNK_CAPACITY;  //!< Default chunk capacity.
-
  public:
   static const bool kNeedFree =
       false;  //!< Tell users that no need to call Free() with this allocator.
@@ -159,9 +215,10 @@ class MemoryPoolAllocator {
      kDefaultChunkSize. \param baseAllocator The allocator for allocating memory
      chunks.
   */
-  explicit MemoryPoolAllocator(size_t chunkSize = kDefaultChunkCapacity,
-                               BaseAllocator* baseAllocator = 0)
-      : chunk_capacity_(chunkSize),
+  explicit MemoryPoolAllocator(
+      size_t chunkSize = SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY,
+      BaseAllocator* baseAllocator = 0)
+      : cp_(chunkSize),
         baseAllocator_(baseAllocator ? baseAllocator : new BaseAllocator()),
         shared_(static_cast<SharedData*>(
             baseAllocator_ ? baseAllocator_->Malloc(SIZEOF_SHARED_DATA +
@@ -195,9 +252,9 @@ class MemoryPoolAllocator {
      memory chunks.
   */
   MemoryPoolAllocator(void* buffer, size_t size,
-                      size_t chunkSize = kDefaultChunkCapacity,
+                      size_t chunkSize = SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY,
                       BaseAllocator* baseAllocator = 0)
-      : chunk_capacity_(chunkSize),
+      : cp_(chunkSize),
         baseAllocator_(baseAllocator),
         shared_(static_cast<SharedData*>(AlignBuffer(buffer, size))) {
     sonic_assert(size >= SIZEOF_SHARED_DATA + SIZEOF_CHUNK_HEADER);
@@ -212,9 +269,7 @@ class MemoryPoolAllocator {
   }
 
   MemoryPoolAllocator(const MemoryPoolAllocator& rhs) noexcept
-      : chunk_capacity_(rhs.chunk_capacity_),
-        baseAllocator_(rhs.baseAllocator_),
-        shared_(rhs.shared_) {
+      : cp_(rhs.cp_), baseAllocator_(rhs.baseAllocator_), shared_(rhs.shared_) {
     sonic_assert(shared_->refcount > 0);
     ++shared_->refcount;
   }
@@ -223,15 +278,13 @@ class MemoryPoolAllocator {
     ++rhs.shared_->refcount;
     this->~MemoryPoolAllocator();
     baseAllocator_ = rhs.baseAllocator_;
-    chunk_capacity_ = rhs.chunk_capacity_;
+    cp_ = rhs.cp_;
     shared_ = rhs.shared_;
     return *this;
   }
 
   MemoryPoolAllocator(MemoryPoolAllocator&& rhs) noexcept
-      : chunk_capacity_(rhs.chunk_capacity_),
-        baseAllocator_(rhs.baseAllocator_),
-        shared_(rhs.shared_) {
+      : cp_(rhs.cp_), baseAllocator_(rhs.baseAllocator_), shared_(rhs.shared_) {
     sonic_assert(rhs.shared_->refcount > 0);
     rhs.shared_ = 0;
   }
@@ -239,7 +292,7 @@ class MemoryPoolAllocator {
     sonic_assert(rhs.shared_->refcount > 0);
     this->~MemoryPoolAllocator();
     baseAllocator_ = rhs.baseAllocator_;
-    chunk_capacity_ = rhs.chunk_capacity_;
+    cp_ = rhs.cp_;
     shared_ = rhs.shared_;
     rhs.shared_ = 0;
     return *this;
@@ -317,9 +370,9 @@ class MemoryPoolAllocator {
     size = SONIC_ALIGN(size);
     LOCK_GUARD;
     if (sonic_unlikely(shared_->chunkHead->size + size >
-                       shared_->chunkHead->capacity))
-      if (!AddChunk(chunk_capacity_ > size ? chunk_capacity_ : size))
-        return NULL;
+                       shared_->chunkHead->capacity)) {
+      if (!AddChunk(cp_.ChunkSize(size))) return NULL;
+    }
 
     void* buffer = GetChunkBuffer(shared_) + shared_->chunkHead->size;
     shared_->chunkHead->size += size;
@@ -409,8 +462,9 @@ class MemoryPoolAllocator {
     return buf;
   }
 
-  size_t chunk_capacity_;  //!< The minimum capacity of chunk when they are
-                           //!< allocated.
+  // size_t chunk_capacity_;  //!< The minimum capacity of chunk when they are
+  //!< allocated.
+  ChunkPolicy cp_;  //! chunk capacity policy
   BaseAllocator*
       baseAllocator_;   //!< base allocator for allocating memory chunks.
   SharedData* shared_;  //!< The shared data of the allocator

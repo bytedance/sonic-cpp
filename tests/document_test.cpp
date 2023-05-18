@@ -264,8 +264,11 @@ class DocumentTest : public testing::Test {
 
 using DynSimpleDom = GenericDocument<DNode<SimpleAllocator>>;
 using DynMempoolDom = GenericDocument<DNode<MemoryPoolAllocator<>>>;
+using DynAdaptiveMempoolDom = GenericDocument<DNode<
+    MemoryPoolAllocator<SimpleAllocator, sonic_json::AdaptiveChunkPolicy>>>;
 
-using DomTypes = testing::Types<DynMempoolDom, DynSimpleDom>;
+using DomTypes =
+    testing::Types<DynMempoolDom, DynSimpleDom, DynAdaptiveMempoolDom>;
 TYPED_TEST_SUITE(DocumentTest, DomTypes);
 
 TYPED_TEST(DocumentTest, Parse) {

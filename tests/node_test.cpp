@@ -125,12 +125,16 @@ class NodeTest : public testing::Test {
   }
 };
 
-using MAllocType = MemoryPoolAllocator<>;
 using SAllocType = SimpleAllocator;
+using MAllocType = MemoryPoolAllocator<>;
+using AdaptiveMAllocType =
+    MemoryPoolAllocator<SAllocType, sonic_json::AdaptiveChunkPolicy>;
 using DNodeMempoolNode = DNode<MAllocType>;
+using DNodeAdaptiveMempoolNode = DNode<AdaptiveMAllocType>;
 using DNodeSimpleNode = DNode<SAllocType>;
 
-using NodeTypes = testing::Types<DNodeMempoolNode, DNodeSimpleNode>;
+using NodeTypes =
+    testing::Types<DNodeMempoolNode, DNodeSimpleNode, DNodeAdaptiveMempoolNode>;
 TYPED_TEST_SUITE(NodeTest, NodeTypes);
 
 TYPED_TEST(NodeTest, BasciConstrcut) {
