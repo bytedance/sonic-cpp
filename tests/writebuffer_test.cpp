@@ -89,4 +89,22 @@ TEST(WriteBuffer, ToString) {
     EXPECT_STREQ(cwb.ToString(), "c");
   }
 }
+
+TEST(WriteBuffer, StringSize) {
+  {
+    WriteBuffer wb;
+    wb.Push<char>('c');
+    auto s = std::string(wb.ToString(), wb.Size());
+    EXPECT_EQ(wb.Size(), 1);
+    EXPECT_EQ(s.size(), 1);
+    EXPECT_STREQ(s.c_str(), "c");
+  }
+  {
+    WriteBuffer wb;
+    auto s = std::string(wb.ToString(), wb.Size());
+    EXPECT_EQ(wb.Size(), 0);
+    EXPECT_EQ(s.size(), 0);
+    EXPECT_STREQ(s.c_str(), "");
+  }
+}
 }  // namespace
