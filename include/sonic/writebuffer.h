@@ -43,7 +43,7 @@ class WriteBuffer {
    */
   sonic_force_inline const char* ToString() const {
     stack_.Grow(1);
-    stack_.PushUnsafe('\0');
+    *(stack_.template End<char>()) = '\0';
     return stack_.Begin<char>();
   }
 
