@@ -42,7 +42,8 @@ class WriteBuffer {
    * thread-safe.
    */
   sonic_force_inline const char* ToString() const {
-    stack_.Push('\0');
+    stack_.Grow(1);
+    *(stack_.template End<char>()) = '\0';
     return stack_.Begin<char>();
   }
 
