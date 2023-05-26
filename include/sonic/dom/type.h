@@ -17,6 +17,7 @@
 #pragma once
 
 #include "sonic/macro.h"
+#include "sonic/string_view.h"
 
 namespace sonic_json {
 enum TypeFlag {
@@ -26,16 +27,17 @@ enum TypeFlag {
   kNumber = 3,  // xxxxx011
   kString = 4,  // xxxxx100
   kRaw = 5,     // xxxxx101
-  // Container Mask 00000110, & Mask == Mask
   kObject = 6,  // xxxxx110
   kArray = 7,   // xxxxx111
 
   // SubType: 2 bits
-  kFalse = ((uint8_t)(0 << 3)) | kBool,   // xxx00_010, 2
-  kTrue = ((uint8_t)(1 << 3)) | kBool,    // xxx01_010, 10
+  kFalse = ((uint8_t)(0 << 3)) | kBool,  // xxx00_010, 2
+  kTrue = ((uint8_t)(1 << 3)) | kBool,   // xxx01_010, 10
+
   kUint = ((uint8_t)(0 << 3)) | kNumber,  // xxx00_011, 3
   kSint = ((uint8_t)(1 << 3)) | kNumber,  // xxx01_011, 11
   kReal = ((uint8_t)(2 << 3)) | kNumber,  // xxx10_011, 19
+
   // kStringCopy: sv.p is copied, but not need free, e.g. node's string buffer
   // is dom str_
   kStringCopy = kString,  // xxx00_100, 4
@@ -46,7 +48,8 @@ enum TypeFlag {
   // allocator arg
   kStringConst = ((uint8_t)(2 << 3)) | kString,  // xxx10_100, 20
 
-};  // 8 bits
+  kRawNumber = ((uint8_t)(1 << 3)) | kRaw,  // xxx01_101, 13
+};                                          // 8 bits
 
 enum TypeInfo {
   kTotalTypeBits = 8,
@@ -65,6 +68,12 @@ enum TypeInfo {
   kOthersBits = 56,
   kLengthMask = (0xFFFFFFFFFFFFFFFF << 8),
   kContainerMask = 0x6,  // 00000110
+};
+
+// RawNumber is a wrapper type for JSON number.
+class RawNumber : public StringView {
+ public:
+  RawNumber(StringView s) : StringView(s) {}
 };
 
 }  // namespace sonic_json

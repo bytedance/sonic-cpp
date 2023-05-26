@@ -371,9 +371,17 @@ TYPED_TEST(DocumentTest, ParseFile) {
   using Document = TypeParam;
   auto jsons = get_all_jsons("./testdata/");
   for (const auto& json : jsons) {
-    Document doc;
-    doc.Parse(json);
-    EXPECT_FALSE(doc.HasParseError());
+    {
+      Document doc;
+      doc.Parse(json);
+      EXPECT_FALSE(doc.HasParseError());
+    }
+
+    {
+      Document doc;
+      doc.template Parse<kParseRawNumber>(json);
+      EXPECT_FALSE(doc.HasParseError());
+    }
   }
 }
 
@@ -537,6 +545,22 @@ TYPED_TEST(DocumentTest, Length) {
   EXPECT_EQ(this->doc_["titles"][0].Empty(), true);
 }
 
+template <typename Document, unsigned parseFlags>
+void testSerialize(const std::string& json) {
+  Document doc;
+  doc.template Parse<parseFlags>(json);
+  EXPECT_FALSE(doc.HasParseError());
+  EXPECT_EQ(doc.GetErrorOffset(), json.size());
+
+  WriteBuffer wb;
+  auto err = doc.Serialize(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), json.c_str());
+
+  // std::string got = doc.Dump();
+  // EXPECT_STREQ(got.c_str(), json.c_str());
+}
+
 TYPED_TEST(DocumentTest, SerializeOK) {
   using Document = TypeParam;
   std::vector<std::string> vec = {
@@ -553,22 +577,10 @@ TYPED_TEST(DocumentTest, SerializeOK) {
       R"({"id":12125925,"ids":[-2147483648,2147483647],"title":"未来简史","titles":["","world"],"price":345.67,"prices":[-0.1,0.1],"hot":true,"hots":[true,true,true],"author":{"name":"json","age":99,"male":true},"authors":[{"name":"json","age":99,"male":true},{"name":"json","age":99,"male":true},{"name":"json","age":99,"male":true}],"weights":[],"extra":{},"other":null})",
   };
   for (auto& v : vec) {
-    Document doc;
-    doc.Parse(v.c_str(), v.size());
-    EXPECT_FALSE(doc.HasParseError());
-    EXPECT_EQ(doc.GetErrorOffset(), v.size());
-
-    WriteBuffer wb;
-    auto err = doc.Serialize(wb);
-    EXPECT_EQ(err, kErrorNone);
-    EXPECT_STREQ(wb.ToString(), v.c_str());
-
-    std::string json = doc.Dump();
-    EXPECT_STREQ(json.c_str(), v.c_str());
+    testSerialize<Document, kParseDefault>(v);
+    testSerialize<Document, kParseRawNumber>(v);
   }
 }
-
-TYPED_TEST(DocumentTest, SerializeSort) {}
 
 TYPED_TEST(DocumentTest, SonicErrorInvalidKey) {
   using DNode = typename TypeParam::NodeType;

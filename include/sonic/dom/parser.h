@@ -188,8 +188,72 @@ class Parser {
     }
   }
 
+  // whole validate number here.
   template <typename SAX>
+  sonic_force_inline void parseRawNumber(SAX &sax) {
+#define SONIC_MUST(exp)              \
+  do {                               \
+    if (!(exp)) {                    \
+      pos_ = (np)-json_buf_;         \
+      err_ = kParseErrorInvalidChar; \
+      return;                        \
+    }                                \
+  } while (0)
+
+    using internal::IsDigit;
+
+    const uint8_t *np = json_buf_ + pos_ - 1;
+    const char *start = reinterpret_cast<const char *>(np);
+
+    // check sign
+    if (*np == '-') {
+      np++;
+    }
+
+    // skip integer part, check leading zero at first
+    if (*np == '0') {
+      np++;
+      SONIC_MUST(!IsDigit(*np));
+    } else {
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
+    }
+
+    // skip fraction part
+    if (*np == '.') {
+      np++;
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
+    }
+
+    // skip exponent part
+    if (*np == 'e' || *np == 'E') {
+      np++;
+      if (*np == '-' || *np == '+') {
+        np++;
+      }
+      SONIC_MUST(IsDigit(*np));
+      while (IsDigit(*np)) np++;
+    }
+#undef SONIC_MUST
+
+    // set the raw number
+    pos_ = np - json_buf_;
+    sax.NumberRaw(
+        StringView(start, reinterpret_cast<const char *>(np) - start));
+    return;
+  }
+
+  template <unsigned parseFlags, typename SAX>
   sonic_force_inline void parseNumber(SAX &sax) {
+    using internal::IsDigit;
+
+    // check the parseNumberFlags
+    if ((parseFlags & kParseRawNumber) != 0) {
+      parseRawNumber(sax);
+      return;
+    }
+
 #define FLOATING_LONGEST_DIGITS 17
 #define RETURN_SET_ERROR_CODE(error_code) \
   {                                       \
@@ -238,7 +302,6 @@ class Parser {
     size_t i = pos_ - 1;
     size_t exp10_s = i;
     const char *s = reinterpret_cast<const char *>(json_buf_);
-    using internal::is_digit;
 
     /* check sign */
     {
@@ -261,7 +324,7 @@ class Parser {
           i++;
           if (s[i] == '-' || s[i] == '+') i++;
           CHECK_DIGIT();
-          while (is_digit(s[i])) {
+          while (IsDigit(s[i])) {
             i++;
           }
           SET_DOUBLE_AND_RETURN(0.0 * sgn);
@@ -271,7 +334,7 @@ class Parser {
         i++;
         if (s[i] == '-' || s[i] == '+') i++;
         CHECK_DIGIT();
-        while (is_digit(s[i])) {
+        while (IsDigit(s[i])) {
           i++;
         }
         SET_DOUBLE_AND_RETURN(0.0 * sgn);
@@ -292,7 +355,7 @@ class Parser {
         i = digit_start;
         man = 0;
         man_nd = 0;
-        while (is_digit(s[i])) {
+        while (IsDigit(s[i])) {
           if (man_nd < 19) {
             man = man * 10 + s[i] - '0';
             man_nd++;
@@ -376,7 +439,7 @@ class Parser {
       man = man * pow10[fract_len] + sum;
       man_nd += fract_len;
       i += fract_len;
-      while (man_nd < FLOATING_LONGEST_DIGITS && is_digit(s[i])) {
+      while (man_nd < FLOATING_LONGEST_DIGITS && IsDigit(s[i])) {
         man = man * 10 + s[i] - '0';
         man_nd++;
         i++;
@@ -386,7 +449,7 @@ class Parser {
 
     exp10 -= (i - exp10_s);
 
-    while (is_digit(s[i])) {
+    while (IsDigit(s[i])) {
       trunc = 1;
       i++;
     }
@@ -407,7 +470,7 @@ class Parser {
     }
     CHECK_DIGIT();
 
-    while (is_digit(s[i])) {
+    while (IsDigit(s[i])) {
       if (sonic_likely(exp < 10000)) {
         exp = exp * 10 + (s[i] - '0');
       }
@@ -446,7 +509,7 @@ class Parser {
 #undef CHECK_DIGIT
   }
 
-  template <typename SAX>
+  template <unsigned parseFlags, typename SAX>
   void parsePrimitives(SAX &sax) {
     switch (json_buf_[pos_ - 1]) {
       case '0':
@@ -460,7 +523,7 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber(sax);
+        parseNumber<parseFlags>(sax);
         break;
       case '"':
         parseStrInPlace(sax);
@@ -515,7 +578,7 @@ class Parser {
         goto obj_key;
       }
       default:
-        parsePrimitives(sax);
+        parsePrimitives<parseFlags>(sax);
         goto doc_end;
     };
 
@@ -559,7 +622,7 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber(sax);
+        parseNumber<parseFlags>(sax);
         sonic_check_err();
         break;
       case 't':
@@ -639,7 +702,7 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber(sax);
+        parseNumber<parseFlags>(sax);
         sonic_check_err();
         break;
       case 't':

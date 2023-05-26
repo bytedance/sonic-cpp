@@ -25,6 +25,7 @@
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
+#include "sonic/internal/utils.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
 
@@ -185,6 +186,29 @@ class GenericNode {
   }
 
   /**
+   * @brief Constructor for creating raw number node. COPY string.
+   * @param rn raw number that contains the pointer and length.
+   * @note  This constructor will validate the number rn.
+   */
+  GenericNode(RawNumber rn, alloc_type& alloc) {
+    size_t len = internal::SkipNumberSafe(rn.data(), rn.size());
+    if (len == 0) {
+      setType(kNull);
+      return;
+    }
+
+    raw.p = (char*)(alloc.Malloc(len + 1));
+    if (!raw.p) {
+      setType(kNull);
+      return;
+    }
+
+    std::memcpy(const_cast<char*>(raw.p), rn.data(), len);
+    const_cast<char*>(raw.p)[len] = '\0';
+    setLength(len, kRawNumber);
+  }
+
+  /**
    * @brief Copy string data to memory allocated from alloc, then store pointer
    * and size into node.
    * @param s     string pointer
@@ -233,6 +257,15 @@ class GenericNode {
   sonic_force_inline bool IsRaw() const noexcept {
     return getBasicType() == kRaw;
   }
+
+  /**
+   * @brief  Check this node is a raw number.
+   * @return true if it is raw number.
+   */
+  sonic_force_inline bool IsRawNumber() const noexcept {
+    return GetType() == kRawNumber;
+  }
+
   /**
    * @brief  Check this node is a number.
    * @return true if it is a number.
@@ -340,6 +373,15 @@ class GenericNode {
   sonic_force_inline StringView GetRaw() const noexcept {
     sonic_assert(IsRaw());
     return StringView(raw.p, Size());
+  }
+
+  /**
+   * @brief  Get the raw number of this node, won't copy it.
+   * @return RawNumber that represents the raw json number.
+   */
+  sonic_force_inline RawNumber GetRawNumber() const noexcept {
+    sonic_assert(IsRawNumber());
+    return RawNumber{StringView(raw.p, Size())};
   }
 
   /**
@@ -1033,21 +1075,26 @@ class GenericNode {
   sonic_force_inline TypeFlag getBasicType() const noexcept {
     return static_cast<TypeFlag>(t.t & kBasicTypeMask);
   }
+
   sonic_force_inline void setLength(size_t len) noexcept {
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(t.t);
   }
+
   sonic_force_inline void setLength(size_t len, TypeFlag flag) noexcept {
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(flag);
   }
+
   sonic_force_inline void setType(TypeFlag flag) noexcept {
     sv.len = static_cast<uint64_t>(flag);
     if (IsString()) {
       setEmptyString();
     }
   }
-  NodeType& setRaw(StringView s) {
-    return downCast()->setRawImpl(s.data(), s.size());
+
+  NodeType& setRaw(StringView s, TypeFlag flag) {
+    return downCast()->setRawImpl(s, flag);
   }
+
   void setEmptyString() noexcept {
     sv.p = "";
     setLength(0, kStringConst);
@@ -1156,6 +1203,8 @@ class GenericNode {
     }
     return const_cast<NodeType*>(re);
   }
+
+  sonic_force_inline void* getPtr() { return (void*)(sv.p); }
 };
 
 }  // namespace sonic_json

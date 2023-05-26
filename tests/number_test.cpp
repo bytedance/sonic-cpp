@@ -23,11 +23,26 @@
 
 #include "gtest/gtest.h"
 #include "sonic/dom/dynamicnode.h"
+#include "sonic/dom/flags.h"
 #include "sonic/dom/generic_document.h"
 
 namespace {
 
 using namespace sonic_json;
+
+void TestSkipNumber(const std::string& input) {
+  size_t len = internal::SkipNumberSafe(input.data(), input.size());
+  EXPECT_EQ(input.size(), len) << input;
+}
+
+void TestParseRawNumber(const std::string& input) {
+  Document doc;
+  doc.template Parse<kParseRawNumber>(input);
+  EXPECT_FALSE(doc.HasParseError()) << input;
+  EXPECT_TRUE(doc.IsRawNumber()) << input;
+  EXPECT_EQ(input, doc.GetRaw()) << input;
+  TestSkipNumber(input);
+}
 
 void TestParseSigned(int64_t num, const std::string& input) {
   Document doc;
@@ -35,6 +50,7 @@ void TestParseSigned(int64_t num, const std::string& input) {
   EXPECT_FALSE(doc.HasParseError()) << input;
   EXPECT_TRUE(doc.IsInt64()) << input;
   EXPECT_EQ(num, doc.GetInt64()) << input;
+  TestParseRawNumber(input);
 }
 
 void TestParseUnsigned(uint64_t num, const std::string& input) {
@@ -43,6 +59,7 @@ void TestParseUnsigned(uint64_t num, const std::string& input) {
   EXPECT_FALSE(doc.HasParseError()) << input;
   EXPECT_TRUE(doc.IsUint64()) << input;
   EXPECT_EQ(num, doc.GetUint64()) << input;
+  TestParseRawNumber(input);
 }
 
 void TestParseDouble(double num, const std::string& input) {
@@ -55,23 +72,32 @@ void TestParseDouble(double num, const std::string& input) {
   }
   // test native atof
   { EXPECT_DOUBLE_EQ(num, internal::AtofNative(input.data(), input.size())); }
+
+  TestParseRawNumber(input);
 }
 
+template <unsigned parseFlags>
 void TestParseError(const std::string& input, size_t off, SonicError err) {
   Document doc;
-  doc.Parse(input.data(), input.size());
+  doc.template Parse<parseFlags>(input.data(), input.size());
   EXPECT_TRUE(doc.HasParseError()) << input;
   EXPECT_EQ(doc.GetParseError(), err) << input;
   // TODO: test offset
   (void)(off);
 }
 
+void TestSkipNumberError(const std::string& input) {
+  size_t len = internal::SkipNumberSafe(input.data(), input.size());
+  EXPECT_EQ(len, 0) << input;
+}
+
 void TestParseInf(size_t off, const std::string& input) {
-  TestParseError(input, off, kParseErrorInfinity);
+  TestParseError<kParseDefault>(input, off, kParseErrorInfinity);
 }
 
 void TestParseInval(size_t off, const std::string& input) {
-  TestParseError(input, off, kParseErrorInvalidChar);
+  TestParseError<kParseDefault>(input, off, kParseErrorInvalidChar);
+  TestParseError<kParseRawNumber>(input, off, kParseErrorInvalidChar);
 }
 
 TEST(ParserTest, ParseNumber) {
@@ -235,6 +261,25 @@ TEST(ParserTest, ParseInvalidNumber) {
   TestParseInval(8, "-1234567.");
   TestParseInval(
       8, "1234567 123");  // Only support parse single JSON value one time
+}
+
+TEST(NumberTest, SkipInvalidNumber) {
+  TestSkipNumberError("+");
+  TestSkipNumberError("+0");  // +0 is not allowed in JSON RFC
+  TestSkipNumberError("e");
+  TestSkipNumberError("E");
+  TestSkipNumberError(".");
+  TestSkipNumberError("-");
+  TestSkipNumberError("00");
+  TestSkipNumberError("01");
+  TestSkipNumberError("0.");
+  TestSkipNumberError("0e");
+  TestSkipNumberError("0e-");
+  TestSkipNumberError("0.0e+");
+  TestSkipNumberError("1.0e");
+  TestSkipNumberError("-1.0e+");
+  TestSkipNumberError("-1.0e-");
+  TestSkipNumberError("-1234567.");
 }
 
 }  // namespace
