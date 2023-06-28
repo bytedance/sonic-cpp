@@ -25,19 +25,19 @@ namespace internal {
 namespace common {
 
 sonic_force_inline bool AddOverflow64(uint64_t value1, uint64_t value2,
-                                    uint64_t* result) {
-    return __builtin_uaddll_overflow(
+                                      uint64_t* result) {
+  return __builtin_uaddll_overflow(
       value1, value2, reinterpret_cast<unsigned long long*>(result));
 }
 
 sonic_force_inline bool AddOverflow32(uint32_t value1, uint32_t value2,
-                                    uint64_t* result) {
-    unsigned ret = 0;
-    bool is_over = __builtin_uadd_overflow(value1, value2, &ret);
-    *result = ret;
-    return is_over;
+                                      uint64_t* result) {
+  unsigned ret = 0;
+  bool is_over = __builtin_uadd_overflow(value1, value2, &ret);
+  *result = ret;
+  return is_over;
 }
 
-} // namespace common
-} // namespace internal
-} // namespace sonic_json
+}  // namespace common
+}  // namespace internal
+}  // namespace sonic_json

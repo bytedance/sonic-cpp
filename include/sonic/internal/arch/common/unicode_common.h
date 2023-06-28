@@ -278,10 +278,10 @@ sonic_force_inline uint64_t GetEscapedBranchless(uint64_t &prev_escaped,
   uint64_t sequences_starting_on_even_bits;
   if (BLOK_SIZE == 64) {
     prev_escaped = AddOverflow64(odd_sequence_starts, backslash,
-                              &sequences_starting_on_even_bits);
+                                 &sequences_starting_on_even_bits);
   } else if (BLOK_SIZE == 32) {
     prev_escaped = AddOverflow32(odd_sequence_starts, backslash,
-                              &sequences_starting_on_even_bits);
+                                 &sequences_starting_on_even_bits);
   }
   uint64_t invert_mask = sequences_starting_on_even_bits << 1;
   return (even_bits ^ invert_mask) & follows_escape;

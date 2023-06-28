@@ -78,7 +78,7 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
     // maybe has escaped quotes
     if (((quote_bits - 1) & bs_bits) || prev_escaped) {
       escaped = common::GetEscapedBranchless<32>(prev_escaped, bs_bits);
-      // NOTE: maybe mark the normal string as escaped, example "abc":"\\", 
+      // NOTE: maybe mark the normal string as escaped, example "abc":"\\",
       // abc will marked as escaped.
       found = true;
       quote_bits &= ~escaped;
@@ -108,7 +108,7 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
       continue;
     }
     if (data[pos++] == '"') {
-       return found ? kEscaped : kNormal;
+      return found ? kEscaped : kNormal;
     }
   };
   return kUnclosed;

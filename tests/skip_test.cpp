@@ -16,68 +16,81 @@
 
 #include <string>
 
-#include "sonic/dom/parser.h"
 #include "gtest/gtest.h"
+#include "sonic/dom/parser.h"
 
 namespace {
 
 using namespace sonic_json;
 
-void TestGetOnDemand(StringView json,  const JsonPointer& path, StringView expect) {
-    StringView target;
-    auto result = GetOnDemand(json, path, target);
-    EXPECT_EQ(result.Error(), sonic_json::kErrorNone);
-    EXPECT_EQ(target, expect);
+void TestGetOnDemand(StringView json, const JsonPointer& path,
+                     StringView expect) {
+  StringView target;
+  auto result = GetOnDemand(json, path, target);
+  EXPECT_EQ(result.Error(), sonic_json::kErrorNone);
+  EXPECT_EQ(target, expect);
 }
 
-void TestGetOnDemandFailed(StringView json,  const JsonPointer& path, ParseResult expect) {
-    StringView target;
-    auto result = GetOnDemand(json, path, target);
-    EXPECT_EQ(result.Error(), expect.Error()) << json << expect.Error();
-    EXPECT_EQ(result.Offset(), expect.Offset()) << json << expect.Error();
-    EXPECT_EQ(target, "");
+void TestGetOnDemandFailed(StringView json, const JsonPointer& path,
+                           ParseResult expect) {
+  StringView target;
+  auto result = GetOnDemand(json, path, target);
+  EXPECT_EQ(result.Error(), expect.Error()) << json << expect.Error();
+  EXPECT_EQ(result.Offset(), expect.Offset()) << json << expect.Error();
+  EXPECT_EQ(target, "");
 }
 
 TEST(GetOnDemand, SuccessBasic) {
-    TestGetOnDemand("{}", {}, "{}");
-    TestGetOnDemand("1", {}, "1");
-    TestGetOnDemand(R"({"a":1})", {"a"}, "1");
-    TestGetOnDemand(R"({"a":"1"})", {"a"}, "\"1\"");
-    TestGetOnDemand("[1, 2, 3, null]", {3}, "null");
+  TestGetOnDemand("{}", {}, "{}");
+  TestGetOnDemand("1", {}, "1");
+  TestGetOnDemand(R"({"a":1})", {"a"}, "1");
+  TestGetOnDemand(R"({"a":"1"})", {"a"}, "\"1\"");
+  TestGetOnDemand("[1, 2, 3, null]", {3}, "null");
 }
 
 TEST(GetOnDemand, SuccessNestedObject) {
-    TestGetOnDemand(R"({"a":{"b":{"c":1}}})", {"a", "b", "c"}, "1");
-    TestGetOnDemand(R"({"a":{"b":{"c":true}}})", {"a", "b", "c"}, "true");
-    TestGetOnDemand(R"({"a":{"b":{"c":"hello, world!"}}})", {"a", "b", "c"}, R"("hello, world!")");
+  TestGetOnDemand(R"({"a":{"b":{"c":1}}})", {"a", "b", "c"}, "1");
+  TestGetOnDemand(R"({"a":{"b":{"c":true}}})", {"a", "b", "c"}, "true");
+  TestGetOnDemand(R"({"a":{"b":{"c":"hello, world!"}}})", {"a", "b", "c"},
+                  R"("hello, world!")");
 }
 
 TEST(GetOnDemand, SuccessNestedArray) {
-    TestGetOnDemand(R"([[1], [2, 3], [4, 5, 6]])", {1, 1}, "3");
-    TestGetOnDemand(R"([[1], [2, 3], [4, 5, 6]])", {2, 2}, "6");
+  TestGetOnDemand(R"([[1], [2, 3], [4, 5, 6]])", {1, 1}, "3");
+  TestGetOnDemand(R"([[1], [2, 3], [4, 5, 6]])", {2, 2}, "6");
 }
 
 TEST(GetOnDemand, SuccessUnicode) {
-    TestGetOnDemand(R"("未来简史-从智人到智神hello: world, \\ {\" / \b \f \n \r \t } [景] 测试中文 😀")", {}, R"("未来简史-从智人到智神hello: world, \\ {\" / \b \f \n \r \t } [景] 测试中文 😀")");
-    TestGetOnDemand(R"({"a":"你好，世界！"})", {"a"}, R"("你好，世界！")");
-    TestGetOnDemand(R"({"a":"こんにちは、世界！"})", {"a"}, R"("こんにちは、世界！")");
-    TestGetOnDemand(R"({"a":"안녕하세요, 세상!"})", {"a"}, R"("안녕하세요, 세상!")");
+  TestGetOnDemand(
+      R"("未来简史-从智人到智神hello: world, \\ {\" / \b \f \n \r \t } [景] 测试中文 😀")",
+      {},
+      R"("未来简史-从智人到智神hello: world, \\ {\" / \b \f \n \r \t } [景] 测试中文 😀")");
+  TestGetOnDemand(R"({"a":"你好，世界！"})", {"a"}, R"("你好，世界！")");
+  TestGetOnDemand(R"({"a":"こんにちは、世界！"})", {"a"},
+                  R"("こんにちは、世界！")");
+  TestGetOnDemand(R"({"a":"안녕하세요, 세상!"})", {"a"},
+                  R"("안녕하세요, 세상!")");
 }
 
 TEST(GetOnDemand, SuccessEscapeCharacters) {
-    // TestGetOnDemand(R"({"a":"\n\tHello,\nworld!\n"})", {"a"}, R"("\n\tHello,\nworld!\n")");
-    TestGetOnDemand(R"({"a":"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"})", {"a"}, R"("\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\")");
-    TestGetOnDemand(R"({"a":"\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\""})", {"a"}, R"("\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"")");
+  // TestGetOnDemand(R"({"a":"\n\tHello,\nworld!\n"})", {"a"},
+  // R"("\n\tHello,\nworld!\n")");
+  TestGetOnDemand(R"({"a":"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"})", {"a"},
+                  R"("\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\")");
+  TestGetOnDemand(R"({"a":"\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\""})", {"a"},
+                  R"("\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"")");
 }
 
 TEST(GetOnDemand, Failed) {
-    TestGetOnDemandFailed("{}", {1}, ParseResult(kParseErrorMismatchType, 0));
-    TestGetOnDemandFailed("{}", {"a"}, ParseResult(kParseErrorUnknownObjKey, 1));
-    
-    TestGetOnDemandFailed("{123}", {"a"}, ParseResult(kParseErrorUnknownObjKey, 4));
+  TestGetOnDemandFailed("{}", {1}, ParseResult(kParseErrorMismatchType, 0));
+  TestGetOnDemandFailed("{}", {"a"}, ParseResult(kParseErrorUnknownObjKey, 1));
 
-    TestGetOnDemandFailed("[]", {1}, ParseResult(kParseErrorArrIndexOutOfRange, 2));
+  TestGetOnDemandFailed("{123}", {"a"},
+                        ParseResult(kParseErrorUnknownObjKey, 4));
 
-    TestGetOnDemandFailed(R"("\")", {}, ParseResult(kParseErrorInvalidChar, 3));
+  TestGetOnDemandFailed("[]", {1},
+                        ParseResult(kParseErrorArrIndexOutOfRange, 2));
+
+  TestGetOnDemandFailed(R"("\")", {}, ParseResult(kParseErrorInvalidChar, 3));
 }
-}
+}  // namespace

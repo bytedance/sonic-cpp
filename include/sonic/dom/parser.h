@@ -35,7 +35,8 @@
 namespace sonic_json {
 
 // GetOnDemand get the target raw json fields of the json pointer.
-// The default JPStringType is std::string(SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE).
+// The default JPStringType is
+// std::string(SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE).
 template <typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
 ParseResult GetOnDemand(StringView json,
                         const GenericJsonPointer<JPStringType> &path,
@@ -44,7 +45,7 @@ ParseResult GetOnDemand(StringView json,
   size_t pos = 0;
   long start = scan.GetOnDemand(json, pos, path);
   if (start < 0) {
-    target = ""; // clear the exist target
+    target = "";  // clear the exist target
     return ParseResult(SonicError(-start), pos);
   }
   target = StringView(json.data() + start, pos - start);
