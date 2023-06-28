@@ -56,12 +56,6 @@ sonic_force_inline long long int CountOnes(uint64_t input_num) {
   return __builtin_popcountll(input_num);
 }
 
-sonic_force_inline bool AddOverflow(uint64_t value1, uint64_t value2,
-                                    uint64_t* result) {
-  return __builtin_uaddll_overflow(
-      value1, value2, reinterpret_cast<unsigned long long*>(result));
-}
-
 sonic_force_inline uint64_t PrefixXor(uint64_t bitmask) {
   bitmask ^= bitmask << 1;
   bitmask ^= bitmask << 2;

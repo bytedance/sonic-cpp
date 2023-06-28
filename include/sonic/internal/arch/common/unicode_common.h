@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include "../common/base.h"
+
 namespace sonic_json {
 namespace internal {
 namespace common {
@@ -264,6 +266,19 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
   size_t offset = codepoint_to_utf8(code_point, *dst_ptr);
   *dst_ptr += offset;
   return offset > 0;
+}
+
+sonic_force_inline uint64_t GetEscapedBranchless(uint64_t &prev_escaped,
+                                                 uint64_t backslash) {
+  backslash &= ~prev_escaped;
+  uint64_t follows_escape = backslash << 1 | prev_escaped;
+  const uint64_t even_bits = 0x5555555555555555ULL;
+  uint64_t odd_sequence_starts = backslash & ~even_bits & ~follows_escape;
+  uint64_t sequences_starting_on_even_bits;
+  prev_escaped = AddOverflow64(odd_sequence_starts, backslash,
+                             &sequences_starting_on_even_bits);
+  uint64_t invert_mask = sequences_starting_on_even_bits << 1;
+  return (even_bits ^ invert_mask) & follows_escape;
 }
 
 }  // namespace common

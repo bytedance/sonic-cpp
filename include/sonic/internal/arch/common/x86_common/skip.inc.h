@@ -21,7 +21,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
   if (bs_bits) {
-    escaped = GetEscapedBranchless(prev_escaped, bs_bits);
+    escaped = common::GetEscapedBranchless(prev_escaped, bs_bits);
   } else {
     escaped = prev_escaped;
     prev_escaped = 0;
@@ -79,7 +79,7 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
       return found ? kEscaped : kNormal;
     }
     if (bs_bits) {
-      escaped = GetEscapedBranchless(prev_escaped, bs_bits);
+      escaped = common::GetEscapedBranchless(prev_escaped, bs_bits);
       found = true;
       quote_bits &= ~escaped;
       if (quote_bits) {
