@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+
 #include "sonic/macro.h"
 
 namespace sonic_json {
