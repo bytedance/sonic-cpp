@@ -29,17 +29,17 @@ enum SonicError {
   kParseErrorInfinity = 3,     ///< Parse: JSON number is infinity.
   kParseErrorUnEscaped = 4,  ///< Parse: JSON string has unescaped control chars
                              ///< (\x00 ~ \x1f)
-  kParseErrorEscapedFormat = 5,  ///< Parse: JSON string has wrong escaped
-                                 ///< format, e.g.
-                                 ///< "\\g"
+  kParseErrorEscapedFormat = 5,   ///< Parse: JSON string has wrong escaped
+                                  ///< format, e.g.
+                                  ///< "\\g"
   kParseErrorEscapedUnicode = 6,  ///< Parse: JSON string has wrong escaped
                                   ///< unicode, e.g.
                                   ///< "\\uD800"
-  kParseErrorInvalidUTF8 = 7,  ///< Parse: JSON string has wrong escaped
-                               ///< unicode, e.g.
-                               ///< "\xff\xff"
-  kParseErrorUnknownObjKey = 8,  ///< ParseOnDemand: Not found the target keys
-                                 ///< in object.
+  kParseErrorInvalidUTF8 = 7,     ///< Parse: JSON string has wrong escaped
+                                  ///< unicode, e.g.
+                                  ///< "\xff\xff"
+  kParseErrorUnknownObjKey = 8,   ///< ParseOnDemand: Not found the target keys
+                                  ///< in object.
   kParseErrorArrIndexOutOfRange = 9,  ///< ParseOnDemand: the target array index
                                       ///< out of range.
   kParseErrorMismatchType =
