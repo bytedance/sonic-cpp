@@ -21,7 +21,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
   if (bs_bits) {
-    escaped = common::GetEscapedBranchless(prev_escaped, bs_bits);
+    escaped = common::GetEscapedBranchless<64>(prev_escaped, bs_bits);
   } else {
     escaped = prev_escaped;
     prev_escaped = 0;
@@ -74,33 +74,44 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
     const VecUint8Type v(data + pos);
     bs_bits = static_cast<uint64_t>((v == '\\').to_bitmask());
     quote_bits = static_cast<uint64_t>((v == '"').to_bitmask());
-    if (((bs_bits - 1) & quote_bits) != 0) {
+
+    // maybe has escaped quotes
+    if (((quote_bits - 1) & bs_bits) || prev_escaped) {
+      escaped = common::GetEscapedBranchless<32>(prev_escaped, bs_bits);
+      // NOTE: maybe mark the normal string as escaped, example "abc":"\\", 
+      // abc will marked as escaped.
+      found = true;
+      quote_bits &= ~escaped;
+    }
+
+    // real quote bits
+    if (quote_bits) {
       pos += TrailingZeroes(quote_bits) + 1;
       return found ? kEscaped : kNormal;
     }
-    if (bs_bits) {
-      escaped = common::GetEscapedBranchless(prev_escaped, bs_bits);
-      found = true;
-      quote_bits &= ~escaped;
-      if (quote_bits) {
-        pos += TrailingZeroes(quote_bits) + 1;
-        return kEscaped;
-      }
-    }
     pos += VEC_LEN;
   }
+
+  // skip the possible prev escaped quote
+  if (prev_escaped) {
+    pos++;
+  }
+
+  // found quote for remaining bytes
   while (pos < len) {
     if (data[pos] == '\\') {
+      if (pos + 1 >= len) {
+        return kUnclosed;
+      }
       found = true;
       pos += 2;
       continue;
     }
     if (data[pos++] == '"') {
-      break;
+       return found ? kEscaped : kNormal;
     }
   };
-  if (pos >= len) return kUnclosed;
-  return found ? kEscaped : kNormal;
+  return kUnclosed;
 }
 
 // return true if container is closed.
