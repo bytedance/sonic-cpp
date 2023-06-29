@@ -271,6 +271,8 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
 template <size_t BLOK_SIZE>
 sonic_force_inline uint64_t GetEscapedBranchless(uint64_t &prev_escaped,
                                                  uint64_t backslash) {
+  static_assert(BLOK_SIZE == 32 || BLOK_SIZE == 64,
+                "escaped branchless block only support 32 or 64 bytes");
   backslash &= ~prev_escaped;
   uint64_t follows_escape = backslash << 1 | prev_escaped;
   const uint64_t even_bits = 0x5555555555555555ULL;
