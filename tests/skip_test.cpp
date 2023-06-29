@@ -27,8 +27,8 @@ void TestGetOnDemand(StringView json, const JsonPointer& path,
                      StringView expect) {
   StringView target;
   auto result = GetOnDemand(json, path, target);
-  EXPECT_EQ(result.Error(), sonic_json::kErrorNone);
-  EXPECT_EQ(target, expect);
+  EXPECT_EQ(result.Error(), sonic_json::kErrorNone) << json;
+  EXPECT_EQ(target, expect) << json;
 }
 
 void TestGetOnDemandFailed(StringView json, const JsonPointer& path,
@@ -73,8 +73,8 @@ TEST(GetOnDemand, SuccessUnicode) {
 }
 
 TEST(GetOnDemand, SuccessEscapeCharacters) {
-  // TestGetOnDemand(R"({"a":"\n\tHello,\nworld!\n"})", {"a"},
-  // R"("\n\tHello,\nworld!\n")");
+  TestGetOnDemand(R"({"a":"\n\tHello,\nworld!\n"})", {"a"},
+                  R"("\n\tHello,\nworld!\n")");
   TestGetOnDemand(R"({"a":"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"})", {"a"},
                   R"("\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\")");
   TestGetOnDemand(R"({"a":"\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\""})", {"a"},

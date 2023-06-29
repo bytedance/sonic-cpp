@@ -107,16 +107,18 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
   }
   while (pos < len) {
     if (data[pos] == '\\') {
+      if (pos + 1 >= len) {
+        return kUnclosed;
+      }
       ret = kEscaped;
       pos += 2;
       continue;
     }
     if (data[pos++] == '"') {
-      break;
+      return ret;
     }
   };
-  if (pos >= len) return kUnclosed;
-  return ret;
+  return kUnclosed;
 }
 
 // return true if container is closed.
