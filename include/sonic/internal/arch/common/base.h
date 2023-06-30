@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -16,19 +17,28 @@
 
 #pragma once
 
-#include "simd_dispatch.h"
+#include <cstdint>
 
-#include INCLUDE_ARCH_FILE(base.h)
+#include "sonic/macro.h"
 
 namespace sonic_json {
 namespace internal {
+namespace common {
 
-SONIC_USING_ARCH_FUNC(TrailingZeroes);
-SONIC_USING_ARCH_FUNC(ClearLowestBit);
-SONIC_USING_ARCH_FUNC(LeadingZeroes);
-SONIC_USING_ARCH_FUNC(CountOnes);
-SONIC_USING_ARCH_FUNC(PrefixXor);
-SONIC_USING_ARCH_FUNC(Xmemcpy);
+sonic_force_inline bool AddOverflow64(uint64_t value1, uint64_t value2,
+                                      uint64_t* result) {
+  return __builtin_uaddll_overflow(
+      value1, value2, reinterpret_cast<unsigned long long*>(result));
+}
 
+sonic_force_inline bool AddOverflow32(uint32_t value1, uint32_t value2,
+                                      uint64_t* result) {
+  unsigned ret = 0;
+  bool is_over = __builtin_uadd_overflow(value1, value2, &ret);
+  *result = ret;
+  return is_over;
+}
+
+}  // namespace common
 }  // namespace internal
 }  // namespace sonic_json

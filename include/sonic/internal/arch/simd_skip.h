@@ -235,7 +235,6 @@ class SkipScanner {
     pos -= 1;
     return -kParseErrorMismatchType;
   err_unknown_key:
-    pos -= 1;
     return -kParseErrorUnknownObjKey;
   err_invalid_char:
     pos -= 1;
@@ -246,21 +245,6 @@ class SkipScanner {
   size_t nonspace_bits_end_{0};
   uint64_t nonspace_bits_{0};
 };
-
-template <typename JPStringType>
-ParseResult GetOnDemand(StringView json,
-                        const GenericJsonPointer<JPStringType> &path,
-                        StringView &target) {
-  SkipScanner scan;
-  size_t pos = 0;
-  long start = scan.GetOnDemand(json, pos, path);
-  if (start < 0) {
-    target = "";
-    return ParseResult(SonicError(-start), pos - 1);
-  }
-  target = StringView(json.data() + start, pos - start);
-  return ParseResult(kErrorNone, pos);
-}
 
 }  // namespace internal
 }  // namespace sonic_json

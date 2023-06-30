@@ -4,12 +4,14 @@ file(GLOB BENCH_SRC
 "${PROJECT_SOURCE_DIR}/benchmark/*.hpp"
 )
 
-set(COMPILE_FLAGS -O3 -DNDEBUG -g -mavx2 -mpclmul -mbmi -mlzcnt)
-
 include("${PROJECT_SOURCE_DIR}/cmake/external.cmake")
+include("${PROJECT_SOURCE_DIR}/cmake/set_arch_flags.cmake")
 
 unset(CMAKE_RUNTIME_OUTPUT_DIRECTORY CACHE)
 add_executable(bench "${BENCH_SRC}")
+target_compile_features(bench PRIVATE cxx_std_17)
+target_compile_options(bench PRIVATE -O3 -DNDEBUG -g)
+set_arch_flags(bench ${CMAKE_SYSTEM_PROCESSOR})
 
 set(EP_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external/)
 include(ExternalProject)
@@ -23,8 +25,7 @@ ExternalProject_Add(
 )
 add_dependencies(bench google_benchmark)
 
-target_compile_features(bench PRIVATE cxx_std_17)
-target_link_libraries(bench simdjson yyjson cjson jsoncpp_lib benchmark benchmark_main pthread stdc++fs)
+target_link_libraries(bench simdjson yyjson cjson jsoncpp_lib benchmark benchmark_main pthread)
 target_include_directories(bench 
     PRIVATE ${rapidjson_SOURCE_DIR}/include
     PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR} 

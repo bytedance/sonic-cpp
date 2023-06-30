@@ -23,32 +23,33 @@
 namespace sonic_json {
 
 enum SonicError {
-  kErrorNone = 0,            ///< No errors.
-  kParseErrorEof,            ///< Parse: JSON is empty or truncated.
-  kParseErrorInvalidChar,    ///< Parse: JSON has invalid chars, e.g. 1.2x.
-  kParseErrorInfinity,       ///< Parse: JSON number is infinity.
-  kParseErrorUnEscaped,      ///< Parse: JSON string has unescaped control chars
+  kErrorNone = 0,              ///< No errors.
+  kParseErrorEof = 1,          ///< Parse: JSON is empty or truncated.
+  kParseErrorInvalidChar = 2,  ///< Parse: JSON has invalid chars, e.g. 1.2x.
+  kParseErrorInfinity = 3,     ///< Parse: JSON number is infinity.
+  kParseErrorUnEscaped = 4,  ///< Parse: JSON string has unescaped control chars
                              ///< (\x00 ~ \x1f)
-  kParseErrorEscapedFormat,  ///< Parse: JSON string has wrong escaped format,
-                             ///< e.g.
-                             ///< "\\g"
-  kParseErrorEscapedUnicode,  ///< Parse: JSON string has wrong escaped unicode,
-                              ///< e.g.
-                              ///< "\\uD800"
-  kParseErrorInvalidUTF8,     ///< Parse: JSON string has wrong escaped unicode,
-                              ///< e.g.
-                              ///< "\xff\xff"
-  kParseErrorUnknownObjKey,   ///< ParseOnDemand: Not found the target keys in
-                              ///< object.
-  kParseErrorArrIndexOutOfRange,  ///< ParseOnDemand: the target array index out
-                                  ///< of range.
-  kParseErrorMismatchType,   ///< ParseOnDemand: the target type is not matched.
-  kSerErrorUnsupportedType,  ///< Serialize: DOM has invalid node type.
-  kSerErrorInfinity,         ///< Serialize: DOM has inifinity number node.
-  kSerErrorInvalidObjKey,    ///< Serialize: The type of object's key is not
-                             ///< string.
-  kErrorNoMem,               ///< Memory is not enough to allocate.
-  kParseErrorUnexpect,       ///< Unexpected Errors
+  kParseErrorEscapedFormat = 5,   ///< Parse: JSON string has wrong escaped
+                                  ///< format, e.g.
+                                  ///< "\\g"
+  kParseErrorEscapedUnicode = 6,  ///< Parse: JSON string has wrong escaped
+                                  ///< unicode, e.g.
+                                  ///< "\\uD800"
+  kParseErrorInvalidUTF8 = 7,     ///< Parse: JSON string has wrong escaped
+                                  ///< unicode, e.g.
+                                  ///< "\xff\xff"
+  kParseErrorUnknownObjKey = 8,   ///< ParseOnDemand: Not found the target keys
+                                  ///< in object.
+  kParseErrorArrIndexOutOfRange = 9,  ///< ParseOnDemand: the target array index
+                                      ///< out of range.
+  kParseErrorMismatchType =
+      10,  ///< ParseOnDemand: the target type is not matched.
+  kSerErrorUnsupportedType = 11,  ///< Serialize: DOM has invalid node type.
+  kSerErrorInfinity = 12,         ///< Serialize: DOM has inifinity number node.
+  kSerErrorInvalidObjKey = 13,  ///< Serialize: The type of object's key is not
+                                ///< string.
+  kErrorNoMem = 14,             ///< Memory is not enough to allocate.
+  kParseErrorUnexpect = 15,     ///< Unexpected Errors
 
   kErrorNums,
 };

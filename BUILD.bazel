@@ -190,7 +190,6 @@ cc_test(
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
-        '-lstdc++fs',
         '-fstack-protector-all',
         '-fsanitize-link-c++-runtime'
     ],

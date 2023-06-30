@@ -23,7 +23,6 @@
 
 namespace sonic_json {
 namespace internal {
-using sse::AddOverflow;
 using sse::ClearLowestBit;
 using sse::CountOnes;
 using sse::LeadingZeroes;

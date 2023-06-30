@@ -78,19 +78,6 @@ sonic_force_inline uint64_t GetNonSpaceBits(const uint8_t *data) {
   return ~space;
 }
 
-sonic_force_inline uint64_t GetEscapedBranchless(uint64_t &prev_escaped,
-                                                 uint64_t backslash) {
-  backslash &= ~prev_escaped;
-  uint64_t follows_escape = backslash << 1 | prev_escaped;
-  const uint64_t even_bits = 0x5555555555555555ULL;
-  uint64_t odd_sequence_starts = backslash & ~even_bits & ~follows_escape;
-  uint64_t sequences_starting_on_even_bits;
-  prev_escaped = AddOverflow(odd_sequence_starts, backslash,
-                             &sequences_starting_on_even_bits);
-  uint64_t invert_mask = sequences_starting_on_even_bits << 1;
-  return (even_bits ^ invert_mask) & follows_escape;
-}
-
 }  // namespace avx2
 }  // namespace internal
 }  // namespace sonic_json
