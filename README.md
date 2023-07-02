@@ -212,7 +212,7 @@ int main()
 ```
 The following Is\*, Get\* and Set\* methods are supported:
 - IsNull(), SetNull()
-- IsBoo(), GetBool(), SetBool(bool)
+- IsBool(), GetBool(), SetBool(bool)
 - IsString(), GetString(), GetStringView(), SetString(const char*, size_t)
 - IsNumber()
 - IsArray(), SetArray()
