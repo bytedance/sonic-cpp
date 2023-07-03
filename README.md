@@ -3,7 +3,7 @@
 A fast JSON serializing & deserializing library, accelerated by SIMD.
 
 [![clang-format Check](https://github.com/bytedance/sonic-cpp/actions/workflows/clang-format-check.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/clang-format-check.yml)
-[![Test](https://github.com/bytedance/sonic-cpp/actions/workflows/test.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/test.yml)
+[![Test](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml)
 [![codecov](https://codecov.io/gh/bytedance/sonic-cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/bytedance/sonic-cpp)
 
 ## Requirement
@@ -212,7 +212,7 @@ int main()
 ```
 The following Is\*, Get\* and Set\* methods are supported:
 - IsNull(), SetNull()
-- IsBoo(), GetBool(), SetBool(bool)
+- IsBool(), GetBool(), SetBool(bool)
 - IsString(), GetString(), GetStringView(), SetString(const char*, size_t)
 - IsNumber()
 - IsArray(), SetArray()
@@ -236,4 +236,3 @@ More [usage](docs/usage.md).
 
 ## Contributing
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for information on contributing to sonic-cpp.
-
