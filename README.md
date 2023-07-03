@@ -151,7 +151,7 @@ int main()
 using member_itr_type = typename sonic_json::Document::MemberIterator;
 
 void print_member(member_itr_type m) {
-  sonic_json::Node& key = m->name;
+  const sonic_json::Node& key = m->name;
   sonic_json::Node& value = m->value;
   if (key.IsString()) {
     std::cout << "Key is: "
