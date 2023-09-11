@@ -6,28 +6,28 @@ A fast JSON serializing & deserializing library, accelerated by SIMD.
 [![Test](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml)
 [![codecov](https://codecov.io/gh/bytedance/sonic-cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/bytedance/sonic-cpp)
 
-## Requirement
-- c++11 or above
-- x86 platform with AVX2 instruction
-- GCC or LLVM compiler (not support MSVC compiler now)
-- Linux OS
+## Requirements
+- C++11 or above
+- x86 with AVX2 instructions support
+- GCC or LLVM (MSVC is not supported now)
+- Linux
 
 ## Features
 - Complete APIs for JSON value manipulation
 - Fast on JSON serializing and parsing
-- Support parse ondemand
+- Support on-demand parsing
 
 ## Benchmarks
 
 
-- use CMake
+- Use CMake
 ```
 cmake -S . -B build -DBUILD_BENCH=ON
 cmake --build build --target bench -j
 ./build/benchmark/bench
 ```
 
-- use bazel
+- Use Bazel
 ```
 bazel run :benchmark --compilation_mode=opt
 ```
@@ -37,10 +37,10 @@ bazel run :benchmark --compilation_mode=opt
 - Run
 
 ```shell
-# build by bazel
+# build with bazel
 python3 ./scripts/tools/draw-decode-encode.py
 ```
-- Result
+- Results
 
 Parsing Performance
 ![image](docs/images/compare_Decode.png)
@@ -50,7 +50,7 @@ Serializing performance
 
 ### Performance by third-party benchmark
 
-Below data is test by https://github.com/miloyip/nativejson-benchmark:
+The data below is tested by https://github.com/miloyip/nativejson-benchmark:
 
 Parsing Performance
 ![image](docs/images/parse.png)
@@ -58,8 +58,8 @@ Parsing Performance
 Serializing Performance
 ![image](docs/images/serialize.png)
 
-## API Document
-Make sure Doxygen 1.8.13 or higher version has been installed. Then following:
+## API Documentation
+Make sure Doxygen 1.8.13 or higher has been installed. Then run:
 
 ```shell
 mdkir api-doc && cd api-doc
@@ -72,14 +72,14 @@ Sonic-cpp parses JSON into a compact document tree. The document structure is as
 
 ![image](docs/images/dom.png)
 
-There are many optimizations in parsing as follows:
-- using SIMD to accelerate skipping white space.
-- using SIMD to find escaped chars when parsing strings.
-- using the STOA float pointing algorithm.
+There are many optimizations in parsing:
+- Using SIMD to accelerate skipping white spaces.
+- Using SIMD to find escaped chars when parsing strings.
+- Using the STOA floating point algorithm.
 
-Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions(AVX2/SSE) to find the escaped char for a long JSON string.
+Sonic-cpp serializes a document to JSON. When serializing JSON strings, we should check the escaped characters first. So, we use SIMD instructions (AVX2/SSE) to find the escaped char for a long JSON string.
 
-Sonic-cpp also supports ParseOnDemand if the user knows the target key at compile time. ParseOndemand also used SIMD and bit manipulation to skip the unwanted values fastly.
+Sonic-cpp also supports ParseOnDemand if the user knows the target key at compile time. ParseOndemand also uses SIMD and bit manipulation to skip the unwanted values fastly.
 
 ## Usage
 ### Include
@@ -231,8 +231,8 @@ More [usage](docs/usage.md).
 * [ ] Support [`JSON Merge Patch`](https://www.rfc-editor.org/rfc/rfc7396).
 * [ ] Support [`JSON Pointer`](https://datatracker.ietf.org/doc/html/rfc6901).
 * [ ] Support more platforms, e.g. ARM.
-* [ ] Support struct bind.
-* [ ] Support validating UTF-8.
+* [ ] Support structural binding.
+* [ ] Support UTF-8 validation.
 
 ## Contributing
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for information on contributing to sonic-cpp.
