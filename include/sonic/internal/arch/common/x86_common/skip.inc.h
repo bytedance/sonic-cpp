@@ -72,8 +72,8 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
   bool found = false;
   while (pos + VEC_LEN <= len) {
     const VecUint8Type v(data + pos);
-    bs_bits = static_cast<uint64_t>((v == '\\').to_bitmask());
-    quote_bits = static_cast<uint64_t>((v == '"').to_bitmask());
+    bs_bits = (v == '\\').to_bitmask();
+    quote_bits = (v == '"').to_bitmask();
 
     // maybe has escaped quotes
     if (((quote_bits - 1) & bs_bits) || prev_escaped) {
