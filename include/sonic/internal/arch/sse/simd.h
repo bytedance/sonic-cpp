@@ -116,7 +116,9 @@ struct simd128<bool> : base128<bool> {
   // Splat constructor
   sonic_force_inline simd128<bool>(bool _value)
       : base128<bool>(splat(_value)) {}
-  sonic_force_inline int to_bitmask() const { return _mm_movemask_epi8(*this); }
+  sonic_force_inline uint64_t to_bitmask() const {
+    return (uint32_t)_mm_movemask_epi8(*this);
+  }
   // Override splat bool
   static sonic_force_inline simd128<bool> splat(bool _value) {
     return _mm_set1_epi8(uint8_t(-(!!_value)));
