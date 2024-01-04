@@ -50,6 +50,7 @@ class GenericDocument : public NodeType {
         alloc_(rhs.alloc_),
         parse_result_(rhs.parse_result_),
         str_(rhs.str_),
+        schema_str_(rhs.schema_str_),
         str_cap_(rhs.str_cap_),
         strp_(rhs.strp_) {
     rhs.clear();
@@ -65,6 +66,7 @@ class GenericDocument : public NodeType {
     // free the static memory if need
     if (Allocator::kNeedFree) {
       Allocator::Free(static_cast<void*>(str_));
+      Allocator::Free(static_cast<void*>(schema_str_));
     }
 
     // Step2: assignment data member
@@ -72,6 +74,7 @@ class GenericDocument : public NodeType {
     alloc_ = rhs.alloc_;
     own_alloc_ = std::move(rhs.own_alloc_);
     str_ = rhs.str_;
+    schema_str_ = rhs.schema_str_;
     str_cap_ = rhs.str_cap_;
     strp_ = rhs.strp_;
 
@@ -89,6 +92,7 @@ class GenericDocument : public NodeType {
     own_alloc_.swap(rhs.own_alloc_);
     std::swap(alloc_, rhs.alloc_);
     std::swap(str_, rhs.str_);
+    std::swap(schema_str_, rhs.schema_str_);
     std::swap(str_cap_, rhs.str_cap_);
     std::swap(strp_, rhs.strp_);
     return *this;
@@ -122,6 +126,16 @@ class GenericDocument : public NodeType {
   GenericDocument& Parse(const char* data, size_t len) {
     destroyDom();
     return parseImpl<parseFlags>(data, len);
+  }
+
+  template <unsigned parseFlags = kParseDefault>
+  GenericDocument& ParseSchema(StringView json) {
+    return ParseSchema<parseFlags>(json.data(), json.size());
+  }
+
+  template <unsigned parseFlags = kParseDefault>
+  GenericDocument& ParseSchema(const char* data, size_t len) {
+    return parseSchemaImpl<parseFlags>(data, len);
   }
 
   /**
@@ -172,6 +186,7 @@ class GenericDocument : public NodeType {
     own_alloc_ = nullptr;
     alloc_ = nullptr;
     str_ = nullptr;
+    schema_str_ = nullptr;
   }
 
   void destroyDom() {
@@ -182,8 +197,10 @@ class GenericDocument : public NodeType {
     // NOTE: must free dynamic nodes at first
     reinterpret_cast<DNode<Allocator>*>(this)->~DNode();
     Allocator::Free(str_);
+    Allocator::Free(schema_str_);
     // Avoid Double Free
     str_ = nullptr;
+    schema_str_ = nullptr;
     this->setType(kNull);
   }
 
@@ -204,6 +221,22 @@ class GenericDocument : public NodeType {
       return *this;
     }
     NodeType::operator=(std::move(sax.st_[0]));
+    return *this;
+  }
+
+  template <unsigned parseFlags>
+  GenericDocument& parseSchemaImpl(const char* json, size_t len) {
+    Parser p;
+    SchemaHandler<NodeType> sax(this, *alloc_);
+    parse_result_ = allocateSchemaStringBuffer(json, len);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
+    if (!sax.SetUp(StringView(json, len))) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    parse_result_ = p.template Parse<parseFlags>(schema_str_, len, sax);
     return *this;
   }
 
@@ -235,6 +268,20 @@ class GenericDocument : public NodeType {
     return kErrorNone;
   }
 
+  SonicError allocateSchemaStringBuffer(const char* json, size_t len) {
+    size_t pad_len = len + 64;
+    schema_str_ = (char*)(alloc_->Malloc(pad_len));
+    if (schema_str_ == nullptr) {
+      return kErrorNoMem;
+    }
+    std::memcpy(schema_str_, json, len);
+    // Add ending mask to support parsing invalid json
+    schema_str_[len] = 'x';
+    schema_str_[len + 1] = '"';
+    schema_str_[len + 2] = 'x';
+    return kErrorNone;
+  }
+
   friend class Parser;
 
   // Note: it is a callback function in parse.parse_impl
@@ -254,6 +301,7 @@ class GenericDocument : public NodeType {
 
   // String Buffer for all parsed string values
   char* str_{nullptr};
+  char* schema_str_{nullptr};
   size_t str_cap_{0};
   long strp_{0};
 };

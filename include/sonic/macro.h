@@ -46,6 +46,12 @@
 #define sonic_assert(x) assert((x));
 #endif
 
+#if __cplusplus >= 201703L
+#define SONIC_IF_CONSTEXPR constexpr
+#else
+#define SONIC_IF_CONSTEXPR
+#endif
+
 #ifndef SONIC_STRINGIFY
 #define SONIC_STRINGIFY(s) SONIC_STRINGIFY2(s)
 #define SONIC_STRINGIFY2(s) #s

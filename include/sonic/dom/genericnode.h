@@ -22,6 +22,7 @@
 
 #include "sonic/dom/handler.h"
 #include "sonic/dom/json_pointer.h"
+#include "sonic/dom/schema_handler.h"
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
@@ -1070,6 +1071,7 @@ class GenericNode {
   friend NodeType;
   friend class SAXHandler<NodeType>;
   friend class LazySAXHandler<NodeType>;
+  friend class SchemaHandler<NodeType>;
 
   union ContainerNext {
     size_t ofs;
