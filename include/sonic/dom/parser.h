@@ -482,6 +482,11 @@ class Parser {
         break;
       case '"':
         parseStrInPlace(sax);
+        // only need check length when parsing string primitives, because the
+        // padding "x\"x" makes parsing other invalid JSON always failed
+        if (pos_ > len_) {
+          setParseError(kParseErrorInvalidChar);
+        }
         break;
       case 'f':
         parseFalse(sax);

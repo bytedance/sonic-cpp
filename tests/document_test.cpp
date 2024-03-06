@@ -283,7 +283,7 @@ TYPED_TEST(DocumentTest, Parse) {
   constexpr static bool kNoError = false;
   constexpr static bool kError = true;
   std::vector<ParseTest> tests = {
-      // test valid json
+      // test valid JSON
       {"true", &Document::IsTrue, kNoError},
       {"false", &Document::IsFalse, kNoError},
       {"null", &Document::IsNull, kNoError},
@@ -296,7 +296,14 @@ TYPED_TEST(DocumentTest, Parse) {
       {"123", &Document::IsUint64, kNoError},
       {"-123", &Document::IsInt64, kNoError},
       {"0.000e0", &Document::IsDouble, kNoError},
+
+      // test invalid JSON
       {"", &Document::IsNull, kError},
+      {std::string(1000, ' '), &Document::IsNull, kError},
+      {"\"string", &Document::IsNull, kError},
+      {"\"", &Document::IsNull, kError},
+      {"\"" + std::string(1000, ' '), &Document::IsNull, kError},
+      {"\" \"\"", &Document::IsNull, kError},
       {"1.", &Document::IsNull, kError},
       {"truef", &Document::IsNull, kError},
       {"true:", &Document::IsNull, kError},
