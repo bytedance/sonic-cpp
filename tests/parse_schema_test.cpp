@@ -25,22 +25,37 @@ void TestSuccess(const std::string schema, const std::string json,
                  const std::string expect) {
   Document doc;
   doc.Parse(schema);
-  EXPECT_FALSE(doc.HasParseError())
-      << "failed parsing schema: " << schema << std::endl;
-  if (doc.HasParseError()) return;
+  if (doc.HasParseError())
+    FAIL() << "failed parsing schema: " << schema << std::endl
+           << "failed start: " << schema.substr(doc.GetErrorOffset()) << std::endl; 
+
   doc.ParseSchema(json);
-  EXPECT_FALSE(doc.HasParseError())
-      << "failed parsing json: " << json << std::endl;
-  if (doc.HasParseError()) return;
+  
+  if (doc.HasParseError()) 
+    FAIL() << "failed parsing json: " << json << std::endl
+           << "failed start: " << json.substr(doc.GetErrorOffset()) << std::endl; 
+
   Document expect_doc;
   expect_doc.Parse(expect);
-  EXPECT_FALSE(doc.HasParseError())
-      << "failed parsing expect: " << expect << std::endl;
-  if (expect_doc.HasParseError()) return;
+  if (expect_doc.HasParseError())
+    FAIL() << "failed parsing expect: " << expect << std::endl
+           << "failed start: " << expect.substr(expect_doc.GetErrorOffset()) << std::endl; 
 
   EXPECT_TRUE(doc == expect_doc)
       << "doc: " << doc.Dump() << std::endl
       << "expect doc: " << expect_doc.Dump() << std::endl;
+}
+
+void TestFailed(const std::string schema, const std::string json) {
+  Document doc;
+  doc.Parse(schema);
+  if (doc.HasParseError())
+    FAIL() << "failed parsing schema: " << schema << std::endl;
+
+  doc.ParseSchema(json);
+  
+  EXPECT_TRUE(doc.HasParseError())
+    << "unexpect parsing json success: " << json << std::endl;
 }
 
 TEST(ParseSchema, SuccessBasic) {
@@ -53,14 +68,14 @@ TEST(ParseSchema, SuccessBasic) {
             "object": {},
             "array": []
         },
-        "array": [{}, []]
+        "array": [{}, [], {"a":1}, [-1]]
     })",
       R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string", 
         "object": {
             "object": {},
             "array": []
         },
-        "array": [{}, []]
+        "array": [{}, [], {"a":1}, [-1]]
     })");
   TestSuccess(
       R"({"true": false, "false": true, "null": {}, "int": 2, "double":2.0, 
@@ -127,13 +142,23 @@ TEST(ParseSchema, SuccessBasic) {
         "dbl2null": 3.0, "dbl2obj": 3.0, "dbl2arr": 3.0,
         "str2bool":"string", "str2int":"string", "str2dbl": "string", "str2str": "string",
         "str2null": "string", "str2obj": "string", "str2arr": "string",
-        "null2bool":null, "null2int":null1, "null2dbl": null, "null2str": null,
+        "null2bool":null, "null2int":null, "null2dbl": null, "null2str": null,
         "null2null": null, "null2obj": null, "null2arr": null,
         "obj2bool": {"a":1}, "obj2int":{"a":1}, "obj2dbl": {"a":1}, "obj2str":{"a":1},
         "obj2null": {"a":1}, "obj2obj": {"a":1}, "obj2arr": {"a":1},
         "arr2bool":[1], "arr2int":[1], "arr2dbl": [1], "arr2str": [1],
         "arr2null": [1], "arr2obj": [1], "arr2arr": [1] 
     })");
+}
+
+TEST(ParseSchema, FailedBasic) {
+  TestFailed(R"(null)", R"(nul)");
+  TestFailed(R"(null)", R"(fals)");
+  TestFailed(R"(null)", R"(tru)");
+  TestFailed(R"(null)", R"(1.2.3)");
+  TestFailed(R"(null)", R"("string)");
+  TestFailed(R"(null)", R"({"obj":})");
+  TestFailed(R"(null)", R"([null,])");
 }
 
 }  // namespace
