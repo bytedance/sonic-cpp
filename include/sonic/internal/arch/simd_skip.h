@@ -184,7 +184,9 @@ class SkipScanner {
       // parse escaped key
       kbuf.resize(sn + 32);
       uint8_t *nsrc = &kbuf[0];
-      std::memcpy(nsrc, sp, sn);
+
+      // parseStringInplace need `"` as the end
+      std::memcpy(nsrc, sp, sn + 1);
       sn = parseStringInplace(nsrc, err);
       if (err) {
         pos = (sp - data) + (nsrc - &kbuf[0]);

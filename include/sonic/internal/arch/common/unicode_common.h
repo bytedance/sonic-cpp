@@ -17,8 +17,6 @@
 
 #pragma once
 
-#include "../common/base.h"
-
 namespace sonic_json {
 namespace internal {
 namespace common {
@@ -268,25 +266,19 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
   return offset > 0;
 }
 
-template <size_t BLOK_SIZE>
-sonic_force_inline uint64_t GetEscapedBranchless(uint64_t &prev_escaped,
-                                                 uint64_t backslash) {
-  static_assert(BLOK_SIZE == 32 || BLOK_SIZE == 64,
-                "escaped branchless block only support 32 or 64 bytes");
-  backslash &= ~prev_escaped;
-  uint64_t follows_escape = backslash << 1 | prev_escaped;
-  const uint64_t even_bits = 0x5555555555555555ULL;
-  uint64_t odd_sequence_starts = backslash & ~even_bits & ~follows_escape;
-  uint64_t sequences_starting_on_even_bits;
-  if (BLOK_SIZE == 64) {
-    prev_escaped = AddOverflow64(odd_sequence_starts, backslash,
-                                 &sequences_starting_on_even_bits);
-  } else if (BLOK_SIZE == 32) {
-    prev_escaped = AddOverflow32(odd_sequence_starts, backslash,
-                                 &sequences_starting_on_even_bits);
-  }
-  uint64_t invert_mask = sequences_starting_on_even_bits << 1;
-  return (even_bits ^ invert_mask) & follows_escape;
+template <size_t BLOCK_SIZE>
+sonic_force_inline uint64_t GetEscaped(uint64_t &prev_escaped,
+                                       uint64_t backslash) {
+  uint64_t with_prev_backslash = backslash & ~prev_escaped;
+  static const uint64_t odd_bits = 0xAAAAAAAAAAAAAAAAULL;
+  // see: https://github.com/simdjson/simdjson/pull/2042
+  uint64_t escaped =
+      (((with_prev_backslash << 1) | odd_bits) - with_prev_backslash) ^
+      odd_bits;
+  // & backslash to clear escaped char
+  uint64_t escaped_with_prev = (escaped ^ (backslash | prev_escaped));
+  prev_escaped = ((escaped & backslash) >> (BLOCK_SIZE - 1)) & 0x1ULL;
+  return escaped_with_prev;
 }
 
 }  // namespace common

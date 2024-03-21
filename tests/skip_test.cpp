@@ -79,6 +79,15 @@ TEST(GetOnDemand, SuccessEscapeCharacters) {
                   R"("\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\")");
   TestGetOnDemand(R"({"a":"\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\""})", {"a"},
                   R"("\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"")");
+  TestGetOnDemand(R"({"\"a\"":"\n\tHello,\nworld!\n"})", {"\"a\""},
+                  R"("\n\tHello,\nworld!\n")");
+  TestGetOnDemand(R"({"123456789012345\"123":"sse_string",
+                      "1234567890123456789012345678901\"123":"avx2_string",
+                      "obj\n\t\\":{"name\\\\\\\\":"string\\\\"},
+                      "array\"\t\n\b\r":["\n\tHello,\nworld!\n",
+                        "{\" / \b \f \n \r \t } [景] 测试中文 😀")],
+                      "\"a\"":"\n\tHello,\nworld!\n"})",
+                  {"\"a\""}, R"("\n\tHello,\nworld!\n")");
 }
 
 TEST(GetOnDemand, Failed) {
