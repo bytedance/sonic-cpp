@@ -21,7 +21,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
   if (bs_bits) {
-    escaped = common::GetEscapedBranchless<64>(prev_escaped, bs_bits);
+    escaped = common::GetEscaped<64>(prev_escaped, bs_bits);
   } else {
     escaped = prev_escaped;
     prev_escaped = 0;
@@ -72,12 +72,14 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
   bool found = false;
   while (pos + VEC_LEN <= len) {
     const VecUint8Type v(data + pos);
+
+    // bs_bits and quote_bits only has VEC_LEN bits used
     bs_bits = (v == '\\').to_bitmask();
     quote_bits = (v == '"').to_bitmask();
 
     // maybe has escaped quotes
     if (((quote_bits - 1) & bs_bits) || prev_escaped) {
-      escaped = common::GetEscapedBranchless<32>(prev_escaped, bs_bits);
+      escaped = common::GetEscaped<VEC_LEN>(prev_escaped, bs_bits);
       // NOTE: maybe mark the normal string as escaped, example "abc":"\\",
       // abc will marked as escaped.
       found = true;
