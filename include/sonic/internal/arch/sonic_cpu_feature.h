@@ -37,8 +37,11 @@
 #if defined(__AVX2__)
 #define SONIC_HAVE_AVX2
 #endif
-#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#else
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
 #define SONIC_HAVE_NEON
-#elif defined(__ARM_FEATURE_SVE)
-#define SONIC_HAVE_NEON
+#endif
+#if defined(__ARM_FEATURE_SVE2) && (__ARM_FEATURE_SVE_BITS == 128)
+#define SONIC_HAVE_SVE2_128
+#endif
 #endif

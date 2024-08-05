@@ -16,15 +16,18 @@
 
 #pragma once
 
-#include "../common/arm_common/itoa.h"
+#include <arm_neon.h>
+#include <sonic/macro.h>
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace arm_common {
 
-using sonic_json::internal::arm_common::Utoa_16;
-using sonic_json::internal::arm_common::Utoa_8;
+sonic_force_inline uint64_t to_bitmask(uint8x16_t v) {
+  return vget_lane_u64(
+      vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(v), 4)), 0);
+}
 
-}  // namespace neon
+}  // namespace arm_common
 }  // namespace internal
 }  // namespace sonic_json

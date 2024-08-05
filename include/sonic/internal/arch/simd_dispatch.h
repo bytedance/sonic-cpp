@@ -33,13 +33,17 @@
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(sse/file)
 #endif
 
-#if defined(SONIC_HAVE_NEON)
+#if defined(SONIC_HAVE_SVE2_128)
+#define SONIC_USING_ARCH_FUNC(func) using sve2_128::func
+#define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(sve2-128/file)
+#elif defined(SONIC_HAVE_NEON)
 #define SONIC_USING_ARCH_FUNC(func) using neon::func
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(neon/file)
 #endif
 
 #elif defined(SONIC_DYNAMIC_DISPATCH)
 
+// TODO: support SVE2 runtime dispatch
 #if defined(__x86_64__)
 #define SONIC_USING_ARCH_FUNC(func)
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(x86_ifuncs/file)
