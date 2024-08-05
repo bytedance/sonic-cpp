@@ -16,15 +16,23 @@
 
 #pragma once
 
-#include "../common/arm_common/itoa.h"
+#include <cstdint>
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace arm_common {
 
-using sonic_json::internal::arm_common::Utoa_16;
-using sonic_json::internal::arm_common::Utoa_8;
+sonic_force_inline uint64_t simd_str2int(const char* c, int& man_nd) {
+  uint64_t sum = 0;
+  int i = 0;
+  while (c[i] >= '0' && c[i] <= '9' && i < man_nd) {
+    sum = sum * 10 + (c[i] - '0');
+    i++;
+  }
+  man_nd = i;
+  return sum;
+}
 
-}  // namespace neon
+}  // namespace arm_common
 }  // namespace internal
 }  // namespace sonic_json
