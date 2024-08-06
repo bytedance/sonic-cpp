@@ -21,7 +21,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace sve2_128 {
 
 using sonic_json::internal::arm_common::ClearLowestBit;
 using sonic_json::internal::arm_common::CountOnes;
@@ -30,6 +30,6 @@ using sonic_json::internal::arm_common::PrefixXor;
 using sonic_json::internal::arm_common::TrailingZeroes;
 using sonic_json::internal::arm_common::Xmemcpy;
 
-}  // namespace neon
+}  // namespace sve2_128
 }  // namespace internal
 }  // namespace sonic_json

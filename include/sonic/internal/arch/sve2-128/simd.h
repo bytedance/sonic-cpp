@@ -16,15 +16,19 @@
 
 #pragma once
 
-#include "../common/arm_common/itoa.h"
+#include <arm_sve.h>
+
+#include "../common/arm_common/simd.h"
+
+static_assert(__ARM_FEATURE_SVE_BITS == 128, "SVE vector size must be 128");
+typedef svuint8_t svuint8x16_t __attribute__((arm_sve_vector_bits(128)));
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace sve2_128 {
 
-using sonic_json::internal::arm_common::Utoa_16;
-using sonic_json::internal::arm_common::Utoa_8;
+using sonic_json::internal::arm_common::to_bitmask;
 
-}  // namespace neon
+}  // namespace sve2_128
 }  // namespace internal
 }  // namespace sonic_json
