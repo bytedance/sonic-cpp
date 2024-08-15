@@ -26,4 +26,5 @@ enum ParseFlag {
 // User can define customed flags through combinations.
 enum SerializeFlags {
   kSerializeDefault = 0,
+  kSerializeAppendBuffer = 1,
 };

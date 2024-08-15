@@ -281,6 +281,27 @@ sonic_force_inline uint64_t GetEscaped(uint64_t &prev_escaped,
   return escaped_with_prev;
 }
 
+// unescape with padding buffer
+sonic_force_inline size_t unescape_with_padding(const uint8_t **src_ptr,
+                                           uint8_t **dst_ptr) {
+  uint8_t escape_char = (*src_ptr)[1];
+  if (sonic_unlikely(escape_char == 'u')) {
+    if (!handle_unicode_codepoint(src_ptr, dst_ptr)) {
+      return 0;
+    } else {
+      return 1;
+    }
+  } else {
+    **dst_ptr = kEscapedMap[escape_char];
+    if (sonic_unlikely(**dst_ptr == '\0')) {
+      return 0;
+    }
+    *src_ptr += 2;
+    *dst_ptr += 1;
+    return 1;
+  }
+}
+
 }  // namespace common
 }  // namespace internal
 }  // namespace sonic_json

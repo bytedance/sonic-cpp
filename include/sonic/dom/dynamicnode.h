@@ -260,6 +260,51 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return true;
   }
 
+  bool atJsonPathImpl(const internal::JsonPath& path, size_t index,
+                      std::vector<DNode*>& res) {
+    if (index >= path.size()) {
+      res.push_back(this);
+      return true;
+    }
+
+    if (path[index].is_wildcard()) {
+      if (!this->IsObject() && !this->IsArray()) {
+        return true;
+      }
+      DNode* n = (DNode*)getChildrenFirstUnsafe() + (this->IsObject() ? 1 : 0);
+      size_t step = this->IsObject() ? 2 : 1;
+      for (size_t i = 0; i < this->Size(); ++i) {
+        DNode* cur = (n + i * step);
+        cur->atJsonPathImpl(path, index + 1, res);
+      }
+      return true;
+    }
+
+    if (path[index].is_key()) {
+      if (!this->IsObject()) {
+        return false;
+      }
+      auto m = this->FindMember(path[index].key());
+      if (m != this->MemberEnd()) {
+        return m->value.atJsonPathImpl(path, index + 1, res);
+      } else {
+        return false;
+      }
+    }
+
+    if (path[index].is_index()) {
+      if (!this->IsArray()) {
+        return false;
+      }
+      size_t idx = path[index].index();
+      if (idx >= this->Size()) {
+        return false;
+      }
+      return this->findValueImpl(idx).atJsonPathImpl(path, index + 1, res);
+    }
+    return false;
+  };
+
   /**
    * @brief Destory the created map. This means that you don't want maintain the
    * map anymore.
@@ -516,6 +561,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   sonic_force_inline DNode* getArrChildrenFirstUnsafe() const {
     sonic_assert(this->IsArray());
+    return (DNode*)((char*)this->a.next.children +
+                    sizeof(MetaNode) / sizeof(char));
+  }
+
+  sonic_force_inline DNode* getChildrenFirstUnsafe() const {
     return (DNode*)((char*)this->a.next.children +
                     sizeof(MetaNode) / sizeof(char));
   }

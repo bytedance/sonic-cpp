@@ -51,6 +51,10 @@ enum SonicError {
   kErrorNoMem = 14,             ///< Memory is not enough to allocate.
   kParseErrorUnexpect = 15,     ///< Unexpected Errors
 
+  kSaxTermination = 16,       ///< Parse: SAX handler return false to
+                              ///< terminate parsing.
+  kUnsupportedJsonPath = 17,  ///< JsonPath: Unsupported json path.
+  kNotFoundByJsonPath = 18,  ///< JsonPath: Not found the target by json path.
   kErrorNums,
 };
 
@@ -84,6 +88,11 @@ inline const char* ErrorMsg(SonicError error) noexcept {
        "Serialize: The type of object's key is not string."},
       {kErrorNoMem, "Memory is not enough to allocate."},
       {kParseErrorUnexpect, "Unexpected Errors"},
+      {kSaxTermination,
+       "Parse: SAX handler return false to terminate parsing."},
+      {kUnsupportedJsonPath, "JsonPath: Unsupported json path."},
+        {kNotFoundByJsonPath, "JsonPath: Not found the target by json path."}
+
   };
   return kErrorMsg[error].msg;
 };

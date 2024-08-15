@@ -567,24 +567,25 @@ class Parser {
     c = scan.SkipSpace(json_buf_, pos_);
     if (sonic_unlikely(c != ':')) goto err_invalid_char;
 
-    if SONIC_IF_CONSTEXPR (CheckKeyReturn<SAX>::value) {
-      if (!found) {
-        if (!scan.SkipOne(json_buf_, pos_, len_)) {
+    if
+      SONIC_IF_CONSTEXPR(CheckKeyReturn<SAX>::value) {
+        if (!found) {
+          if (!scan.SkipOne(json_buf_, pos_, len_)) {
+            goto err_invalid_char;
+          }
+          c = GetNextToken(json_buf_, pos_, len_, "\"}");
+          if (c == '"') {
+            pos_++;
+            goto obj_key;
+          }
+          if (c == '}') {
+            pos_++;
+            sax.EndObject(depth.back());
+            goto scope_end;
+          }
           goto err_invalid_char;
         }
-        c = GetNextToken(json_buf_, pos_, len_, "\"}");
-        if (c == '"') {
-          pos_++;
-          goto obj_key;
-        }
-        if (c == '}') {
-          pos_++;
-          sax.EndObject(depth.back());
-          goto scope_end;
-        }
-        goto err_invalid_char;
       }
-    }
     c = scan.SkipSpace(json_buf_, pos_);
     switch (c) {
       case '{': {

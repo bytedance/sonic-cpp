@@ -19,9 +19,11 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "sonic/dom/handler.h"
 #include "sonic/dom/json_pointer.h"
+#include "sonic/dom/jsonpath.h"
 #include "sonic/dom/schema_handler.h"
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
@@ -41,6 +43,15 @@ class MemberNodeT {
 // Forward Declaration.
 template <typename derived_t>
 struct NodeTraits;
+
+
+template <typename NodeType>
+struct JsonPathResult {
+public:
+    std::vector<NodeType*> nodes;
+    bool is_single;
+    SonicError error;
+};
 
 /**
  * @brief Basic class represents a JSON value.
@@ -696,6 +707,35 @@ class GenericNode {
   template <typename StringType>
   NodeType* AtPointer(const GenericJsonPointer<StringType>& pointer) {
     return atPointerImpl(pointer);
+  }
+
+  /**
+   * @brief get specific nodes by json path
+   * @param path json pointer
+   * @retval nullptr get node failed
+   * @retval others success
+   */
+  JsonPathResult<NodeType> AtJsonPath(const StringView jsonpath) {
+    JsonPathResult<NodeType> ret = {};
+    ret.error = kErrorNone;
+    internal::JsonPath path;
+
+    // padding some buffers
+    std::string pathpadd = internal::paddingJsonPath(jsonpath);
+    if (!path.Parse(pathpadd)) {
+        ret.error = kUnsupportedJsonPath;
+        return ret;
+    }
+    
+    if (path[0].is_root() && path.size() == 1) {
+      ret.nodes.push_back(downCast());
+    } else if (!downCast()->atJsonPathImpl(path, 1, ret.nodes)) {
+      ret.error = kNotFoundByJsonPath;
+      ret.nodes.clear();
+    }
+
+    ret.is_single = !path.HasWildcard();
+    return ret;
   }
 
   /**

@@ -54,8 +54,12 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   internal::Stack stk;
   ParentCtx* parent;
 
-  wb.Clear();
-  wb.Reserve(estimate);
+  if (serializeFlags != kSerializeAppendBuffer) {
+    wb.Clear();
+    wb.Reserve(estimate);
+  } else {
+    wb.Reserve(estimate + wb.Size());
+  }
 
   bool is_single = (!node->IsContainer()) || node->Empty();
   if (sonic_unlikely(is_single)) {
