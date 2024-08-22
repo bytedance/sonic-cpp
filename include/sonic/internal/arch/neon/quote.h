@@ -156,7 +156,8 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 }
 
 static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
-                                                          char *dst) {
+                                                          char *dst,
+                                                          bool escape_emoji) {
   uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t *>(src));
   vst1q_u8(reinterpret_cast<uint8_t *>(dst), v);
 
@@ -167,10 +168,15 @@ static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
   uint8x16_t m4 = vorrq_u8(m1, m2);
   uint8x16_t m5 = vorrq_u8(m3, m4);
 
+  if (escape_emoji) {
+    uint8x16_t m6 = vcgeq_u8(v, vdupq_n_u8('\xF0'));
+    m5 = vorrq_u8(m5, m6);
+  }
   return to_bitmask(m5);
 }
 
-sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
+sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
+                                bool escape_emoji) {
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint64_t mm;
@@ -184,7 +190,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
       // cn = __builtin_ctz(mm);
       cn = TrailingZeroes(mm) >> 2;
       MOVE_N_CHARS(src, cn);
-      DoEscape(src, dst, nb);
+      DoEscape(src, dst, nb, escape_emoji);
     } else {
       /* move to next block */
       MOVE_N_CHARS(src, VEC_LEN);
@@ -211,7 +217,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
       if (mm) {
         cn = TrailingZeroes(mm) >> 2;
         MOVE_N_CHARS(src_r, cn);
-        DoEscape(src_r, dst, nb);
+        DoEscape(src_r, dst, nb, escape_emoji);
       } else {
         dst += nb;
         nb = 0;

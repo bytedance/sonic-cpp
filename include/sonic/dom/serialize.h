@@ -54,7 +54,7 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   internal::Stack stk;
   ParentCtx* parent;
 
-  if (serializeFlags != kSerializeAppendBuffer) {
+  if ((serializeFlags & kSerializeAppendBuffer) == 0) {
     wb.Clear();
     wb.Reserve(estimate);
   } else {
@@ -79,7 +79,9 @@ val_begin:
       inc_len = str_len * 6 + 32 + 3;
       wb.Grow(inc_len);
       str_ptr = node->GetStringView().data();
-      rn = internal::Quote(str_ptr, str_len, wb.End<char>()) - wb.End<char>();
+      rn = internal::Quote(str_ptr, str_len, wb.End<char>(),
+                           (serializeFlags & kSerializeEscapeEmoji) != 0) -
+           wb.End<char>();
       wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(is_key ? ':' : ',');
       member_cnt -= is_key;

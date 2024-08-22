@@ -37,17 +37,17 @@ class JsonPathNode {
   bool is_root() const noexcept { return token_ == '$'; }
 
   StringView key() const noexcept {
-    assert(index_ == -1 && token_ == '\0');
+    sonic_assert(index_ == -1 && token_ == '\0');
     return key_;
   }
 
   int index() const noexcept {
-    assert(index_ != -1 && token_ == '\0');
+    sonic_assert(index_ != -1 && token_ == '\0');
     return index_;
   }
 
   char token() const noexcept {
-    assert(index_ == -1 && key_ == "");
+    sonic_assert(index_ == -1 && key_ == "");
     return token_;
   }
 
@@ -60,19 +60,19 @@ class JsonPathNode {
 
 // to parse escaped chars inplace
 sonic_force_inline std::string paddingJsonPath(StringView path) {
-    std::string padded;
-    padded.reserve(path.size() + 8);
-    padded.append(path.data(), path.size());
-    padded.append(8, '\0');
-    padded.resize(path.size());
-    return padded;
+  std::string padded;
+  padded.reserve(path.size() + 8);
+  padded.append(path.data(), path.size());
+  padded.append(8, '\0');
+  padded.resize(path.size());
+  return padded;
 }
 
 /**
  * Respresent a JSON path. RFC is https://datatracker.ietf.org/doc/rfc9535/.
  * NOTE: descendant, slice, filter and curent node not support.
-*/
-class JsonPath: public std::vector<JsonPathNode> {
+ */
+class JsonPath : public std::vector<JsonPathNode> {
  private:
   // case as .abc
   sonic_force_inline bool parseUnquotedKey(StringView path, size_t& index,
@@ -115,23 +115,23 @@ class JsonPath: public std::vector<JsonPathNode> {
     size_t len = 0;
     // normalized path
     if (quote == '\"') {
-        while (src < end && *src != quote) {
-            if (*src == '\\') {
-                if (internal::common::unescape_with_padding(
-                        reinterpret_cast<const uint8_t**>(&src),
-                        reinterpret_cast<uint8_t**>(&dst)) == 0) {
-                return false;
-                }
-            } else {
-                *dst++ = *src++;
-            }
+      while (src < end && *src != quote) {
+        if (*src == '\\') {
+          if (internal::common::unescape_with_padding(
+                  reinterpret_cast<const uint8_t**>(&src),
+                  reinterpret_cast<uint8_t**>(&dst)) == 0) {
+            return false;
+          }
+        } else {
+          *dst++ = *src++;
         }
-        len = (dst - &path[0]) - start;
+      }
+      len = (dst - &path[0]) - start;
     } else {
-        while (src < end && *src != quote) {
-            src++;
-        }
-        len = (src - &path[0]) - start;
+      while (src < end && *src != quote) {
+        src++;
+      }
+      len = (src - &path[0]) - start;
     }
 
     index = src - &path[0];
@@ -169,7 +169,7 @@ class JsonPath: public std::vector<JsonPathNode> {
     return false;
   }
 
-public:
+ public:
   sonic_force_inline bool Parse(StringView path) noexcept {
     this->clear();
     if (path.empty() || path[0] != '$') {
@@ -241,9 +241,10 @@ public:
   }
 
   bool HasWildcard() const noexcept { return has_wildcard_; }
+
  private:
-    bool has_wildcard_ = false;
+  bool has_wildcard_ = false;
 };
 
-} // namespace internal
+}  // namespace internal
 }  // namespace sonic_json

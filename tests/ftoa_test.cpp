@@ -18,6 +18,8 @@
 // This file may have been modified by ByteDance authors. All ByteDance
 // Modifications are Copyright 2022 ByteDance Authors.
 
+#define SONIC_DEFAULT_FORMAT
+
 #include "sonic/internal/ftoa.h"
 
 #include <gtest/gtest.h>

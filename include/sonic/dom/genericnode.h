@@ -44,13 +44,12 @@ class MemberNodeT {
 template <typename derived_t>
 struct NodeTraits;
 
-
 template <typename NodeType>
 struct JsonPathResult {
-public:
-    std::vector<NodeType*> nodes;
-    bool is_single;
-    SonicError error;
+ public:
+  std::vector<NodeType*> nodes;
+  bool is_single;
+  SonicError error;
 };
 
 /**
@@ -723,10 +722,10 @@ class GenericNode {
     // padding some buffers
     std::string pathpadd = internal::paddingJsonPath(jsonpath);
     if (!path.Parse(pathpadd)) {
-        ret.error = kUnsupportedJsonPath;
-        return ret;
+      ret.error = kUnsupportedJsonPath;
+      return ret;
     }
-    
+
     if (path[0].is_root() && path.size() == 1) {
       ret.nodes.push_back(downCast());
     } else if (!downCast()->atJsonPathImpl(path, 1, ret.nodes)) {

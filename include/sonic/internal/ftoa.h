@@ -829,23 +829,38 @@ static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
   char* p = out + 1;
   char* end = FormatSignificand(v.sig, p, cnt);
   while (*(end - 1) == '0') end--;
-
-  /* print decimal point if needed */
   *out = *p;
+#if SONIC_EXPONENT_ALWAYS_DOT
+  *p = '.';
+  if ((end - p) <= 1) {
+    *(++p) = '0';
+    end = p + 1;
+  }
+
+#else
+  /* print decimal point if needed */
   if (end - p > 1) {
     *p = '.';
   } else {
     end--;
   }
+#endif
 
   /* print the exponent */
+#if SONIC_EXPONENT_UPPERCASE
+  *end++ = 'E';
+#else
   *end++ = 'e';
+#endif
+
   int32_t exp = v.exp + (int32_t)cnt - 1;
   if (exp < 0) {
     *end++ = '-';
     exp = -exp;
   } else {
+#if SONIC_EXPONENT_ALWAYS_SIGN
     *end++ = '+';
+#endif
   }
 
   if (exp >= 100) {

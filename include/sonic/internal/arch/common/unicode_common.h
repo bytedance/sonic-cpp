@@ -283,7 +283,7 @@ sonic_force_inline uint64_t GetEscaped(uint64_t &prev_escaped,
 
 // unescape with padding buffer
 sonic_force_inline size_t unescape_with_padding(const uint8_t **src_ptr,
-                                           uint8_t **dst_ptr) {
+                                                uint8_t **dst_ptr) {
   uint8_t escape_char = (*src_ptr)[1];
   if (sonic_unlikely(escape_char == 'u')) {
     if (!handle_unicode_codepoint(src_ptr, dst_ptr)) {

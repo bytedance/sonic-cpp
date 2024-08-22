@@ -75,3 +75,31 @@
 
 #define SONIC_PUSH_WESTMERE SONIC_PUSH_TARGET(SONIC_WESTMERE)
 #define SONIC_PUSH_HASWELL SONIC_PUSH_TARGET(SONIC_HASWELL)
+
+#ifdef SONIC_SPARK_FORMAT
+#define SONIC_EXPONENT_ALWAYS_DOT 1
+#define SONIC_EXPONENT_UPPERCASE 1
+#define SONIC_EXPONENT_ALWAYS_SIGN 0
+#endif
+
+#ifdef SONIC_DEFAULT_FORMAT
+#define SONIC_EXPONENT_ALWAYS_DOT 0
+#define SONIC_EXPONENT_UPPERCASE 0
+#define SONIC_EXPONENT_ALWAYS_SIGN 1
+#endif
+
+/* Macros used to customed JSON format */
+#ifndef SONIC_EXPONENT_ALWAYS_DOT
+// print exponent with dot, like 1.0e+2
+#define SONIC_EXPONENT_ALWAYS_DOT 0
+#endif
+
+#ifndef SONIC_EXPONENT_UPPERCASE
+// print with uppercase `E`, like 1.0E+2
+#define SONIC_EXPONENT_UPPERCASE 0
+#endif
+
+#ifndef SONIC_EXPONENT_ALWAYS_SIGN
+// print exponent with sign, including '+', like 1.0E+2
+#define SONIC_EXPONENT_ALWAYS_SIGN 1
+#endif

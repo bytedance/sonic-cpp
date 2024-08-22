@@ -308,8 +308,8 @@ class GenericDocument : public NodeType {
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
 
-sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(StringView json,
-                                             StringView jsonpath) {
+sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
+    StringView json, StringView jsonpath) {
   // parse json into dom
   Document dom;
   dom.Parse(json);
@@ -326,25 +326,32 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(StringView 
   // check json path is wildcard
   WriteBuffer wb;
   if (result.is_single) {
-    auto err = result.nodes[0]->Serialize(wb);
-    if (err != kErrorNone) {
-      return std::make_tuple("", err);
+    // not serialize the single string
+    auto& root = result.nodes[0];
+    if (root->IsString()) {
+      wb.Push(root->GetStringView().data(), root->Size());
+    } else {
+      auto err = result.nodes[0]->template Serialize<kSerializeEscapeEmoji>(wb);
+      if (err != kErrorNone) {
+        return std::make_tuple("", err);
+      }
     }
   } else {
     wb.Push('[');
     for (const auto& node : result.nodes) {
-        auto err = node->template Serialize<kSerializeAppendBuffer>(wb) ;
-        if (err != kErrorNone) {
-          return std::make_tuple("", err);
-        }
-        wb.Push(',');
+      auto err = node->template Serialize<kSerializeAppendBuffer |
+                                          kSerializeEscapeEmoji>(wb);
+      if (err != kErrorNone) {
+        return std::make_tuple("", err);
+      }
+      wb.Push(',');
     }
     if (*(wb.Top<char>()) == ',') {
       wb.Pop<char>(1);
     }
     wb.Push(']');
   }
- return std::make_tuple(wb.ToString(), kErrorNone);
+  return std::make_tuple(wb.ToString(), kErrorNone);
 }
 
 }  // namespace sonic_json

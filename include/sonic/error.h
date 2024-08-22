@@ -54,7 +54,7 @@ enum SonicError {
   kSaxTermination = 16,       ///< Parse: SAX handler return false to
                               ///< terminate parsing.
   kUnsupportedJsonPath = 17,  ///< JsonPath: Unsupported json path.
-  kNotFoundByJsonPath = 18,  ///< JsonPath: Not found the target by json path.
+  kNotFoundByJsonPath = 18,   ///< JsonPath: Not found the target by json path.
   kErrorNums,
 };
 
@@ -91,7 +91,7 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kSaxTermination,
        "Parse: SAX handler return false to terminate parsing."},
       {kUnsupportedJsonPath, "JsonPath: Unsupported json path."},
-        {kNotFoundByJsonPath, "JsonPath: Not found the target by json path."}
+      {kNotFoundByJsonPath, "JsonPath: Not found the target by json path."}
 
   };
   return kErrorMsg[error].msg;

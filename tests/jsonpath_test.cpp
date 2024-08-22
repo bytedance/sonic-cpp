@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define SONIC_SPARK_FORMAT
+
 #include "sonic/sonic.h"
 
 #include <gtest/gtest.h>
@@ -34,16 +36,26 @@ void TestFail(const std::string json, const std::string path) {
 }
 
 TEST(JsonPath, RootIdentifier) {
-  TestOk("123  ", "$", "123");
-  TestOk("\"123\"  ", "$", "\"123\"");
-  // TestOk("\"😊\"  ", "$", "😊");
+  TestOk("[\"[\\\",\"]", "$", "[\"[\\\",\"]");
   TestOk(" null ", "$", "null");
-  TestOk("\"null\"", "$", "\"null\"");
+
+  // number
+  TestOk("123  ", "$", "123");
+
+  // string
+  TestOk("\"123\"  ", "$", "123");
+  TestOk("\"😊\"  ", "$", "😊");
+  TestOk("\"null\"", "$", "null");
+
+  // container
   TestOk(" [] ", "$", "[]");
+  TestOk(" [\"😊\"] ", "$", "[\"\\uD83D\\uDE0A\"]");
+  TestOk(" {\"a\":  \"😊💎\"} ", "$", "{\"a\":\"\\uD83D\\uDE0A\\uD83D\\uDC8E\"}");
   TestOk(" {} ", "$", "{}");
   TestOk(R"( {"a":null} )", "$", R"({"a":null})");
   TestOk(R"( [[], {}, []] )", "$", R"([[],{},[]])");
 
+  // invalid json
   TestFail("123x  ", "$");
   TestFail(" nullx ", "$");
   TestFail(" [} ", "$");
@@ -65,8 +77,8 @@ TEST(JsonPath, IndexSelector) {
   TestOk(json, "$.0", "0");
   TestOk(json, "$[0]", "0");
   TestOk(json, "$.1", "1.23");
-  TestOk(json, "$.2", "4e+56");
-  TestOk(json, "$.3", "\"null\"");
+  TestOk(json, "$.2", "4.0E56");
+  TestOk(json, "$.3", "null");
   TestOk(json, "$.4", "true");
   TestOk(json, "$.5", "{}");
   TestOk(json, "$.6", "[]");
@@ -91,8 +103,8 @@ TEST(JsonPath, WildCard) {
   TestOk(json, "$.3.*", "[]");
   TestOk(json, "$.0.*", "[]");
 
-//   TestFail(json, "$.5.a");
-//   TestFail(json, "$.6.0.*");
+  TestFail(json, "$.5.a");
+  TestFail(json, "$.6.0.*");
 }
 
 TEST(JsonPath, WildCardMany) {
