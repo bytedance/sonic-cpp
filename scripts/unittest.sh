@@ -9,7 +9,7 @@ Usage:
     -g, --gcc       compiler is gcc
     -c, --clang     compiler is clang
     -h, --help      display this message
-    --arch={arm|haswell|westmere} target architecture, default is haswell
+    --arch={aarch64|haswell|westmere} target architecture, default is haswell
     --dispatch={dynamic|static} sonic dispatch mode, default is static
 
     example: bash unittest.sh -g --arch=westmere --dispatch=static
@@ -43,7 +43,7 @@ do
     --arch)
         case "$2" in
             "") shift 2 ;;
-            arm|haswell|westmere)
+            aarch64|haswell|westmere)
                 UNIT_TEST_ARCH="$2"
                 shift 2 ;;
             *)
