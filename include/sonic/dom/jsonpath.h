@@ -145,10 +145,24 @@ class JsonPath : public std::vector<JsonPathNode> {
     return true;
   }
 
+  // case as [abc]
+  sonic_force_inline bool parseBrackedUnquotedKey(StringView path, size_t& index,
+                                          JsonPathNode& node) {
+    size_t start = index;
+    while (index < path.size() && path[index] != ']') {
+      index++;
+    }
+    if (start == index) {
+      return false;
+    }
+    node = JsonPathNode(path.substr(start, index - start));
+    index++;
+    return true;
+  }
+
   // case as [123]
   sonic_force_inline bool parseBracktedIndex(StringView path, size_t& index,
                                              JsonPathNode& node) {
-    index += 1;
     if (!parseRawIndex(path, index, node)) {
       return false;
     }
@@ -224,7 +238,7 @@ class JsonPath : public std::vector<JsonPathNode> {
         } else if (path[i] >= '0' && path[i] <= '9') {
           valid = parseBracktedIndex(path, i, node);
         } else {
-          return false;
+          valid = false;
         }
       } else {
         valid = false;

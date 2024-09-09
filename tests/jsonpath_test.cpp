@@ -76,12 +76,15 @@ TEST(JsonPath, IndexSelector) {
 
   TestOk(json, "$.0", "0");
   TestOk(json, "$[0]", "0");
+  TestOk(json, "$[1]", "1.23");
   TestOk(json, "$.1", "1.23");
   TestOk(json, "$.2", "4.0E56");
   TestOk(json, "$.3", "null");
   TestOk(json, "$.4", "true");
   TestOk(json, "$.5", "{}");
   TestOk(json, "$.6", "[]");
+
+  TestOk("[1,2]", "$[1]", "2");
 
   TestFail(json, "$.a");
   TestFail(json, "$.5.a");
@@ -145,6 +148,7 @@ TEST(JsonPath, KeySelector) {
   TestOk(json, "$.a", "1");
   TestOk(json, "$.b", "2");
   TestOk(json, "$['b']", "2");
+//   TestOk(json, "$[b]", "2");
   TestOk(json, "$[\"b\"]", "2");
   TestOk(json, "$.d", "{\"d1\":4,\"d2\":[0,1,{\"d21\":5},[true],[],[[null]]]}");
 
@@ -177,5 +181,19 @@ TEST(JsonPath, EscapedKeySelector) {
   TestOk(json, R"($["b\u0041"])", "3");
   TestOk(json, "$['b.9']", "4");
   TestOk(json, "$['b@']", "5");
+}
+
+TEST(JSONPath, BadCases) {
+    auto json = R"({
+    "a": {
+      "b": {
+        "c": "value1",
+        "d": "value2"
+      }
+    },
+    "e.f": "value3",
+    "g.h.i": "value4"
+  })";
+   TestOk(json, "$.a.b.c", "value1");
 }
 }  // namespace
