@@ -18,43 +18,47 @@ namespace internal {
 const char NONE = '\0';
 const char WILDCARD = '*';
 const char ROOT = '$';
+const char IS_KEY = '\x01';
+const char IS_INDEX = '\x02';
 
 class JsonPathNode {
  public:
   JsonPathNode() noexcept = default;
-  JsonPathNode(int index) noexcept : index_(index) {}
-  JsonPathNode(StringView key) noexcept : key_(key) {}
+  JsonPathNode(int64_t index) noexcept : index_(index), token_(IS_INDEX) {}
+  JsonPathNode(StringView key) noexcept : key_(key), token_(IS_KEY) {}
   JsonPathNode(char token) noexcept : token_(token) {}
   ~JsonPathNode() = default;
 
  public:
-  bool is_wildcard() const noexcept { return token_ == '*'; }
+  bool is_wildcard() const noexcept { return token_ == WILDCARD; }
 
-  bool is_key() const noexcept { return index_ == -1 && token_ == '\0'; }
+  bool is_key() const noexcept { return token_ == IS_KEY; }
 
-  bool is_index() const noexcept { return index_ != -1; }
+  bool is_index() const noexcept { return token_ == IS_INDEX; }
 
-  bool is_root() const noexcept { return token_ == '$'; }
+  bool is_none() const noexcept { return token_ == NONE; }
+
+  bool is_root() const noexcept { return token_ == ROOT; }
 
   StringView key() const noexcept {
-    sonic_assert(index_ == -1 && token_ == '\0');
+    sonic_assert(is_key());
     return key_;
   }
 
-  int index() const noexcept {
-    sonic_assert(index_ != -1 && token_ == '\0');
+  int64_t index() const noexcept {
+    sonic_assert(is_index());
     return index_;
   }
 
   char token() const noexcept {
-    sonic_assert(index_ == -1 && key_ == "");
+    sonic_assert(!is_key() && !is_index() && !is_none());
     return token_;
   }
 
  private:
-  int index_ = -1;
+  int64_t index_ = 0;
   StringView key_ = "";
-  // special tokens
+  // record special tokens, also distinguish key and index
   char token_ = '\0';
 };
 
@@ -88,15 +92,46 @@ class JsonPath : public std::vector<JsonPathNode> {
     return true;
   }
 
-  // case as .123
-  sonic_force_inline bool parseRawIndex(StringView path, size_t& index,
-                                        JsonPathNode& node) {
-    int sum = 0;
+  // case as [123] or [-123]
+  sonic_force_inline bool parseBracktedIndex(StringView path, size_t& index,
+                                             JsonPathNode& node) {
+    uint64_t sum = 0;
+    int sign = 1;
+
+    // check negative
+    if (index < path.size() && path[index] == '-') {
+      index++;
+      sign = -1;
+    }
+
+    // check leading zero
+    if (index < path.size() && path[index] == '0') {
+      index++;
+      goto end;
+    }
+
     while (index < path.size() && path[index] >= '0' && path[index] <= '9') {
-      sum = sum * 10 + (path[index] - '0');
+      auto last = sum * 10 + (path[index] - '0');
+      // check overflow
+      if (last < sum) {
+        return false;
+      }
+      sum = last;
       index++;
     }
-    node = JsonPathNode(sum);
+
+    // check overflow
+    if (sum > INT64_MAX) {
+      return false;
+    }
+
+  end:
+    // match ']'
+    if (index >= path.size() || path[index] != ']') {
+      return false;
+    }
+    index++;
+    node = JsonPathNode(int64_t(sum) * sign);
     return true;
   }
 
@@ -146,8 +181,9 @@ class JsonPath : public std::vector<JsonPathNode> {
   }
 
   // case as [abc]
-  sonic_force_inline bool parseBrackedUnquotedKey(StringView path, size_t& index,
-                                          JsonPathNode& node) {
+  sonic_force_inline bool parseBrackedUnquotedKey(StringView path,
+                                                  size_t& index,
+                                                  JsonPathNode& node) {
     size_t start = index;
     while (index < path.size() && path[index] != ']') {
       index++;
@@ -157,18 +193,6 @@ class JsonPath : public std::vector<JsonPathNode> {
     }
     node = JsonPathNode(path.substr(start, index - start));
     index++;
-    return true;
-  }
-
-  // case as [123]
-  sonic_force_inline bool parseBracktedIndex(StringView path, size_t& index,
-                                             JsonPathNode& node) {
-    if (!parseRawIndex(path, index, node)) {
-      return false;
-    }
-    if (path[index++] != ']') {
-      return false;
-    }
     return true;
   }
 
@@ -206,17 +230,11 @@ class JsonPath : public std::vector<JsonPathNode> {
 
         i++;
         if (path[i] == '*') {
-          has_wildcard_ = true;
           this->emplace_back(JsonPathNode(WILDCARD));
           i++;
           continue;
         }
-
-        if (path[i] >= '0' && path[i] <= '9') {
-          valid = parseRawIndex(path, i, node);
-        } else {
-          valid = parseUnquotedKey(path, i, node);
-        }
+        valid = parseUnquotedKey(path, i, node);
       } else if (path[i] == '[') {
         if (i + 1 >= path.size()) {
           return false;
@@ -225,7 +243,6 @@ class JsonPath : public std::vector<JsonPathNode> {
         i++;
         if (path[i] == '*') {
           if (i + 1 < path.size() && path[i + 1] == ']') {
-            has_wildcard_ = true;
             this->emplace_back(JsonPathNode(WILDCARD));
             i += 2;
             continue;
@@ -235,13 +252,9 @@ class JsonPath : public std::vector<JsonPathNode> {
 
         if (path[i] == '\'' || path[i] == '"') {
           valid = parseQuotedName(path, i, node);
-        } else if (path[i] >= '0' && path[i] <= '9') {
+        } else if ((path[i] >= '0' && path[i] <= '9') || path[i] == '-') {
           valid = parseBracktedIndex(path, i, node);
-        } else {
-          valid = false;
         }
-      } else {
-        valid = false;
       }
 
       if (!valid) {
@@ -253,11 +266,6 @@ class JsonPath : public std::vector<JsonPathNode> {
     }
     return true;
   }
-
-  bool HasWildcard() const noexcept { return has_wildcard_; }
-
- private:
-  bool has_wildcard_ = false;
 };
 
 }  // namespace internal

@@ -269,7 +269,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
     if (path[index].is_wildcard()) {
       if (!this->IsObject() && !this->IsArray()) {
-        return true;
+        return false;
       }
       DNode* n = (DNode*)getChildrenFirstUnsafe() + (this->IsObject() ? 1 : 0);
       size_t step = this->IsObject() ? 2 : 1;
@@ -296,11 +296,18 @@ class DNode : public GenericNode<DNode<Allocator>> {
       if (!this->IsArray()) {
         return false;
       }
-      size_t idx = path[index].index();
-      if (idx >= this->Size()) {
+
+      // index maybe negative
+      int64_t idx = path[index].index();
+      if (idx < 0) {
+        idx = this->Size() + idx;
+      }
+
+      if (idx >= int64_t(this->Size()) || idx < 0) {
         return false;
       }
-      return this->findValueImpl(idx).atJsonPathImpl(path, index + 1, res);
+      return this->findValueImpl(size_t(idx))
+          .atJsonPathImpl(path, index + 1, res);
     }
     return false;
   };

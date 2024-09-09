@@ -41,6 +41,7 @@ TEST(JsonPath, RootIdentifier) {
 
   // number
   TestOk("123  ", "$", "123");
+  TestOk("100000000.0", "$", "1.0E8");
 
   // string
   TestOk("\"123\"  ", "$", "123");
@@ -74,21 +75,24 @@ TEST(JsonPath, IndexSelector) {
         []
     ])";
 
-  TestOk(json, "$.0", "0");
   TestOk(json, "$[0]", "0");
+  TestOk(json, "$[-7]", "0");
   TestOk(json, "$[1]", "1.23");
-  TestOk(json, "$.1", "1.23");
-  TestOk(json, "$.2", "4.0E56");
-  TestOk(json, "$.3", "null");
-  TestOk(json, "$.4", "true");
-  TestOk(json, "$.5", "{}");
-  TestOk(json, "$.6", "[]");
+  TestOk(json, "$[1]", "1.23");
+  TestOk(json, "$[2]", "4.0E56");
+  TestOk(json, "$[3]", "null");
+  TestOk(json, "$[4]", "true");
+  TestOk(json, "$[5]", "{}");
+  TestOk(json, "$[6]", "[]");
+  TestOk(json, "$[-1]", "[]");
 
   TestOk("[1,2]", "$[1]", "2");
 
   TestFail(json, "$.a");
-  TestFail(json, "$.5.a");
-  TestFail(json, "$.6.0");
+  TestFail(json, "$[7]");
+  TestFail(json, "$[-8]");
+  TestFail(json, "$[5].a");
+  TestFail(json, "$[6][0]");
 }
 
 TEST(JsonPath, WildCard) {
@@ -100,14 +104,14 @@ TEST(JsonPath, WildCard) {
     ])";
 
   TestOk(json, "$.*", R"([0,[1,2,3],{"a":1,"b":[1,2,3]},[]])");
-  TestOk(json, "$.1.*", "[1,2,3]");
-  TestOk(json, "$.2.*", "[1,[1,2,3]]");
-  TestOk(json, "$.2.b.*", "[1,2,3]");
-  TestOk(json, "$.3.*", "[]");
-  TestOk(json, "$.0.*", "[]");
+  TestOk(json, "$[1].*", "[1,2,3]");
+  TestOk(json, "$[2].*", "[1,[1,2,3]]");
+  TestOk(json, "$[2].b.*", "[1,2,3]");
+  TestOk(json, "$[3].*", "null");
 
-  TestFail(json, "$.5.a");
-  TestFail(json, "$.6.0.*");
+  TestFail(json, "$[0].*");
+  TestFail(json, "$[5].a");
+  TestFail(json, "$[6][0].*");
 }
 
 TEST(JsonPath, WildCardMany) {
@@ -148,23 +152,23 @@ TEST(JsonPath, KeySelector) {
   TestOk(json, "$.a", "1");
   TestOk(json, "$.b", "2");
   TestOk(json, "$['b']", "2");
-//   TestOk(json, "$[b]", "2");
+  //   TestOk(json, "$[b]", "2");
   TestOk(json, "$[\"b\"]", "2");
   TestOk(json, "$.d", "{\"d1\":4,\"d2\":[0,1,{\"d21\":5},[true],[],[[null]]]}");
 
-  TestFail(json, "$.1");
+  TestFail(json, "$[1]");
   TestFail(json, "$.a.b");
-  TestFail(json, "$.a.1");
+  TestFail(json, "$.a[1]");
 
-  TestOk(json, "$.d.d2.0", "0");
-  TestOk(json, "$.d.d2.1", "1");
-  TestOk(json, "$.d.d2.2", "{\"d21\":5}");
-  TestOk(json, "$.d.d2.3", "[true]");
-  TestOk(json, "$.d.d2.3.0", "true");
-  TestOk(json, "$.d.d2.4", "[]");
-  TestOk(json, "$.d.d2.5.0.0", "null");
-  TestFail(json, "$.d.d2.4.a");
-  TestFail(json, "$.d.d2.5.0.0.0");
+  TestOk(json, "$.d.d2[0]", "0");
+  TestOk(json, "$.d.d2[1]", "1");
+  TestOk(json, "$.d.d2[2]", "{\"d21\":5}");
+  TestOk(json, "$.d.d2[3]", "[true]");
+  TestOk(json, "$.d.d2[3][0]", "true");
+  TestOk(json, "$.d.d2[4]", "[]");
+  TestOk(json, "$.d.d2[5][0][0]", "null");
+  TestFail(json, "$.d.d2[4].a");
+  TestFail(json, "$.d.d2[5][0][0][0]");
 }
 
 TEST(JsonPath, EscapedKeySelector) {
@@ -184,7 +188,7 @@ TEST(JsonPath, EscapedKeySelector) {
 }
 
 TEST(JSONPath, BadCases) {
-    auto json = R"({
+  auto json = R"({
     "a": {
       "b": {
         "c": "value1",
@@ -194,6 +198,19 @@ TEST(JSONPath, BadCases) {
     "e.f": "value3",
     "g.h.i": "value4"
   })";
-   TestOk(json, "$.a.b.c", "value1");
+  TestOk(json, "$.a.b.c", "value1");
+
+  TestOk(R"({"root": [{"a":null},{"a":"foo"},{"a":"bar"}]})", "$.root[*].a",
+         R"(["foo","bar"])");
+}
+
+TEST(JsonPath, InvalidJsonPath) {
+  auto json = R"({})";
+
+  TestFail(json, "$[01]");
+  TestFail(json, "$[-01]");
+  TestFail(json, "$[-0");
+  TestFail(json, "$[18446744073709551616]");
+  TestFail(json, "$[]");
 }
 }  // namespace

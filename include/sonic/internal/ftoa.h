@@ -1035,9 +1035,22 @@ sonic_static_noinline int F64toa(char* out, double fp) {
     /* fast path for integer */
     if (q <= 0 && q >= -F64_SIG_BITS && IsDivPow2(c, -q)) {
       uint64_t u = c >> -q;
+#if SONIC_UES_EXPONENT
+      uint64_t exp = 0;
+      while ((u % 10) == 0) {
+        u /= 10;
+        exp += 1;
+      }
+#endif
       p = U64toa(p, u);
       *p++ = '.';
       *p++ = '0';
+#if SONIC_UES_EXPONENT
+      if (exp != 0) {
+        *p++ = 'E';
+        p = U64toa(p, exp);
+      }
+#endif
       return p - out;
     }
 
@@ -1050,7 +1063,11 @@ sonic_static_noinline int F64toa(char* out, double fp) {
   int cnt = Ctz10(dec.sig);
   int dot = cnt + dec.exp;
   int sci_exp = dot - 1;
+#if SONIC_UES_EXPONENT
+  bool exp_fmt = sci_exp != 0;
+#else
   bool exp_fmt = sci_exp < -6 || sci_exp > 20;
+#endif
   bool has_dot = dot < cnt;
 
   if (exp_fmt) {

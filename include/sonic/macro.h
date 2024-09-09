@@ -80,6 +80,7 @@
 #define SONIC_EXPONENT_ALWAYS_DOT 1
 #define SONIC_EXPONENT_UPPERCASE 1
 #define SONIC_EXPONENT_ALWAYS_SIGN 0
+#define SONIC_UES_EXPONENT 1
 #endif
 
 #ifdef SONIC_DEFAULT_FORMAT
@@ -102,4 +103,9 @@
 #ifndef SONIC_EXPONENT_ALWAYS_SIGN
 // print exponent with sign, including '+', like 1.0E+2
 #define SONIC_EXPONENT_ALWAYS_SIGN 1
+#endif
+
+#ifndef SONIC_UES_EXPONENT
+// use exponent format for float point number
+#define SONIC_UES_EXPONENT 0
 #endif

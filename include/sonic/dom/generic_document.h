@@ -323,9 +323,18 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
     return std::make_tuple("", result.error);
   }
 
-  // check json path is wildcard
+  // filter the null nodes
+  result.nodes.erase(
+      std::remove_if(result.nodes.begin(), result.nodes.end(),
+                     [](const auto& node) { return node->IsNull(); }),
+      result.nodes.end());
+
+  if (result.nodes.empty()) {
+    return std::make_tuple("null", kErrorNone);
+  }
+
   WriteBuffer wb;
-  if (result.is_single) {
+  if (result.nodes.size() == 1) {
     // not serialize the single string
     auto& root = result.nodes[0];
     if (root->IsString()) {

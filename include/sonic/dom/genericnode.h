@@ -48,7 +48,6 @@ template <typename NodeType>
 struct JsonPathResult {
  public:
   std::vector<NodeType*> nodes;
-  bool is_single;
   SonicError error;
 };
 
@@ -733,7 +732,6 @@ class GenericNode {
       ret.nodes.clear();
     }
 
-    ret.is_single = !path.HasWildcard();
     return ret;
   }
 
