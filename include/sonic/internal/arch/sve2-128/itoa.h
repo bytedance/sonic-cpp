@@ -20,11 +20,11 @@
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace sve2_128 {
 
 using sonic_json::internal::arm_common::Utoa_16;
 using sonic_json::internal::arm_common::Utoa_8;
 
-}  // namespace neon
+}  // namespace sve2_128
 }  // namespace internal
 }  // namespace sonic_json

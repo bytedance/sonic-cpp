@@ -24,7 +24,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace neon {
+namespace sve2_128 {
 
 using sonic_json::internal::arm_common::GetNextToken;
 using sonic_json::internal::arm_common::skip_space_safe;
@@ -42,9 +42,12 @@ sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
 
   // current pos is out of block
   while (1) {
-    uint64_t nonspace = GetNonSpaceBits(data + pos);
-    if (nonspace) {
-      pos += TrailingZeroes(nonspace) >> 2;
+    const svbool_t pmatch = GetNonSpaceBits(data + pos);
+    const svbool_t ptrue = svptrue_b8();
+    if (svptest_any(ptrue, pmatch)) {
+      // nonspace = bit position of first non-space token
+      const uint64_t nonspace = svcntp_b8(ptrue, svbrkb_z(ptrue, pmatch));
+      pos += nonspace;
       return data[pos++];
     } else {
       pos += 16;
@@ -53,7 +56,7 @@ sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
   sonic_assert(false && "!should not happen");
 }
 
-}  // namespace neon
+}  // namespace sve2_128
 }  // namespace internal
 }  // namespace sonic_json
 

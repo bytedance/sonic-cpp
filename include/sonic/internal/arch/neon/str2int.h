@@ -16,22 +16,13 @@
 
 #pragma once
 
-#include <cstdint>
+#include "../common/arm_common/str2int.h"
 
 namespace sonic_json {
 namespace internal {
 namespace neon {
 
-sonic_force_inline uint64_t simd_str2int(const char* c, int& man_nd) {
-  uint64_t sum = 0;
-  int i = 0;
-  while (c[i] >= '0' && c[i] <= '9' && i < man_nd) {
-    sum = sum * 10 + (c[i] - '0');
-    i++;
-  }
-  man_nd = i;
-  return sum;
-}
+using sonic_json::internal::arm_common::simd_str2int;
 
 }  // namespace neon
 }  // namespace internal
