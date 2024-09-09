@@ -98,7 +98,6 @@ TEST(JsonPath, IndexSelector) {
   TestOk(json, "$[0]", "0");
   TestOk(json, "$[-7]", "0");
   TestOk(json, "$[1]", "1.23");
-  TestOk(json, "$[1]", "1.23");
   TestOk(json, "$[2]", "4.0E56");
   TestOk(json, "$[3]", "null");
   TestOk(json, "$[4]", "true");
