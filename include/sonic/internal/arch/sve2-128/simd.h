@@ -28,9 +28,6 @@ namespace internal {
 namespace sve2_128 {
 
 using sonic_json::internal::arm_common::to_bitmask;
-// These types are used for the on demand parser which is currently faster using neon comparisons instead of sve
-using sonic_json::internal::neon::simd8;
-using sonic_json::internal::neon::simd8x64;
 
 }  // namespace sve2_128
 }  // namespace internal

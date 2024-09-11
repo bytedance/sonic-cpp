@@ -18,10 +18,11 @@
 #error "Define vector length firstly!"
 #endif
 
+template <typename T>
 sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
                                           uint64_t &prev_instring,
                                           uint64_t &prev_escaped) {
-  const simd8x64<uint8_t> v(data);
+  const T v(data);
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
   if (bs_bits) {
@@ -121,7 +122,8 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 }
 
 // return true if container is closed.
-sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
+template <typename T>
+sonic_force_inline bool skip_container(const uint8_t *data, size_t &pos,
                                       size_t len, uint8_t left, uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
@@ -130,8 +132,8 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
     p = data + pos;
 #define SKIP_LOOP()                                                    \
   {                                                                    \
-    instring = GetStringBits(p, prev_instring, prev_escaped);          \
-    simd8x64<uint8_t> v(p);                                      \
+    instring = GetStringBits<T>(p, prev_instring, prev_escaped);       \
+    T v(p);                                                            \
     last_lbrace_num = lbrace_num;                                      \
     uint64_t rbrace = v.eq(right) & ~instring;                         \
     uint64_t lbrace = v.eq(left) & ~instring;                          \

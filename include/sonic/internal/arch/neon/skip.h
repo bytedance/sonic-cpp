@@ -32,6 +32,11 @@ using sonic_json::internal::common::SkipLiteral;
 
 #include "../common/arm_common/skip.inc.h"
 
+sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
+                                      size_t len, uint8_t left, uint8_t right) {
+    return skip_container<simd8x64<uint8_t>>(data, pos, len, left, right);
+}
+
 // TODO: optimize by removing bound checking.
 sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
                                       size_t &, uint64_t &) {
