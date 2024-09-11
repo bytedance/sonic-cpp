@@ -14,23 +14,27 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <sonic/dom/json_pointer.h>
-#include <sonic/error.h>
-#include <sonic/internal/utils.h>
-#include <sonic/macro.h>
-
-#include "../skip_common.h"
-#include "simd.h"
-
-namespace sonic_json {
-namespace internal {
-namespace arm_common {
-
 #ifndef VEC_LEN
 #error "Define vector length firstly!"
 #endif
+
+sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
+                                          uint64_t &prev_instring,
+                                          uint64_t &prev_escaped) {
+  const simd8x64<uint8_t> v(data);
+  uint64_t escaped = 0;
+  uint64_t bs_bits = v.eq('\\');
+  if (bs_bits) {
+    escaped = common::GetEscaped<64>(prev_escaped, bs_bits);
+  } else {
+    escaped = prev_escaped;
+    prev_escaped = 0;
+  }
+  uint64_t quote_bits = v.eq('"') & ~escaped;
+  uint64_t in_string = PrefixXor(quote_bits) ^ prev_instring;
+  prev_instring = uint64_t(static_cast<int64_t>(in_string) >> 63);
+  return in_string;
+}
 
 // GetNextToken find the next characters in tokens and update the position to
 // it.
@@ -119,59 +123,40 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 // return true if container is closed.
 sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
                                       size_t len, uint8_t left, uint8_t right) {
-  int rbrace_num = 0, lbrace_num = 0, last_lbrace_num = 0;
-  while (pos + VEC_LEN <= len) {
-    const uint8_t *p = data + pos;
-    last_lbrace_num = lbrace_num;
-
-    uint8x16_t v = vld1q_u8(p);
-    uint64_t quote_bits = to_bitmask(vceqq_u8(v, vdupq_n_u8('"')));
-    uint64_t not_in_str_mask = 0xFFFFFFFFFFFFFFFF;
-    int quote_idx = VEC_LEN;
-    if (quote_bits) {
-      quote_idx = TrailingZeroes(quote_bits);
-      not_in_str_mask =
-          quote_idx == 0 ? 0 : not_in_str_mask >> (64 - quote_idx);
-      quote_idx = (quote_idx >> 2) + 1;  // point to next char after '"'
-    }
-    uint64_t to_one_mask = 0x8888888888888888ull;
-    uint64_t rbrace = to_bitmask(vceqq_u8(v, vdupq_n_u8(right))) & to_one_mask &
-                      not_in_str_mask;
-    uint64_t lbrace = to_bitmask(vceqq_u8(v, vdupq_n_u8(left))) & to_one_mask &
-                      not_in_str_mask;
-
-    /* traverse each `right` */
-    while (rbrace > 0) {
-      rbrace_num++;
-      lbrace_num = last_lbrace_num + CountOnes((rbrace - 1) & lbrace);
-      if (lbrace_num < rbrace_num) { /* closed */
-        pos += (TrailingZeroes(rbrace) >> 2) + 1;
-        return true;
-      }
-      rbrace &= (rbrace - 1);
-    }
-    lbrace_num = last_lbrace_num + CountOnes(lbrace);
-    pos += quote_idx;
-    if (quote_bits) {
-      SkipString(data, pos, len);
-    }
+  uint64_t prev_instring = 0, prev_escaped = 0, instring;
+  int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
+  const uint8_t *p;
+  while (pos + 64 <= len) {
+    p = data + pos;
+#define SKIP_LOOP()                                                    \
+  {                                                                    \
+    instring = GetStringBits(p, prev_instring, prev_escaped);          \
+    simd8x64<uint8_t> v(p);                                      \
+    last_lbrace_num = lbrace_num;                                      \
+    uint64_t rbrace = v.eq(right) & ~instring;                         \
+    uint64_t lbrace = v.eq(left) & ~instring;                          \
+    /* traverse each '}' */                                            \
+    while (rbrace > 0) {                                               \
+      rbrace_num++;                                                    \
+      lbrace_num = last_lbrace_num + CountOnes((rbrace - 1) & lbrace); \
+      bool is_closed = lbrace_num < rbrace_num;                        \
+      if (is_closed) {                                                 \
+        sonic_assert(rbrace_num == lbrace_num + 1);                    \
+        pos += TrailingZeroes(rbrace) + 1;                             \
+        return true;                                                   \
+      }                                                                \
+      rbrace &= (rbrace - 1);                                          \
+    }                                                                  \
+    lbrace_num = last_lbrace_num + CountOnes(lbrace);                  \
   }
-
-  while (pos < len) {
-    uint8_t c = data[pos++];
-    if (c == left) {
-      lbrace_num++;
-    } else if (c == right) {
-      rbrace_num++;
-    } else if (c == '"') {
-      SkipString(data, pos, len);
-    } /* else { do nothing } */
-
-    if (lbrace_num < rbrace_num) { /* closed */
-      return true;
-    }
+    SKIP_LOOP();
+    pos += 64;
   }
-  /* attach the end of string, but not closed */
+  uint8_t buf[64] = {0};
+  std::memcpy(buf, data + pos, len - pos);
+  p = buf;
+  SKIP_LOOP();
+#undef SKIP_LOOP
   return false;
 }
 
@@ -182,7 +167,3 @@ sonic_force_inline uint8_t skip_space_safe(const uint8_t *data, size_t &pos,
   // if not found, still return the space chars
   return data[pos - 1];
 }
-
-}  // namespace arm_common
-}  // namespace internal
-}  // namespace sonic_json
