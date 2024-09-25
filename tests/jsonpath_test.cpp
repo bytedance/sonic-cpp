@@ -71,8 +71,7 @@ TEST(JsonPath, RootIdentifier) {
   // container
   TestOk(" [] ", "$", "[]");
   TestOk(" [\"😊\"] ", "$", "[\"\\uD83D\\uDE0A\"]");
-  TestOk(" {\"a\":  \"😊💎\"} ", "$",
-         "{\"a\":\"\\uD83D\\uDE0A\\uD83D\\uDC8E\"}");
+  TestOk(" {\"a\":  \"😊💎\"} ", "$", "{\"a\":\"\\uD83D\\uDE0A\\uD83D\\uDC8E\"}");
   TestOk(" {} ", "$", "{}");
   TestOk(R"( {"a":null} )", "$", R"({"a":null})");
   TestOk(R"( [[], {}, []] )", "$", R"([[],{},[]])");

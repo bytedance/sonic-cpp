@@ -30,7 +30,7 @@ __attribute__((target("default"))) inline size_t parseStringInplace(
 }
 
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
-                                                      char *) {
+                                                      char *, bool) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
@@ -42,8 +42,9 @@ __attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
 
 __attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
                                                            size_t nb,
-                                                           char *dst) {
-  return sse::Quote(src, nb, dst);
+                                                           char *dst,
+                                                           bool escape_emoji) {
+  return sse::Quote(src, nb, dst, escape_emoji);
 }
 
 __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
@@ -53,8 +54,9 @@ __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
 
 __attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
                                                           size_t nb,
-                                                          char *dst) {
-  return avx2::Quote(src, nb, dst);
+                                                          char *dst,
+                                                          bool escape_emoji) {
+  return avx2::Quote(src, nb, dst, escape_emoji);
 }
 
 }  // namespace internal
