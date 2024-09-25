@@ -16,9 +16,9 @@
 
 #define SONIC_SPARK_FORMAT
 
-#include "sonic/sonic.h"
-
 #include <gtest/gtest.h>
+
+#include "sonic/sonic.h"
 
 namespace {
 
@@ -33,6 +33,26 @@ void TestOk(const std::string json, const std::string path,
 void TestFail(const std::string json, const std::string path) {
   ASSERT_NE(std::get<1>(GetByJsonPath(json, path)), kErrorNone)
       << "json: " << json << ", path: " << path;
+}
+
+void ValidBatchOK(const std::string json,
+                  const std::vector<std::string>& paths) {
+  std::vector<StringView> jsonpaths;
+  for (const auto& path : paths) {
+    jsonpaths.emplace_back(path);
+  }
+  auto batch = GetByJsonPaths(json, jsonpaths);
+
+  ASSERT_EQ(std::get<1>(batch), kErrorNone)
+      << "json: " << json << ", parese failed.";
+  auto results = std::get<0>(batch);
+  for (size_t i = 0; i < paths.size(); ++i) {
+    auto result = GetByJsonPath(json, paths[i]);
+    ASSERT_EQ(std::get<0>(results[i]), std::get<0>(result))
+        << "json: " << json << ", path: " << paths[i];
+    ASSERT_EQ(std::get<1>(results[i]), std::get<1>(result))
+        << "json: " << json << ", path: " << paths[i];
+  }
 }
 
 TEST(JsonPath, RootIdentifier) {
@@ -51,7 +71,8 @@ TEST(JsonPath, RootIdentifier) {
   // container
   TestOk(" [] ", "$", "[]");
   TestOk(" [\"😊\"] ", "$", "[\"\\uD83D\\uDE0A\"]");
-  TestOk(" {\"a\":  \"😊💎\"} ", "$", "{\"a\":\"\\uD83D\\uDE0A\\uD83D\\uDC8E\"}");
+  TestOk(" {\"a\":  \"😊💎\"} ", "$",
+         "{\"a\":\"\\uD83D\\uDE0A\\uD83D\\uDC8E\"}");
   TestOk(" {} ", "$", "{}");
   TestOk(R"( {"a":null} )", "$", R"({"a":null})");
   TestOk(R"( [[], {}, []] )", "$", R"([[],{},[]])");
@@ -112,6 +133,32 @@ TEST(JsonPath, WildCard) {
   TestFail(json, "$[0].*");
   TestFail(json, "$[5].a");
   TestFail(json, "$[6][0].*");
+}
+
+TEST(JsonPath, WildCardBatch) {
+  auto json = R"([
+        0,
+        [1,2,3],
+        {"a":1,"b":[1,2,3]},
+        []
+    ])";
+  std::vector<std::string> paths = {"$.*",    "$[1].*", "$[2].*", "$[2].b.*",
+                                    "$[3].*", "$[0].*", "$[5].a", "$[6][0].*"};
+  ValidBatchOK(json, paths);
+}
+
+TEST(JsonPath, BadBatch) {
+  auto json = R"([
+        0,
+        [1,2,3],
+        {"a":1,"b":[1,2,3]},
+        [] bad balaba)";
+  std::vector<std::string> paths = {"$.*", "$[1].*", "$[2].*", "$[2].b.*"};
+  std::vector<StringView> jsonpaths;
+  for (const auto& path : paths) {
+    jsonpaths.emplace_back(path);
+  }
+  ASSERT_NE(std::get<1>(GetByJsonPaths(json, jsonpaths)), kErrorNone);
 }
 
 TEST(JsonPath, WildCardMany) {

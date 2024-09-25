@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/dom/parser.h"
@@ -308,15 +310,8 @@ class GenericDocument : public NodeType {
 
 using Document = GenericDocument<DNode<SONIC_DEFAULT_ALLOCATOR>>;
 
-sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
-    StringView json, StringView jsonpath) {
-  // parse json into dom
-  Document dom;
-  dom.Parse(json);
-  if (dom.HasParseError()) {
-    return std::make_tuple("", dom.GetParseError());
-  }
-
+sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathInternal(
+    Document& dom, StringView jsonpath) {
   // get the nodes
   auto result = dom.AtJsonPath(jsonpath);
   if (result.error != kErrorNone) {
@@ -361,6 +356,36 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
     wb.Push(']');
   }
   return std::make_tuple(wb.ToString(), kErrorNone);
+}
+
+sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
+    StringView json, StringView jsonpath) {
+  // parse json into dom
+  Document dom;
+  dom.Parse(json);
+  if (dom.HasParseError()) {
+    return std::make_tuple("", dom.GetParseError());
+  }
+  return GetByJsonPathInternal(dom, jsonpath);
+}
+
+
+sonic_force_inline
+    std::tuple<std::vector<std::tuple<std::string, SonicError>>, SonicError>
+    GetByJsonPaths(StringView json, std::vector<StringView> jsonpaths) {
+  // parse json into dom
+  Document dom;
+  dom.Parse(json);
+  if (dom.HasParseError()) {
+    return std::make_tuple(std::vector<std::tuple<std::string, SonicError>>(),
+                           dom.GetParseError());
+  }
+  std::vector<std::tuple<std::string, SonicError>> results;
+
+  for (const auto& jsonpath : jsonpaths) {
+    results.emplace_back(GetByJsonPathInternal(dom, jsonpath));
+  }
+  return std::make_tuple(results, kErrorNone);
 }
 
 }  // namespace sonic_json
