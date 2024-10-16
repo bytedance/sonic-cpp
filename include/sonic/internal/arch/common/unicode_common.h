@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include "sonic/internal/arch/common/quote_tables.h"
+
 namespace sonic_json {
 namespace internal {
 namespace common {

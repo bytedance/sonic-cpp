@@ -55,6 +55,7 @@ enum SonicError {
                               ///< terminate parsing.
   kUnsupportedJsonPath = 17,  ///< JsonPath: Unsupported json path.
   kNotFoundByJsonPath = 18,   ///< JsonPath: Not found the target by json path.
+  kUnmatchedTypeInJsonPath = 19, ///< JsonPath: The type of node is not matched.
   kErrorNums,
 };
 

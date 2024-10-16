@@ -23,7 +23,7 @@
 
 #include "sonic/dom/handler.h"
 #include "sonic/dom/json_pointer.h"
-#include "sonic/dom/jsonpath.h"
+#include "sonic/jsonpath/jsonpath.h"
 #include "sonic/dom/schema_handler.h"
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
@@ -46,7 +46,6 @@ struct NodeTraits;
 
 template <typename NodeType>
 struct JsonPathResult {
- public:
   std::vector<NodeType*> nodes;
   SonicError error;
 };

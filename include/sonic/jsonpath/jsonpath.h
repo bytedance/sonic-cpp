@@ -2,7 +2,8 @@
 
 #pragma once
 
-#include "sonic/dom/parser.h"
+#include "sonic/string_view.h"
+#include "sonic/internal/arch/common/unicode_common.h"
 
 #include <cinttypes>
 #include <cstdint>
@@ -10,7 +11,6 @@
 #include <stack>
 #include <vector>
 
-#include "sonic/string_view.h"
 
 namespace sonic_json {
 

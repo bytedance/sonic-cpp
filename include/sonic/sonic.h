@@ -18,6 +18,8 @@
 
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/generic_document.h"
+#include "sonic/jsonpath/dom.h"
+#include "sonic/jsonpath/ondemand.h"
 
 #define SONIC_MAJOR_VERSION 1
 #define SONIC_MINOR_VERSION 0
