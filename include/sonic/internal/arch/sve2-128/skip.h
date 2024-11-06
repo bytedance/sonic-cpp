@@ -18,12 +18,12 @@
 
 #define VEC_LEN 16
 
-#include <sonic/internal/utils.h>
 #include <sonic/internal/arch/common/skip_common.h>
+#include <sonic/internal/utils.h>
 
+#include "../neon/simd.h"
 #include "base.h"
 #include "simd.h"
-#include "../neon/simd.h"
 
 namespace sonic_json {
 namespace internal {
@@ -36,8 +36,10 @@ using sonic_json::internal::common::SkipLiteral;
 
 sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
                                       size_t len, uint8_t left, uint8_t right) {
-    // We use neon for the on demand parser since it is currently faster for comparisons than sve
-    return skip_container<sonic_json::internal::neon::simd8x64<uint8_t>>(data, pos, len, left, right);
+  // We use neon for the on demand parser since it is currently faster for
+  // comparisons than sve
+  return skip_container<sonic_json::internal::neon::simd8x64<uint8_t>>(
+      data, pos, len, left, right);
 }
 
 // TODO: optimize by removing bound checking.

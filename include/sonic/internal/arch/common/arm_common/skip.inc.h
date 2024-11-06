@@ -124,7 +124,8 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 // return true if container is closed.
 template <typename T>
 sonic_force_inline bool skip_container(const uint8_t *data, size_t &pos,
-                                      size_t len, uint8_t left, uint8_t right) {
+                                       size_t len, uint8_t left,
+                                       uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
   const uint8_t *p;
