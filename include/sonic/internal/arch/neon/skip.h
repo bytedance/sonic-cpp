@@ -18,7 +18,9 @@
 
 #define VEC_LEN 16
 
-#include "../common/arm_common/skip.h"
+#include <sonic/internal/arch/common/skip_common.h>
+#include <sonic/internal/utils.h>
+
 #include "base.h"
 #include "simd.h"
 
@@ -26,12 +28,15 @@ namespace sonic_json {
 namespace internal {
 namespace neon {
 
-using sonic_json::internal::arm_common::GetNextToken;
-using sonic_json::internal::arm_common::skip_space_safe;
-using sonic_json::internal::arm_common::SkipContainer;
-using sonic_json::internal::arm_common::SkipString;
 using sonic_json::internal::common::EqBytes4;
 using sonic_json::internal::common::SkipLiteral;
+
+#include "../common/arm_common/skip.inc.h"
+
+sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
+                                      size_t len, uint8_t left, uint8_t right) {
+  return skip_container<simd8x64<uint8_t>>(data, pos, len, left, right);
+}
 
 // TODO: optimize by removing bound checking.
 sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
