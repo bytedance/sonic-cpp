@@ -1064,7 +1064,7 @@ class GenericNode {
     return std::numeric_limits<int64_t>::max();
   }
   sonic_force_inline uint64_t getUintMax() const {
-    return std::numeric_limits<uint>::max();
+    return std::numeric_limits<unsigned int>::max();
   }
 
  private:
