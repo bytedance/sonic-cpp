@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "gtest/gtest.h"
 #include "sonic/dom/generic_document.h"
