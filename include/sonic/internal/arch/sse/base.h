@@ -94,6 +94,15 @@ sonic_force_inline void Xmemcpy<32>(void* dst_, const void* src_,
   Xmemcpy<16>(dst_, src_, chunks * 2);
 }
 
+sonic_force_inline bool InlinedMemcmpEq(const void* _a, const void* _b,
+                                        size_t s) {
+  return std::memcmp(_a, _b, s) == 0;
+}
+
+sonic_force_inline int InlinedMemcmp(const void* _l, const void* _r, size_t s) {
+  return std::memcmp(_l, _r, s);
+}
+
 }  // namespace sse
 }  // namespace internal
 }  // namespace sonic_json

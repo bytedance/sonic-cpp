@@ -25,6 +25,8 @@ namespace neon {
 
 using sonic_json::internal::arm_common::ClearLowestBit;
 using sonic_json::internal::arm_common::CountOnes;
+using sonic_json::internal::arm_common::InlinedMemcmp;
+using sonic_json::internal::arm_common::InlinedMemcmpEq;
 using sonic_json::internal::arm_common::LeadingZeroes;
 using sonic_json::internal::arm_common::PrefixXor;
 using sonic_json::internal::arm_common::TrailingZeroes;
