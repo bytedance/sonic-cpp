@@ -13,18 +13,16 @@ jobs:
 
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup bazel
-        uses: jwlawson/actions-setup-bazel@v1
+        uses: jwlawson/actions-setup-bazel@v2
         with:
           bazel-version: "latest"
 
       - name: Setup GCC
-        uses: Dup4/actions-setup-gcc@v1
-        with:
-          version: ${{ env.GCC_VERSION }}
-
+        run: |
+          sudo apt-get install -y gcc-12 g++-12
       - name: Install lcov
         run: |
           sudo apt install lcov
@@ -35,7 +33,7 @@ jobs:
           genhtml --output bazel-coverage-html ./coverage.dat
 
       - name: upload coverage artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: |
@@ -43,7 +41,7 @@ jobs:
             coverage.dat
 
       - name: Upload coverage to CodeCov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: coverage.dat
           verbose: true

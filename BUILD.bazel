@@ -122,7 +122,7 @@ cc_test(
     ]),
     deps = [
         ":string_view",
-        "@gtest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = [ '-lstdc++fs', '-fstack-protector-all',] +\
@@ -155,14 +155,13 @@ cc_test(
 cc_test(
     name = "unittest-clang",
     srcs = glob([
-            "tests/*.h",
             "tests/*.cpp",
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
     deps = [
         ":string_view",
-        "@gtest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
@@ -179,14 +178,13 @@ cc_test(
 cc_test(
     name = "unittest-arm",
     srcs = glob([
-            "tests/*.h",
             "tests/*.cpp",
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
     deps = [ 
         ":string_view",
-        "@gtest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
@@ -203,14 +201,13 @@ cc_test(
 cc_test(
     name = "unittest-sse",
     srcs = glob([
-            "tests/*.h",
             "tests/*.cpp",
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
     deps = [ 
         ":string_view",
-        "@gtest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
     linkopts = sanitize_copts + [
@@ -229,11 +226,10 @@ cc_test(
     name = "unittest-gcc-coverage",
     srcs = glob([
         "tests/*.cpp",
-        "tests/*.h",
     ]),
     deps = [
         ":sonic-cpp",
-        "@gtest//:gtest_main",
+        "@googletest//:gtest_main",
     ],
     data = glob([
         "testdata/*.json",
