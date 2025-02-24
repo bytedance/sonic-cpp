@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        llvm_version: ['11', '13.0.0', '15']
+        llvm_version: ['11', '16.0.4', '17']
         tool: ['cmake', 'bazel']
         arch: [westmere, haswell]
         exclude:
@@ -18,16 +18,16 @@ jobs:
       CXX: clang++
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ matrix.llvm_version }}
 
       - name: Setup bazel
         if: matrix.tool == 'bazel'
-        uses: jwlawson/actions-setup-bazel@v1
+        uses: jwlawson/actions-setup-bazel@v2
         with:
           bazel-version: "latest"
 
@@ -70,7 +70,7 @@ jobs:
       CXX: g++-${{ matrix.gcc_version}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install GCC
         run: |
@@ -78,7 +78,7 @@ jobs:
 
       - name: Setup bazel
         if: matrix.tool == 'bazel'
-        uses: jwlawson/actions-setup-bazel@v1
+        uses: jwlawson/actions-setup-bazel@v2
         with:
           bazel-version: "latest"
 
