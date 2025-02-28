@@ -70,7 +70,8 @@ class SonicParseResult : public ParseResult<SonicParseResult<NodeType>,
     switch (v.GetType()) {
       case sonic_json::kObject:
         for (auto m = v.MemberBegin(); m != v.MemberEnd(); ++m) {
-          auto re = v.FindMember(m->name.GetStringView());
+          auto name_sv = m->name.GetStringView();
+          auto re = v.FindMember(name_sv.data(), name_sv.size());
           if (re != v.MemberEnd()) {
             stat.members++;
             find_value(re->value, stat);

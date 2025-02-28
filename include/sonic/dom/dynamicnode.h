@@ -232,6 +232,39 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   using BaseNode::operator[];
   using BaseNode::FindMember;
+
+  /**
+   * @brief Find a specific member in an object. A member is a pair node of key
+   * and name.
+   * @param key target name pointer
+   * @param len target name length
+   * @retval MemberEnd() not found
+   * @retval others iterator for found member
+   * @note If target name is a literal string, string_view can be optimized by
+   * compiler. This function will provide a better memcmp implemention than
+   * std::memcmp while length is not too large.
+   */
+  sonic_force_inline MemberIterator FindMember(const char* key,
+                                               size_t len) noexcept {
+    return findMemberImpl(key, len);
+  }
+
+  /**
+   * @brief Find a specific member in an object. A member is a pair node of key
+   * and name.
+   * @param key target name pointer
+   * @param len target name length
+   * @retval MemberEnd() not found
+   * @retval others iterator for found member
+   * @note If target name is a literal string, string_view can be optimized by
+   * compiler. This function will provide a better memcmp implemention than
+   * std::memcmp while length is not too large.
+   */
+  sonic_force_inline ConstMemberIterator FindMember(const char* key,
+                                                    size_t len) const noexcept {
+    return findMemberImpl(key, len);
+  }
+
   using BaseNode::HasMember;
 
   /**
@@ -301,7 +334,19 @@ class DNode : public GenericNode<DNode<Allocator>> {
  private:
   using MSType = StringView;
   using MAType = MapAllocator<std::pair<const MSType, size_t>, Allocator>;
+#if defined(SONIC_STATIC_DISPATCH)
+  struct Less {
+    bool operator()(MSType s1, MSType s2) const {
+      size_t n1 = s1.size(), n2 = s2.size();
+      const size_t len = std::min(n1, n2);
+      int cmp = internal::InlinedMemcmp(s1.data(), s2.data(), len);
+      return cmp < 0 || (cmp == 0 && n1 < n2);
+    }
+  };
+  using map_type = std::multimap<MSType, size_t, Less, MAType>;
+#else
   using map_type = std::multimap<MSType, size_t, std::less<MSType>, MAType>;
+#endif
 
   struct MetaNode {
     size_t cap;
@@ -565,13 +610,17 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return ((MetaNode*)(this->o.next.children))->map;
   }
 
+  sonic_force_inline MemberIterator findFromMap(StringView key) const {
+    auto it = getMap()->find(MSType(key.data(), key.size()));
+    if (it != getMap()->end()) {
+      return memberBeginUnsafe() + it->second;
+    }
+    return memberEndUnsafe();
+  }
+
   sonic_force_inline MemberIterator findMemberImpl(StringView key) const {
     if (nullptr != getMap()) {
-      auto it = getMap()->find(MSType(key.data(), key.size()));
-      if (it != getMap()->end()) {
-        return memberBeginUnsafe() + it->second;
-      }
-      return memberEndUnsafe();
+      return findFromMap(key);
     }
     auto it = this->MemberBegin();
     for (auto e = this->MemberEnd(); it != e; ++it) {
@@ -580,6 +629,30 @@ class DNode : public GenericNode<DNode<Allocator>> {
       }
     }
     return const_cast<MemberIterator>(it);
+  }
+
+  sonic_force_inline MemberIterator findMemberImpl(const char* key,
+                                                   size_t len) const {
+    /**************************************************
+     * Only calling internal memcmp when static dispatch.
+     * Dynamic dispatch will have indirect call.
+     **************************************************/
+#if defined(SONIC_STATIC_DISPATCH)
+    if (nullptr != getMap()) {
+      return findFromMap(StringView(key, len));
+    }
+    auto it = this->MemberBegin();
+    for (auto e = this->MemberEnd(); it != e; ++it) {
+      auto name_sv = it->name.GetStringView();
+      if (name_sv.size() == len &&
+          internal::InlinedMemcmpEq(name_sv.data(), key, len)) {
+        break;
+      }
+    }
+    return const_cast<MemberIterator>(it);
+#else
+    return findMemberImpl(StringView(key, len));
+#endif
   }
 
   sonic_force_inline DNode& findValueImpl(StringView key) const noexcept {
