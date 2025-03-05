@@ -42,4 +42,4 @@ TEST(Errors, Serialze) {
   EXPECT_EQ(err, kSerErrorInfinity);
   std::cout << ErrorMsg(err) << std::endl;
 }
-};  // namespace
+}  // namespace

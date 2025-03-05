@@ -283,7 +283,7 @@ class GenericNode {
     return (GetType() == kSint) ||
            (GetType() == kUint &&
             n.u64 <= static_cast<uint64_t>(getInt64Max()));
-  };
+  }
   /**
    * @brief  Check this node is in the range of uint64.
    * @return true if it is uint64.

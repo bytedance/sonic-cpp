@@ -26,7 +26,7 @@ namespace internal {
 
 class Stack {
  public:
-  Stack(size_t cap = defaultCapcity()) : cap_(cap) { Reserve(cap); };
+  Stack(size_t cap = defaultCapcity()) : cap_(cap) { Reserve(cap); }
   Stack(const Stack&) = delete;
   Stack(Stack&& rhs) : buf_(rhs.buf_), top_(rhs.top_), cap_(rhs.cap_) {
     rhs.setZero();

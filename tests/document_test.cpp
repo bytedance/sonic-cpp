@@ -392,7 +392,7 @@ TYPED_TEST(DocumentTest, ParseOnDemandFile) {
   static SimpleAllocator alloc_g;
   struct NodeWrapper {
     NodeWrapper() = default;
-    NodeWrapper(CNode&& node) : node(std::move(node)){};
+    NodeWrapper(CNode&& node) : node(std::move(node)) {}
     NodeWrapper(const NodeWrapper& rhs) : node(CNode(rhs.node, alloc_g)) {}
     NodeWrapper(NodeWrapper&&) = default;
     ~NodeWrapper() = default;

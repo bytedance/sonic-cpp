@@ -871,7 +871,8 @@ static sonic_force_inline char* FormatDecimal(F64Decimal v, char* out,
   /* print leading zeros if fp < 1 */
   if (point <= 0) {
     size_t nzeros = -point;
-    *p++ = '0', *p++ = '.';
+    *p++ = '0';
+    *p++ = '.';
     std::memset(p, '0', nzeros);
     p += nzeros;
   }

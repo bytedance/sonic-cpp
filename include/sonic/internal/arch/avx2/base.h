@@ -117,7 +117,8 @@ sonic_force_inline void Xmemcpy<32>(void* dst_, const void* src_,
     for (size_t j = 0; j < 4; j++) {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
   }
   // has remained 1, 2, 3 * 32-bytes
@@ -125,13 +126,15 @@ sonic_force_inline void Xmemcpy<32>(void* dst_, const void* src_,
     case 3: {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
     /* fall through */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
     /* fall through */
     case 1: {
@@ -151,7 +154,8 @@ sonic_force_inline void Xmemcpy<16>(void* dst_, const void* src_,
     for (size_t j = 0; j < 4; j++) {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
   }
   // has remained 1, 2, 3 * 32-bytes
@@ -159,19 +163,22 @@ sonic_force_inline void Xmemcpy<16>(void* dst_, const void* src_,
     case 3: {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
     /* fall through */
     case 2: {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
     /* fall through */
     case 1: {
       simd256<uint8_t> s(src);
       s.store(dst);
-      src += 32, dst += 32;
+      src += 32;
+      dst += 32;
     }
   }
   // has remained 16 bytes

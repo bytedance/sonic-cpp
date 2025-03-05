@@ -24,8 +24,8 @@ namespace sonic_json {
 
 class WriteBuffer {
  public:
-  WriteBuffer() : stack_(){};
-  WriteBuffer(size_t cap) : stack_(cap){};
+  WriteBuffer() : stack_() {}
+  WriteBuffer(size_t cap) : stack_(cap) {}
   WriteBuffer(const WriteBuffer&) = delete;
   WriteBuffer(WriteBuffer&& rhs) : stack_(std::move(rhs.stack_)) {}
   ~WriteBuffer() = default;

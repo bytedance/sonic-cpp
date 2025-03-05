@@ -80,7 +80,7 @@ class SAXHandler {
       cap_ = cap;
     }
     return true;
-  };
+  }
 
   sonic_force_inline void TearDown() {
     if (st_ == nullptr) return;
@@ -89,12 +89,12 @@ class SAXHandler {
     }
     std::free(st_);
     st_ = nullptr;
-  };
+  }
 
 #define SONIC_ADD_NODE()       \
-  {                            \
+  do {                         \
     if (!node()) return false; \
-  }
+  } while (0)
 
   sonic_force_inline bool Null() noexcept {
     SONIC_ADD_NODE();

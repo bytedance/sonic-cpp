@@ -86,7 +86,7 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kParseErrorUnexpect, "Unexpected Errors"},
   };
   return kErrorMsg[error].msg;
-};
+}
 
 struct ParseResult {
  public:

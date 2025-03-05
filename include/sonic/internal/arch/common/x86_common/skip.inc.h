@@ -112,7 +112,7 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
     if (data[pos++] == '"') {
       return found ? kEscaped : kNormal;
     }
-  };
+  }
   return kUnclosed;
 }
 
@@ -125,7 +125,7 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
   while (pos + 64 <= len) {
     p = data + pos;
 #define SKIP_LOOP()                                                    \
-  {                                                                    \
+  do {                                                                 \
     instring = GetStringBits(p, prev_instring, prev_escaped);          \
     simd::simd8x64<uint8_t> v(p);                                      \
     last_lbrace_num = lbrace_num;                                      \
@@ -144,7 +144,7 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
       rbrace &= (rbrace - 1);                                          \
     }                                                                  \
     lbrace_num = last_lbrace_num + CountOnes(lbrace);                  \
-  }
+  } while (0)
     SKIP_LOOP();
     pos += 64;
   }

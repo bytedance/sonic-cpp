@@ -43,7 +43,7 @@
 #define sonic_assert(x) (void)(x)
 #else
 #include <cassert>
-#define sonic_assert(x) assert((x));
+#define sonic_assert(x) assert((x))
 #endif
 
 #if __cplusplus >= 201703L
