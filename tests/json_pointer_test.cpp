@@ -54,8 +54,10 @@ TYPED_TEST(JsonPointerTest, NodeConstructor) {
   }
 
   // number
-#define TEST_INIT_TYPE(type) \
-  { JPNodeType node((type)(0)); }
+#define TEST_INIT_TYPE(type)    \
+  do {                          \
+    JPNodeType node((type)(0)); \
+  } while (0)
   TEST_INIT_TYPE(int);
   TEST_INIT_TYPE(unsigned int);
   TEST_INIT_TYPE(int64_t);

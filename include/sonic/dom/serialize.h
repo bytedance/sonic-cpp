@@ -105,7 +105,7 @@ val_begin:
       wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(',');
       break;
-    };
+    }
     case kBool: {
       wb.Push5_8(node->IsFalse() ? "false,  " : "true,   ",
                  5 + node->IsFalse());
@@ -153,7 +153,7 @@ val_begin:
     }
     default:
       goto type_err;
-  };
+  }
   val_cnt--;
   if (sonic_likely(val_cnt != 0)) {
     node = node->next();

@@ -53,11 +53,11 @@
 // #define VEC_FULL_MASK 0xFFFFFFFF
 
 #define MOVE_N_CHARS(src, N) \
-  {                          \
+  do {                       \
     (src) += (N);            \
     nb -= (N);               \
     dst += (N);              \
-  }
+  } while (0)
 
 using common::handle_unicode_codepoint;
 
@@ -123,7 +123,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
       // we encountered quotes first. Move dst to point to quotes and exit
       while (1) {
         SONIC_REPEAT8(if (sonic_unlikely(*src == '"')) break;
-                      else { *dst++ = *src++; });
+                      else { *dst++ = *src++; })  // ;
       }
       *dst = '\0';
       src++;
@@ -143,7 +143,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
     }
     while (1) {
       SONIC_REPEAT8(if (sonic_unlikely(*src == '\\')) break;
-                    else { *dst++ = *src++; });
+                    else { *dst++ = *src++; })  // ;
     }
     goto cont;
   }

@@ -43,13 +43,13 @@ sonic_force_inline bool SkipLiteral(const uint8_t *data, size_t &pos,
       if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
         pos += 3;
         return true;
-      };
+      }
       break;
     case 'n':
       if (start + 4 <= end && EqBytes4(start, kNullBin)) {
         pos += 3;
         return true;
-      };
+      }
       break;
     case 'f':
       if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {

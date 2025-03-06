@@ -219,35 +219,41 @@ class Parser {
   template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
 #define FLOATING_LONGEST_DIGITS 17
+
 #define RETURN_SET_ERROR_CODE(error_code) \
-  {                                       \
+  do {                                    \
     pos_ = i;                             \
     err_ = error_code;                    \
     return true;                          \
-  }
-#define CHECK_DIGIT()                              \
-  if (sonic_unlikely(s[i] < '0' || s[i] > '9')) {  \
-    RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-  }
+  } while (0)
+
+#define CHECK_DIGIT()                                \
+  do {                                               \
+    if (sonic_unlikely(s[i] < '0' || s[i] > '9')) {  \
+      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
+    }                                                \
+  } while (0)
 
 #define SET_INT_AND_RETURN(int_val)                                       \
-  {                                                                       \
+  do {                                                                    \
     if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
     RETURN_SET_ERROR_CODE(kErrorNone);                                    \
-  }
+  } while (0)
 
 #define SET_UINT_AND_RETURN(int_val)                                       \
-  {                                                                        \
+  do {                                                                     \
     if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
     RETURN_SET_ERROR_CODE(kErrorNone);                                     \
-  }
+  } while (0)
+
 #define SET_DOUBLE_AND_RETURN(dbl)                                       \
-  {                                                                      \
+  do {                                                                   \
     if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
     RETURN_SET_ERROR_CODE(kErrorNone);                                   \
-  }
+  } while (0)
+
 #define SET_U64_AS_DOUBLE_AND_RETURN(int_val)                             \
-  {                                                                       \
+  do {                                                                    \
     union {                                                               \
       double d;                                                           \
       uint64_t u;                                                         \
@@ -255,7 +261,7 @@ class Parser {
     du.u = int_val;                                                       \
     if (!sax.Double(du.d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
     RETURN_SET_ERROR_CODE(kErrorNone);                                    \
-  }
+  } while (0)
 
     static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
     int sgn = -1;
@@ -465,7 +471,7 @@ class Parser {
       SonicError error_code =
           parseFloatEiselLemire64(d, exp10, man, sgn, trunc, s);
       if (!sax.Double(d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
-      ;
+
       RETURN_SET_ERROR_CODE(error_code);
     }
 
@@ -521,10 +527,12 @@ class Parser {
 
   template <unsigned parseFlags, typename SAX>
   sonic_force_inline void parseImpl(SAX &sax) {
-#define sonic_check_err()   \
-  if (err_ != kErrorNone) { \
-    goto err_invalid_char;  \
-  }
+#define sonic_check_err()     \
+  do {                        \
+    if (err_ != kErrorNone) { \
+      goto err_invalid_char;  \
+    }                         \
+  } while (0)
 
     using namespace sonic_json::internal;
     // TODO (liuq19): vector is a temporary choice, will optimize in future.
@@ -544,7 +552,7 @@ class Parser {
           goto scope_end;
         }
         goto arr_val;
-      };
+      }
       case '{': {
         sax.StartObject();
         depth.push_back(kObjMask);
@@ -558,7 +566,7 @@ class Parser {
       default:
         parsePrimitives(sax);
         goto doc_end;
-    };
+    }
 
   obj_key:
     if (sonic_unlikely(c != '"')) goto err_invalid_char;
@@ -769,7 +777,7 @@ class Parser {
         }
         pos--;
         goto arr_val;
-      };
+      }
       case '{': {
         sax.StartObject();
         c = scan.SkipSpaceSafe(data, pos, len);
@@ -787,7 +795,7 @@ class Parser {
         sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
         return kErrorNone;
       }
-    };
+    }
 
   obj_key:
     if (sonic_unlikely(c != '"')) {
@@ -867,7 +875,7 @@ class Parser {
     pos_ = 0;
     err_ = kErrorNone;
     len_ = 0;
-  };
+  }
   constexpr static size_t kJsonPaddingSize = SONICJSON_PADDING;
 
   uint8_t *json_buf_{nullptr};

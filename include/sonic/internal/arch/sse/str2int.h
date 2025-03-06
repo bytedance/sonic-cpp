@@ -30,29 +30,29 @@ namespace sse {
 #undef DATA_MADDUBS
 #endif
 #define DATA_MADDUBS()                               \
-  {                                                  \
+  do {                                               \
     __m128i q = _mm_set1_epi64x(0x010A010A010A010A); \
     data = _mm_maddubs_epi16(data, q);               \
-  }
+  } while (0)
 
 #ifdef DATA_MADD
 #undef DATA_MADD
 #endif
 #define DATA_MADD()                                  \
-  {                                                  \
+  do {                                               \
     __m128i q = _mm_set1_epi64x(0x0001006400010064); \
     data = _mm_madd_epi16(data, q);                  \
-  }
+  } while (0)
 
 #ifdef DATA_PACK_AND_MADD
 #undef DATA_PACK_AND_MADD
 #endif
 #define DATA_PACK_AND_MADD()                                   \
-  {                                                            \
+  do {                                                         \
     data = _mm_packus_epi32(data, data);                       \
     __m128i q = _mm_set_epi16(0, 0, 0, 0, 1, 10000, 1, 10000); \
     data = _mm_madd_epi16(data, q);                            \
-  }
+  } while (0)
 
 sonic_force_inline uint64_t simd_str2int(const char* c, int& man_nd) {
   // uint64_t simd_str2int(const char* c, int& man_nd) {
