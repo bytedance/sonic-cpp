@@ -97,8 +97,6 @@ val_begin:
           rn = internal::F64toa(wb.End<char>(), node->GetDouble());
           if (rn <= 0) goto inf_err;
           break;
-          default:
-            break;
         }
       }
       sonic_assert(rn > 0 && rn <= 32);
