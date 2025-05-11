@@ -59,8 +59,10 @@
 
 #define SONIC_WESTMERE "pclmul,sse4.2"
 #define SONIC_HASWELL "avx2"
+#define SONIC_TURIN "avx512f"
 #define SONIC_WESTMERE_STR(s) "arch=westmere"
 #define SONIC_HASWELL_STR(s) "arch=haswell"
+#define SONIC_TURIN_STR(s) "arch=turin"
 
 #if defined(__clang__)
 #define SONIC_PUSH_TARGET(_target)              \

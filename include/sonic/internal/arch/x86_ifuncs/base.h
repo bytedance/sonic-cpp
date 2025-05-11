@@ -18,6 +18,7 @@
 
 #include <sonic/macro.h>
 
+#include "../avx512/base.h"
 #include "../avx2/base.h"
 #include "../sse/base.h"
 

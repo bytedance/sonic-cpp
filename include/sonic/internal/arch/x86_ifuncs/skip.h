@@ -18,6 +18,7 @@
 
 #include <sonic/macro.h>
 
+#include "../avx512/quote.h"
 #include "../avx2/skip.h"
 #include "../sse/skip.h"
 

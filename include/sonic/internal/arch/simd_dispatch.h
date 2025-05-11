@@ -25,7 +25,10 @@
 #if defined(SONIC_STATIC_DISPATCH)
 
 // clang-format off
-#if defined(SONIC_HAVE_AVX2)
+#if defined(SONIC_HAVE_AVX512)
+#define SONIC_USING_ARCH_FUNC(func) using avx512::func
+#define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(avx512/file)
+#elif defined(SONIC_HAVE_AVX2)
 #define SONIC_USING_ARCH_FUNC(func) using avx2::func
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(avx2/file)
 #elif defined(SONIC_HAVE_SSE)

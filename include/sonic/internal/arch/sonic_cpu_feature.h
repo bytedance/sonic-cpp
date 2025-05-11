@@ -37,6 +37,9 @@
 #if defined(__AVX2__)
 #define SONIC_HAVE_AVX2
 #endif
+#if defined(__AVX512F__)
+#define SONIC_HAVE_AVX512
+#endif
 #else
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
 #define SONIC_HAVE_NEON
