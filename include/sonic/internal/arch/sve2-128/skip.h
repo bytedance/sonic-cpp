@@ -34,20 +34,20 @@ using sonic_json::internal::common::SkipLiteral;
 
 #include "../common/arm_common/skip.inc.h"
 
-
 // Requires clang vx or GCC>=14
 #if (defined(__clang__) && (__clang_major__ >= 14)) || \
-(defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 14))
+    (defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 14))
 
 #define USE_SVE_HIST 1
 
 #include <arm_neon_sve_bridge.h>
 
 template <typename T>
-sonic_force_inline uint64_t GetStringBits(const T& v,
-                                          uint64_t &prev_instring,
-                                          uint64_t &prev_escaped, int backslash_count, int quotes_count) {
-  //const T v(data);
+sonic_force_inline uint64_t GetStringBits(const T &v, uint64_t &prev_instring,
+                                          uint64_t &prev_escaped,
+                                          int backslash_count,
+                                          int quotes_count) {
+  // const T v(data);
   uint64_t escaped = 0;
   uint64_t bs_bits = 0;
   if (backslash_count) {
@@ -59,28 +59,31 @@ sonic_force_inline uint64_t GetStringBits(const T& v,
   }
   uint64_t in_string = prev_instring;
   if (quotes_count) {
-     uint64_t quote_bits = v.eq('"') & ~escaped;
-     in_string = PrefixXor(quote_bits) ^ prev_instring;
-     prev_instring = uint64_t(static_cast<int64_t>(in_string) >> 63);
+    uint64_t quote_bits = v.eq('"') & ~escaped;
+    in_string = PrefixXor(quote_bits) ^ prev_instring;
+    prev_instring = uint64_t(static_cast<int64_t>(in_string) >> 63);
   }
   return in_string;
 }
 
-sonic_force_inline uint32_t count_chars(const uint8x16_t& data, svuint8_t& tokens, uint8_t left, uint8_t right) {
-   svuint8_t v = svundef_u8();
-   v = svset_neonq_u8(v, data);
-   svuint32_t vec32 = svreinterpret_u32(svhistseg_u8(tokens, v));
-   return vgetq_lane_u32(svget_neonq_u32(vec32),0);
+sonic_force_inline uint32_t count_chars(const uint8x16_t &data,
+                                        svuint8_t &tokens, uint8_t left,
+                                        uint8_t right) {
+  svuint8_t v = svundef_u8();
+  v = svset_neonq_u8(v, data);
+  svuint32_t vec32 = svreinterpret_u32(svhistseg_u8(tokens, v));
+  return vgetq_lane_u32(svget_neonq_u32(vec32), 0);
 }
 
 template <typename T>
 sonic_force_inline bool skip_container_sve(const uint8_t *data, size_t &pos,
-                                       size_t len, uint8_t left,
-                                       uint8_t right) {
+                                           size_t len, uint8_t left,
+                                           uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring = 0;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
   const uint8_t *p;
-  svuint8_t tokens = svreinterpret_u8_u32(svdup_n_u32(0x5C22 | (left << 24) | (right<<16)));
+  svuint8_t tokens =
+      svreinterpret_u8_u32(svdup_n_u32(0x5C22 | (left << 24) | (right << 16)));
 
   while (pos + 64 <= len) {
     p = data + pos;
@@ -92,55 +95,54 @@ sonic_force_inline bool skip_container_sve(const uint8_t *data, size_t &pos,
     counts += count_chars(v.chunks[2], tokens, left, right);
     counts += count_chars(v.chunks[3], tokens, left, right);
 
-
-#define SKIP_LOOP()                                                       \
-  {                                                                       \
-    int q_c = (counts) & 0xff;                                            \
-    int b_c = (counts >> 8) & 0xff;                                       \
-    int r_c = (counts >> 16) & 0xff;                                      \
-    int l_c = (counts >> 24) & 0xff;                                      \
-    last_lbrace_num = lbrace_num;                                         \
-    instring = GetStringBits<T>(v, prev_instring, prev_escaped, b_c, q_c);\
-    uint64_t lbrace = 0;                                                  \
-    if(l_c) {                                                             \
-        lbrace = v.eq(left) & ~instring;                                  \
-    }                                                                     \
-    if(r_c) {                                                             \
-      uint64_t rbrace = v.eq(right) & ~instring;                          \
-      /* traverse each '}' */                                             \
-      while (rbrace > 0) {                                                \
-        rbrace_num++;                                                     \
-        /* counts the number of {{ that happens before } */               \
-        lbrace_num = last_lbrace_num + CountOnes((rbrace - 1) & lbrace);  \
-        bool is_closed = lbrace_num < rbrace_num;                         \
-        if (is_closed) {                                                  \
-          sonic_assert(rbrace_num == lbrace_num + 1);                     \
-          pos += TrailingZeroes(rbrace) + 1;                              \
-          return true;                                                    \
-        }                                                                 \
-        rbrace &= (rbrace - 1);                                           \
-      }                                                                   \
-    }                                                                     \
-    lbrace_num = last_lbrace_num + CountOnes(lbrace);                     \
+#define SKIP_LOOP()                                                        \
+  {                                                                        \
+    int q_c = (counts) & 0xff;                                             \
+    int b_c = (counts >> 8) & 0xff;                                        \
+    int r_c = (counts >> 16) & 0xff;                                       \
+    int l_c = (counts >> 24) & 0xff;                                       \
+    last_lbrace_num = lbrace_num;                                          \
+    instring = GetStringBits<T>(v, prev_instring, prev_escaped, b_c, q_c); \
+    uint64_t lbrace = 0;                                                   \
+    if (l_c) {                                                             \
+      lbrace = v.eq(left) & ~instring;                                     \
+    }                                                                      \
+    if (r_c) {                                                             \
+      uint64_t rbrace = v.eq(right) & ~instring;                           \
+      /* traverse each '}' */                                              \
+      while (rbrace > 0) {                                                 \
+        rbrace_num++;                                                      \
+        /* counts the number of {{ that happens before } */                \
+        lbrace_num = last_lbrace_num + CountOnes((rbrace - 1) & lbrace);   \
+        bool is_closed = lbrace_num < rbrace_num;                          \
+        if (is_closed) {                                                   \
+          sonic_assert(rbrace_num == lbrace_num + 1);                      \
+          pos += TrailingZeroes(rbrace) + 1;                               \
+          return true;                                                     \
+        }                                                                  \
+        rbrace &= (rbrace - 1);                                            \
+      }                                                                    \
+    }                                                                      \
+    lbrace_num = last_lbrace_num + CountOnes(lbrace);                      \
   }
     if (!counts) {
-        // Skip, no interesting characters here
-        prev_escaped = 0;
-    } else if((counts < 256) && prev_escaped == 0) {
-        // counts < 256 means that all the values besides the last byte
-	// (quotes) are 0.
-        // Only quotes, other vals are 0, need to check the number to see
-	// if string is open or not
-        // last byte of counts is the string number
-        prev_instring ^= (0 - (int) (counts & 1));
-        prev_escaped = 0;
-    } else if(!(counts &0xff) && prev_instring) {
-        // only backslahes and no quotes, the whole 64 bytes are inside a string
-	// so we dont care about left & right
-        // just check if the last character is a backslash
-        prev_escaped = (p[63] == '\\');
+      // Skip, no interesting characters here
+      prev_escaped = 0;
+    } else if ((counts < 256) && prev_escaped == 0) {
+      // counts < 256 means that all the values besides the last byte
+      // (quotes) are 0.
+      // Only quotes, other vals are 0, need to check the number to see
+      // if string is open or not
+      // last byte of counts is the string number
+      prev_instring ^= (0 - (int)(counts & 1));
+      prev_escaped = 0;
+    } else if (!(counts & 0xff) && prev_instring) {
+      // only backslahes and no quotes, the whole 64 bytes are inside a string
+      // so we dont care about left & right
+      // just check if the last character is a backslash
+      prev_escaped = (p[63] == '\\');
     } else {
-        SKIP_LOOP();
+      SKIP_LOOP();
     }
     pos += 64;
   }
