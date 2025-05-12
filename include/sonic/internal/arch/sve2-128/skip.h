@@ -97,7 +97,7 @@ sonic_force_inline bool skip_container_sve(const uint8_t *data, size_t &pos,
 
 #define SKIP_LOOP()                                                        \
   {                                                                        \
-    int q_c = (counts) & 0xff;                                             \
+    int q_c = counts & 0xff;                                               \
     int b_c = (counts >> 8) & 0xff;                                        \
     int r_c = (counts >> 16) & 0xff;                                       \
     int l_c = (counts >> 24) & 0xff;                                       \
