@@ -19,7 +19,7 @@ if ! type cmake >/dev/null 2>&1; then
 fi
 cur_version="$(cmake --version | head -n1 | cut -d" " -f3)"
 require_mini_version="3.14.0"
-if ! [ "$(printf '%s\n' "${require_mini_version}" "${cur_version}" | sort -V | head -n1)" = "${require_mini_version}" ]; then 
+if ! [ "$(printf '%s\n' "${require_mini_version}" "${cur_version}" | sort -V | head -n1)" = "${require_mini_version}" ]; then
     install_cmake
 fi
 
@@ -31,6 +31,10 @@ if [ -x "./build/tests/unittest" ]; then
     ./build/tests/unittest
 fi
 
-$CMAKE -S . -B build -DBUILD_BENCH=ON
-$CMAKE --build build --target bench -j
-./build/benchmark/bench
+#====================================================================
+# The benchmark build frequently fails in CI due to incompatible
+# CMake configurations across dependent JSON libraries.
+# ===================================================================
+# $CMAKE -S . -B build -DBUILD_BENCH=ON
+# $CMAKE --build build --target bench -j
+# ./build/benchmark/bench
