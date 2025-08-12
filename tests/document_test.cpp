@@ -320,6 +320,7 @@ TYPED_TEST(DocumentTest, Parse) {
       {"{[]}", &Document::IsNull, kError},
       {"{[}]", &Document::IsNull, kError},
       {"[[[[[[", &Document::IsNull, kError},
+      {"[[[[[[[[[[[[[[[[[[[[[[ \"\" ]", &Document::IsNull, kError},
       {"[NULL]", &Document::IsNull, kError},
       {R"([{"a":0})", &Document::IsNull, kError},
       {R"({"a":{"b":0})", &Document::IsNull, kError},

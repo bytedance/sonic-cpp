@@ -196,7 +196,12 @@ class SAXHandler {
       np_++;
       return true;
     } else {
-      return false;
+      cap_ += cap_;
+      st_ = static_cast<NodeType *>(
+          std::realloc((void *)(st_), sizeof(NodeType) * cap_));
+      if (!st_) return false;
+      np_++;
+      return true;
     }
   }
 
