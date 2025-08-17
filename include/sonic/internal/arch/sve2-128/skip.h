@@ -34,14 +34,16 @@ using sonic_json::internal::common::SkipLiteral;
 
 #include "../common/arm_common/skip.inc.h"
 
-// Requires clang vx or GCC>=14
-#if (defined(__clang__) && (__clang_major__ >= 14)) || \
-    (defined(__GNUC__) && !defined(__clang__) && (__GNUC__ >= 14))
+#ifdef __has_include
+# if __has_include(<arm_neon_sve_bridge.h>)
+#  include <arm_neon_sve_bridge.h>
+#  ifndef USE_SVE_HIST
+#   define USE_SVE_HIST 1
+#  endif
+# endif
+#endif
 
-#define USE_SVE_HIST 1
-
-#include <arm_neon_sve_bridge.h>
-
+#ifdef USE_SVE_HIST
 template <typename T>
 sonic_force_inline uint64_t GetStringBits(const T &v, uint64_t &prev_instring,
                                           uint64_t &prev_escaped,
