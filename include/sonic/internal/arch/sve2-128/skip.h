@@ -35,12 +35,12 @@ using sonic_json::internal::common::SkipLiteral;
 #include "../common/arm_common/skip.inc.h"
 
 #ifdef __has_include
-# if __has_include(<arm_neon_sve_bridge.h>)
-#  include <arm_neon_sve_bridge.h>
-#  ifndef USE_SVE_HIST
-#   define USE_SVE_HIST 1
-#  endif
-# endif
+#if __has_include(<arm_neon_sve_bridge.h>)
+#include <arm_neon_sve_bridge.h>
+#ifndef USE_SVE_HIST
+#define USE_SVE_HIST 1
+#endif
+#endif
 #endif
 
 #ifdef USE_SVE_HIST
