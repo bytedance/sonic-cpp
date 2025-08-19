@@ -11,7 +11,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 sonic_force_inline uint32_t low_half_simd_str2int(svuint32_t data, svbool_t curPg, uint32_t *mulFactor) {
     svuint32_t wideData = svrev_u32(data);
     wideData = svcompact_u32(curPg, wideData);
@@ -122,6 +122,6 @@ sonic_force_inline uint64_t simd_str2int(const char *c, int &man_nd) {
     return 1;
 }
 
-} // namespace sve
+} // namespace sve_256
 } // namespace internal
 } // namespace sonic_json

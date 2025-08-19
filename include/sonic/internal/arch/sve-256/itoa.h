@@ -4,11 +4,11 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 
 using sonic_json::internal::arm_common::Utoa_16;
 using sonic_json::internal::arm_common::Utoa_8;
 
-}  // namespace sve
+}  // namespace sve_256
 }  // namespace internal
 }  // namespace sonic_json

@@ -11,7 +11,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 
 using neon::handle_unicode_codepoint;
 
@@ -19,6 +19,6 @@ using neon::StringBlock;
 
 using neon::GetNonSpaceBits;
 
-}  // namespace sve
+}  // namespace sve_256
 }  // namespace internal
 }  // namespace sonic_json

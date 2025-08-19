@@ -5,7 +5,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 
 using sonic_json::internal::arm_common::ClearLowestBit;
 using sonic_json::internal::arm_common::CountOnes;
@@ -152,6 +152,6 @@ sonic_force_inline void Xmemcpy<16>(void* dst_, const void* src_, size_t chunks)
   }
 }
 
-}  // namespace sve
+}  // namespace sve_256
 }  // namespace internal
 }  // namespace sonic_json

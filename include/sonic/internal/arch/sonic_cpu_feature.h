@@ -45,6 +45,6 @@
 #define SONIC_HAVE_SVE2_128
 #endif
 #if defined(__ARM_FEATURE_SVE) && (__ARM_FEATURE_SVE_BITS == 256)
-#define SONIC_HAVE_SVE
+#define SONIC_HAVE_SVE_256
 #endif
 #endif

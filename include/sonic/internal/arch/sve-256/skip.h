@@ -10,7 +10,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 
 using sonic_json::internal::common::EqBytes4;
 using sonic_json::internal::common::SkipLiteral;
@@ -49,7 +49,7 @@ sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos, size_t &
     sonic_assert(false && "!should not happen");
 }
 
-}  // namespace sve
+}  // namespace sve_256
 }  // namespace internal
 }  // namespace sonic_json
 

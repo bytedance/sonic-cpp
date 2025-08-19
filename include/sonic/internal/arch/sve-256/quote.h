@@ -42,7 +42,7 @@
 
 namespace sonic_json {
 namespace internal {
-namespace sve {
+namespace sve_256 {
 
 sonic_force_inline svbool_t copy_get_escaped_mask_predicate(svbool_t pg, const char *src, char *dst)
 {
@@ -180,7 +180,7 @@ sonic_force_inline char *Quote(const char *src, size_t nb, char *dst)
     *dst++ = '"';
     return dst;
 }
-} // namespace sve
+} // namespace sve_256
 } // namespace internal
 } // namespace sonic_json
 

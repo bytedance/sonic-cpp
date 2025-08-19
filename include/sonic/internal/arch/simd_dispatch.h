@@ -36,9 +36,9 @@
 #if defined(SONIC_HAVE_SVE2_128)
 #define SONIC_USING_ARCH_FUNC(func) using sve2_128::func
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(sve2-128/file)
-#elif defined(SONIC_HAVE_SVE)
-#define SONIC_USING_ARCH_FUNC(func) using sve::func
-#define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(sve/file)
+#elif defined(SONIC_HAVE_SVE_256)
+#define SONIC_USING_ARCH_FUNC(func) using sve_256::func
+#define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(sve-256/file)
 #elif defined(SONIC_HAVE_NEON)
 #define SONIC_USING_ARCH_FUNC(func) using neon::func
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(neon/file)
