@@ -55,8 +55,9 @@ class Stack {
       return;
     }
     size_t align_cap = SONIC_ALIGN(new_cap);
+    size_t old_size = Size();
     char* tmp = static_cast<char*>(std::realloc(buf_, align_cap));
-    top_ = tmp + Size();
+    top_ = tmp + old_size;
     buf_ = tmp;
     sonic_assert(buf_ != NULL);
     cap_ = buf_ ? new_cap : 0;
