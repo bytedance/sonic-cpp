@@ -255,7 +255,7 @@ class MemoryPoolAllocator {
                       size_t chunkSize = SONIC_ALLOCATOR_MIN_CHUNK_CAPACITY,
                       BaseAllocator* baseAllocator = 0)
       : cp_(chunkSize),
-        baseAllocator_(baseAllocator),
+        baseAllocator_(baseAllocator ? baseAllocator : new BaseAllocator()),
         shared_(static_cast<SharedData*>(AlignBuffer(buffer, size))) {
     sonic_assert(size >= SIZEOF_SHARED_DATA + SIZEOF_CHUNK_HEADER);
     shared_->chunkHead = GetChunkHead(shared_);
