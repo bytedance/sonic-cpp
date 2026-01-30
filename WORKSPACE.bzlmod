@@ -67,4 +67,3 @@ git_repository(
     branch = "main",
     remote = "https://github.com/gflags/gflags.git",
 )
-

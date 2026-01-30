@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker 
+import matplotlib.ticker as ticker
 import json
 import unicodedata
 import argparse
@@ -25,7 +25,7 @@ class Record:
 
     def category(self):
         return self._category
-    
+
     def is_valid(self):
         return self._isvalid
 
@@ -93,14 +93,14 @@ def draw_png(data1, data2, xnames, title, label1, label2, fontsize, png):
     bar2 = plt.bar(x, data2, width = width, label = label2, facecolor = 'darkorange', tick_label = xnames)
 
     draw_text(bar1, fontsize)
-    draw_text(bar2, fontsize)    
+    draw_text(bar2, fontsize)
 
     plt.title(title)
-    
+
     plt.gca().yaxis.set_major_formatter(ticker.FuncFormatter(to_percent))
     plt.xticks(size = fontsize)
- 
-    plt.rc('legend', fontsize=fontsize) 
+
+    plt.rc('legend', fontsize=fontsize)
     plt.rc('ytick', labelsize=fontsize)
     plt.legend()
     plt.savefig(png, dpi = 200)
@@ -127,7 +127,7 @@ def draw_one_png(group, png, overall):
             decode.append(record)
     encode.sort(key=lambda x : x.algo())
     decode.sort(key=lambda x : x.algo())
-    
+
     encode_percentage = get_percentage(encode)
     decode_percentage = get_percentage(decode)
 
@@ -165,7 +165,7 @@ def draw_one_png(group, png, overall):
         elif title != encode[i].label() or category != encode[i].category():
             print ("Mismatch encode/decode category")
             return
-        
+
     draw_png(encode_percentage, decode_percentage, x_names, title, "Encode", "Decode", 8, png)
 
 def wide_chars(s):
@@ -185,7 +185,7 @@ def draw_in_text(encode_percentage, decode_percentage, encode_cputime, decode_cp
     headers = ["Names", "Encode", "Encode Avg Time(ns)", "Decode", "Decode Avg Time(ns)"]
     for header in headers:
         fields_width.append(str_width(header) + padding)
-    
+
     name_width = fields_width[0]
     for name in names:
         name_width = max(name_width, str_width(name) + padding)
@@ -194,7 +194,7 @@ def draw_in_text(encode_percentage, decode_percentage, encode_cputime, decode_cp
     fields_width[len(fields_width) - 1] = fields_width[len(fields_width) - 1] - padding
 
     dash_width = sum(fields_width)
-    
+
     print("")
     print ("-"*(dash_width))
     for i in range(len(headers)):
@@ -207,7 +207,7 @@ def draw_in_text(encode_percentage, decode_percentage, encode_cputime, decode_cp
         v = 'N/A'
         if i < len(encode_percentage):
             v = '%.2f%%'%(encode_percentage[i] * 100)
-        
+
         print(yellow + "%-*s" % (fields_width[1], v), end='')
 
         v = 'N/A'
@@ -221,7 +221,7 @@ def draw_in_text(encode_percentage, decode_percentage, encode_cputime, decode_cp
             v = '%.2f%%'%(decode_percentage[i] * 100)
 
         print("%-*s" % (fields_width[3], v), end ='')
-    
+
         v = 'N/A'
         if i < len(decode_cputime):
             v = '%.f' % (decode_cputime[i])
@@ -244,18 +244,18 @@ def draw_overall_png(overall, png):
         for (encode_cputime, encode_percentage) in v1:
             total_cputime = total_cputime + encode_cputime
             total_percentage = total_percentage + encode_percentage
-        
+
         if len(v1):
             encode_overall.append(total_cputime / len(v1))
             encode_overall_percentage.append(total_percentage / len(v1))
-        
+
         total_cputime = 0.0
         total_percentage = 0.0
 
         for (encode_cputime, encode_percentage) in v2:
             total_cputime = total_cputime + encode_cputime
             total_percentage = total_percentage + encode_percentage
-        
+
         if len(v2):
             decode_overall.append(total_cputime / len(v2))
             decode_overall_percentage.append(total_percentage / len(v2))

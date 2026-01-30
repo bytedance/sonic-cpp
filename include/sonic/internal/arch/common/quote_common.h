@@ -31,16 +31,49 @@ static sonic_force_inline uint8_t GetEscapeMask4(const char *src) {
          (kNeedEscaped[*(uint8_t *)(src + 3)] << 3);
 }
 
-sonic_static_inline void DoEscape(const char *&src, char *&dst, size_t &nb) {
+static char kHexChars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                             '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+sonic_static_inline void writeHex(uint32_t value, char *&dst) {
+  *dst++ = '\\';
+  *dst++ = 'u';
+  *dst++ = kHexChars[(value >> 12) & 0xf];
+  *dst++ = kHexChars[(value >> 8) & 0xf];
+  *dst++ = kHexChars[(value >> 4) & 0xf];
+  *dst++ = kHexChars[value & 0xf];
+}
+
+sonic_static_inline void DoEscape(const char *&src, char *&dst, size_t &nb,
+                                  bool escape_emoji) {
   /* get the escape entry, handle consecutive quotes */
   do {
     uint8_t ch = *(uint8_t *)src;
     int nc = kQuoteTab[ch].n;
-    std::memcpy(dst, kQuoteTab[ch].s, 8);
-    src++;
-    nb--;
-    dst += nc;
-    if (nb <= 0) return;
+    if (nc != 0) {
+      std::memcpy(dst, kQuoteTab[ch].s, 6);
+      src++;
+      nb--;
+      dst += nc;
+    } else if (escape_emoji) {
+      // TODO: validate the utf8?
+      uint32_t unicode = (src[0] & 0x07) << 18 | (src[1] & 0x3f) << 12 |
+                         (src[2] & 0x3f) << 6 | (src[3] & 0x3f);
+      unicode -= 0x10000;
+      writeHex(0xD800 | ((unicode >> 10) & 0x3FF), dst);
+      writeHex(0xDC00 | (unicode & 0x3FF), dst);
+      src += 4;
+      nb -= 4;
+    }
+
+    if (nb <= 0) {
+      return;
+    }
+
+    /* next char is emoji */
+    if (escape_emoji && ((*(uint8_t *)(src)&0xf0) == 0xf0)) {
+      continue;
+    }
+
     /* copy and find escape chars */
     if (kNeedEscaped[*(uint8_t *)(src)] == 0) {
       return;

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/dom/parser.h"

@@ -28,7 +28,9 @@ namespace sve2_128 {
 
 using sonic_json::internal::arm_common::Quote;
 
-sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
+sonic_force_inline size_t
+parseStringInplace(uint8_t *&src, SonicError &err,
+                   bool allow_unescaped_control_chars = false) {
 #define SONIC_REPEAT8(v) {v v v v v v v v}
 
   uint8_t *dst = src;
@@ -36,13 +38,13 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
   while (1) {
   find:
     auto block = StringBlock::Find(src);
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst(allow_unescaped_control_chars)) {
       int idx = block.QuoteIndex();
       src += idx;
       *src++ = '\0';
       return src - sdst - 1;
     }
-    if (block.HasUnescaped()) {
+    if (!allow_unescaped_control_chars && block.HasUnescaped()) {
       err = kParseErrorUnEscaped;
       return 0;
     }
@@ -82,7 +84,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
     uint8x16_t v = vld1q_u8(src);
     block = StringBlock::Find(v);
     // If the next thing is the end quote, copy and return
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst(allow_unescaped_control_chars)) {
       // we encountered quotes first. Move dst to point to quotes and exit
       while (1) {
         SONIC_REPEAT8(if (sonic_unlikely(*src == '"')) break;
@@ -92,7 +94,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
       src++;
       return dst - sdst;
     }
-    if (block.HasUnescaped()) {
+    if (!allow_unescaped_control_chars && block.HasUnescaped()) {
       err = kParseErrorUnEscaped;
       return 0;
     }

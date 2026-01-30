@@ -41,12 +41,12 @@ std::cout << wb.ToString() << std::endl;
 Node is the present for JSON value and supports all JSON value manipulation.
 
 ### Document
-Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree. 
+Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree.
 Document also the root of JSON value tree. There is an allocator in Document,
 which you should use to allocate memory for Node and Document.
 
 ### Query in object
-There are two ways to find members: `operator[]` or `FindMember`. We recommend 
+There are two ways to find members: `operator[]` or `FindMember`. We recommend
 using `FindMember`.
 ```c++
 #include "sonic/sonic.h"

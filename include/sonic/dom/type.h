@@ -31,11 +31,12 @@ enum TypeFlag {
   kArray = 7,   // xxxxx111
 
   // SubType: 2 bits
-  kFalse = ((uint8_t)(0 << 3)) | kBool,   // xxx00_010, 2
-  kTrue = ((uint8_t)(1 << 3)) | kBool,    // xxx01_010, 10
-  kUint = ((uint8_t)(0 << 3)) | kNumber,  // xxx00_011, 3
-  kSint = ((uint8_t)(1 << 3)) | kNumber,  // xxx01_011, 11
-  kReal = ((uint8_t)(2 << 3)) | kNumber,  // xxx10_011, 19
+  kFalse = ((uint8_t)(0 << 3)) | kBool,     // xxx00_010, 2
+  kTrue = ((uint8_t)(1 << 3)) | kBool,      // xxx01_010, 10
+  kUint = ((uint8_t)(0 << 3)) | kNumber,    // xxx00_011, 3
+  kSint = ((uint8_t)(1 << 3)) | kNumber,    // xxx01_011, 11
+  kReal = ((uint8_t)(2 << 3)) | kNumber,    // xxx10_011, 19
+  kNumStr = ((uint8_t)(3 << 3)) | kNumber,  // xx100_011, 27
   // kStringCopy: sv.p is copied, but not need free, e.g. node's string buffer
   // is dom str_
   kStringCopy = kString,  // xxx00_100, 4

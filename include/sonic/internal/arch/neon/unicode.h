@@ -36,8 +36,9 @@ struct StringBlock {
  public:
   sonic_force_inline static StringBlock Find(const uint8_t *src);
   sonic_force_inline static StringBlock Find(uint8x16_t &v);
-  sonic_force_inline bool HasQuoteFirst() const {
-    return (((bs_bits - 1) & quote_bits) != 0) && !HasUnescaped();
+  sonic_force_inline bool HasQuoteFirst(bool allow_unesc) const {
+    return (((bs_bits - 1) & quote_bits) != 0) &&
+           (allow_unesc || !HasUnescaped());
   }
   sonic_force_inline bool HasBackslash() const {
     return ((quote_bits - 1) & bs_bits) != 0;
@@ -53,10 +54,6 @@ struct StringBlock {
     // return TrailingZeroes(bs_bits);
     return TrailingZeroes(bs_bits) >> 2;
   }
-  sonic_force_inline int UnescapedIndex() const {
-    // return TrailingZeroes(unescaped_bits);
-    return TrailingZeroes(unescaped_bits) >> 2;
-  }
 
   uint64_t bs_bits;
   uint64_t quote_bits;
@@ -65,11 +62,7 @@ struct StringBlock {
 
 sonic_force_inline StringBlock StringBlock::Find(const uint8_t *src) {
   uint8x16_t v = vld1q_u8(src);
-  return {
-      to_bitmask(vceqq_u8(v, vdupq_n_u8('\\'))),
-      to_bitmask(vceqq_u8(v, vdupq_n_u8('"'))),
-      to_bitmask(vcleq_u8(v, vdupq_n_u8('\x1f'))),
-  };
+  return StringBlock::Find(v);
 }
 
 sonic_force_inline StringBlock StringBlock::Find(uint8x16_t &v) {
