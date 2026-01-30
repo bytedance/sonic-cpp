@@ -16,6 +16,7 @@ if(BUILD_UNITTEST)
   add_subdirectory(tests)
 endif()
 
+
 if(BUILD_FUZZ)
   add_subdirectory(fuzz)
 endif()

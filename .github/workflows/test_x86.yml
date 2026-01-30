@@ -29,13 +29,13 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "latest"
+          bazel-version: "8.5.1"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'
         uses: jwlawson/actions-setup-cmake@v1
         with:
-          cmake-version: "latest"
+          cmake-version: "3.31.10"
 
       - name: Run ${{ matrix.arch }} Test Use Bazel
         if: matrix.tool == 'bazel'
@@ -80,13 +80,13 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "latest"
+          bazel-version: "8.5.1"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'
         uses: jwlawson/actions-setup-cmake@v1
         with:
-          cmake-version: "latest"
+          cmake-version: "3.31.10"
 
       - name: Run ${{ matrix.arch }} ${{ matrix.dispatch }} Test Use Bazel
         if: matrix.tool == 'bazel'
