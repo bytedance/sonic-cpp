@@ -18,7 +18,7 @@ jobs:
       - name: Setup bazel
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "latest"
+          bazel-version: "8.5.1"
 
       - name: Setup GCC
         run: |

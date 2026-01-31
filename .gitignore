@@ -36,6 +36,7 @@ build/
 
 # IDE files
 .vscode/
+.idea
 
 # Temp files
 .bak/
@@ -50,6 +51,7 @@ bazel-out
 bazel-sonic-cpp
 bazel-testlogs
 bazel-coverage-html
+MODULE.bazel.lock
 
 # Perf data
 perf.data

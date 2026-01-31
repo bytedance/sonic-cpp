@@ -47,11 +47,9 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
     return;
   }
 
-  uint64_t get;
   for (auto _ : state) {
     sonic_json::Document lite;
     lite.ParseOnDemand(data.json.data(), data.json.size(), path);
-    get = lite.GetUint64();
   }
 
   state.SetLabel(data.name);

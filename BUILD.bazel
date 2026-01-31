@@ -1,4 +1,5 @@
 package(default_visibility = ["//visibility:public"])
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary", "cc_test")
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
 common_copts = ['-mavx2', '-mbmi', '-mpclmul']
@@ -7,16 +8,26 @@ sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 avx2_copts = ['-mavx2', '-mbmi', '-mpclmul']
 sse_copts = ['-msse', '-msse2', '-msse4.1', '-msse4.2','-mpclmul']
 arm_copts = ['-march=armv8-a']
+apple_silicon_copts = [ '-mcpu=apple-m1' ]
+default_copts = ['-march=native']
 benchmark_copts = ['-O3', '-DNDEBUG', '-std=c++17']
 static_dispatch_copts = []
 dynamic_dispatch_copts = ['-DSONIC_DYNAMIC_DISPATCH=1']
+macos_version_copts = select({
+    ":is_macos": ["-mmacosx-version-min=10.15"],
+    "//conditions:default": [],
+})
 no_san_linkopts = []
 gcc_san_linkopts = ['-lasan']
 clang_san_linkopts = ['-fsanitize-link-c++-runtime']
+filesystem_linkopts = select({
+    ":is_macos": [],
+    "//conditions:default": ["-lstdc++fs"],
+})
 
 string_flag(
     name = "sonic_arch",
-    build_setting_default = "haswell",
+    build_setting_default = "default",
 )
 
 string_flag(
@@ -44,6 +55,11 @@ config_setting(
 )
 
 config_setting(
+    name = "apple_silicon_build",
+    values = {"cpu": "darwin_arm64"},
+)
+
+config_setting(
     name = "static_dispatch",
     flag_values = {":sonic_dispatch": "static"},
 )
@@ -66,6 +82,13 @@ config_setting(
 config_setting(
     name = "clang_san",
     flag_values = {":sonic_sanitizer": "clang"},
+)
+
+config_setting(
+    name = "is_macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
 )
 
 cc_library(
@@ -105,12 +128,15 @@ cc_binary(
                 "arm_build": arm_copts + benchmark_copts,
                 "sse_build": sse_copts + benchmark_copts,
                 "avx2_build": avx2_copts + benchmark_copts,
+                "apple_silicon_build": apple_silicon_copts + benchmark_copts,
+                "//conditions:default": default_copts + benchmark_copts,
             }) +\
+            macos_version_copts +\
             select({
                 "static_dispatch": static_dispatch_copts,
                 "dynamic_dispatch": dynamic_dispatch_copts,
             }),
-    linkopts = ['-lstdc++fs'],
+    linkopts = filesystem_linkopts,
 )
 
 cc_test(
@@ -125,7 +151,7 @@ cc_test(
         "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
-    linkopts = [ '-lstdc++fs', '-fstack-protector-all',] +\
+    linkopts = filesystem_linkopts + ['-fstack-protector-all'] +\
         select({
             "no_san": [],
             "gcc_san": sanitize_copts + gcc_san_linkopts,
@@ -145,7 +171,10 @@ cc_test(
             "arm_build": arm_copts + benchmark_copts,
             "sse_build": sse_copts + benchmark_copts,
             "avx2_build": avx2_copts + benchmark_copts,
+            "apple_silicon_build": apple_silicon_copts + benchmark_copts,
+            "//conditions:default": default_copts + benchmark_copts,
         }) +\
+        macos_version_copts +\
         select({
             "static_dispatch": static_dispatch_copts,
             "dynamic_dispatch": dynamic_dispatch_copts,
@@ -164,8 +193,7 @@ cc_test(
         "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
-    linkopts = sanitize_copts + [
-        '-lstdc++fs',
+    linkopts = sanitize_copts + filesystem_linkopts + [
         '-fstack-protector-all',
     ],
     copts = common_copts + sanitize_copts + [
@@ -210,8 +238,7 @@ cc_test(
         "@googletest//:gtest_main",
     ],
     data = glob([ "testdata/*.json"]),
-    linkopts = sanitize_copts + [
-        '-lstdc++fs',
+    linkopts = sanitize_copts + filesystem_linkopts + [
         '-fstack-protector-all',
         '-fsanitize-link-c++-runtime'
     ],
@@ -235,9 +262,8 @@ cc_test(
         "testdata/*.json",
         "testdata/num/*",
     ]),
-    linkopts = [
-        '-lstdc++fs', '-lgcov',
-        '-fprofile-arcs', '-ftest-coverage',
+    linkopts = filesystem_linkopts + [
+        '-lgcov', '-fprofile-arcs', '-ftest-coverage',
     ],
     copts = common_copts + [
         '-O0', '-g', '-UNDEBUG', '-std=c++17',
