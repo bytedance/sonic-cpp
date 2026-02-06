@@ -69,7 +69,8 @@ namespace internal {
 namespace arm_common {
 
 static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
-                                                          char *dst) {
+                                                          char *dst,
+                                                          bool escape_emoji) {
   uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t *>(src));
   vst1q_u8(reinterpret_cast<uint8_t *>(dst), v);
 
@@ -77,13 +78,18 @@ static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
   uint8x16_t m2 = vceqq_u8(v, vdupq_n_u8('"'));
   uint8x16_t m3 = vcltq_u8(v, vdupq_n_u8('\x20'));
 
-  uint8x16_t m4 = vorrq_u8(m1, m2);
-  uint8x16_t m5 = vorrq_u8(m3, m4);
+  uint8x16_t mask = vorrq_u8(m1, m2);
+  mask = vorrq_u8(mask, m3);
+  if (escape_emoji) {
+    uint8x16_t m_emoji = vcgeq_u8(v, vdupq_n_u8(0xF0));
+    mask = vorrq_u8(mask, m_emoji);
+  }
 
-  return to_bitmask(m5);
+  return to_bitmask(mask);
 }
 
-sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
+sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
+                                bool escape_emoji) {
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint64_t mm;
@@ -93,11 +99,11 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
   while (nb >= VEC_LEN) {
     /* check for matches */
     // TODO: optimize: exploit the simd bitmask in the escape block.
-    if ((mm = CopyAndGetEscapMask128(src, dst)) != 0) {
+    if ((mm = CopyAndGetEscapMask128(src, dst, escape_emoji)) != 0) {
       // cn = __builtin_ctz(mm);
       cn = TrailingZeroes(mm) >> 2;
       MOVE_N_CHARS(src, cn);
-      DoEscape(src, dst, nb);
+      DoEscape(src, dst, nb, escape_emoji);
     } else {
       /* move to next block */
       MOVE_N_CHARS(src, VEC_LEN);
@@ -119,12 +125,12 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
       src_r = tmp_src;
     }
     while (nb > 0) {
-      mm = CopyAndGetEscapMask128(src_r, dst) &
+      mm = CopyAndGetEscapMask128(src_r, dst, escape_emoji) &
            (0xFFFFFFFFFFFFFFFF >> ((VEC_LEN - nb) << 2));
       if (mm) {
         cn = TrailingZeroes(mm) >> 2;
         MOVE_N_CHARS(src_r, cn);
-        DoEscape(src_r, dst, nb);
+        DoEscape(src_r, dst, nb, escape_emoji);
       } else {
         dst += nb;
         nb = 0;

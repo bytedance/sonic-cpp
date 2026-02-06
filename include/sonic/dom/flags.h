@@ -20,10 +20,19 @@
 // User can define customed flags through combinations.
 enum ParseFlag {
   kParseDefault = 0,
+  kParseAllowUnescapedControlChars = 1 << 1,
+  // parse all integer as raw number
+  kParseIntegerAsRaw = 1 << 2,
+  // only parse numbers out of double.min, double.max, long.min, long.max as
+  // number string
+  kParseOverflowNumAsNumStr = 1 << 3,
 };
 
 // SerializeFlags is one-hot encoded for different serializing option.
 // User can define customed flags through combinations.
 enum SerializeFlags {
   kSerializeDefault = 0,
+  kSerializeAppendBuffer = 1 << 1,
+  kSerializeEscapeEmoji = 1 << 2,
+  kSerializeInfNan = 1 << 3,
 };

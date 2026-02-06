@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "sonic/dom/handler.h"
 #include "sonic/dom/json_pointer.h"
@@ -26,6 +27,7 @@
 #include "sonic/dom/serialize.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
+#include "sonic/jsonpath/jsonpath.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
 
@@ -41,6 +43,12 @@ class MemberNodeT {
 // Forward Declaration.
 template <typename derived_t>
 struct NodeTraits;
+
+template <typename NodeType>
+struct JsonPathResult {
+  std::vector<NodeType*> nodes;
+  SonicError error;
+};
 
 /**
  * @brief Basic class represents a JSON value.
@@ -275,6 +283,10 @@ class GenericNode {
   sonic_force_inline bool IsDouble() const noexcept {
     return GetType() == kReal;
   }
+
+  sonic_force_inline bool IsStringNumber() const noexcept {
+    return GetType() == kNumStr;
+  }
   /**
    * @brief  Check this node is in the range of int64.
    * @return true if it is int64.
@@ -321,7 +333,7 @@ class GenericNode {
    * @return std::string
    */
   sonic_force_inline std::string GetString() const {
-    sonic_assert(IsString());
+    sonic_assert(IsString() || IsStringNumber());
     return std::string(sv.p, Size());
   }
 
@@ -330,7 +342,12 @@ class GenericNode {
    * @return StringView
    */
   sonic_force_inline StringView GetStringView() const noexcept {
-    sonic_assert(IsString());
+    sonic_assert(IsString() || IsStringNumber() || IsRaw());
+    return StringView(sv.p, Size());
+  }
+
+  sonic_force_inline StringView GetStringNumber() const noexcept {
+    sonic_assert(IsStringNumber());
     return StringView(sv.p, Size());
   }
 
@@ -372,7 +389,7 @@ class GenericNode {
    * @return double
    */
   sonic_force_inline double GetDouble() const noexcept {
-    sonic_assert(IsNumber());
+    sonic_assert(IsNumber() && !IsStringNumber());
     if (IsDouble()) return n.f64;
     if (IsUint64())
       return static_cast<double>(
@@ -433,6 +450,13 @@ class GenericNode {
     return downCast()->setDoubleImpl(d);
   }
 
+  NodeType& SetStringNumber(StringView s) {
+    return downCast()->setStringNumberImpl(s);
+  }
+
+  NodeType& SetStringNumber(StringView s, alloc_type& alloc) {
+    return downCast()->setStringNumberImpl(s, alloc);
+  }
   /**
    * @brief Set this node as a copied string through the allocator alloc.
    * allocator.
@@ -553,7 +577,8 @@ class GenericNode {
    * @return size_t
    */
   size_t Size() const noexcept {
-    sonic_assert(this->IsContainer() || this->IsString() || this->IsRaw());
+    sonic_assert(this->IsContainer() || this->IsString() || this->IsRaw() ||
+                 this->IsStringNumber());
     return sv.len >> kInfoBits;
   }
 
@@ -696,6 +721,34 @@ class GenericNode {
   template <typename StringType>
   NodeType* AtPointer(const GenericJsonPointer<StringType>& pointer) {
     return atPointerImpl(pointer);
+  }
+
+  /**
+   * @brief get specific nodes by json path
+   * @param path json pointer
+   * @retval nullptr get node failed
+   * @retval others success
+   */
+  JsonPathResult<NodeType> AtJsonPath(const StringView jsonpath) {
+    JsonPathResult<NodeType> ret = {};
+    ret.error = kErrorNone;
+    internal::JsonPath path;
+
+    // padding some buffers
+    std::string pathpadd = internal::paddingJsonPath(jsonpath);
+    if (!path.Parse(pathpadd)) {
+      ret.error = kUnsupportedJsonPath;
+      return ret;
+    }
+
+    if (path[0].is_root() && path.size() == 1) {
+      ret.nodes.push_back(downCast());
+    } else if (!downCast()->atJsonPathImpl(path, 1, ret.nodes)) {
+      ret.error = kNotFoundByJsonPath;
+      ret.nodes.clear();
+    }
+
+    return ret;
   }
 
   /**
@@ -1046,8 +1099,9 @@ class GenericNode {
       setEmptyString();
     }
   }
-  NodeType& setRaw(StringView s) {
-    return downCast()->setRawImpl(s.data(), s.size());
+  NodeType& setRaw(StringView s) { return downCast()->setRawImpl(s); }
+  NodeType& setRaw(StringView s, alloc_type& alloc) {
+    return downCast()->setRawImpl(s, alloc);
   }
   void setEmptyString() noexcept {
     sv.p = "";

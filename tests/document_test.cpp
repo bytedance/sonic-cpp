@@ -597,6 +597,33 @@ TYPED_TEST(DocumentTest, SonicErrorInfinity) {
   EXPECT_TRUE(this->doc_.Dump().empty());
 }
 
+TYPED_TEST(DocumentTest, SerialzeInfinity) {
+  Document dom;
+  dom.SetDouble(std::numeric_limits<double>::infinity());
+  WriteBuffer wb;
+  SonicError err = dom.Serialize<kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "\"Infinity\"");
+
+  dom.SetDouble(-std::numeric_limits<double>::infinity());
+  err = dom.Serialize<kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "\"-Infinity\"");
+}
+
+TYPED_TEST(DocumentTest, SerialzeNaN) {
+  Document dom;
+  dom.SetDouble(std::numeric_limits<double>::quiet_NaN());
+  WriteBuffer wb;
+  SonicError err = dom.Serialize<kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  auto out = std::string(wb.ToString());
+  EXPECT_STREQ(wb.ToString(), "\"NaN\"");
+  dom.SetDouble(-std::numeric_limits<double>::quiet_NaN());
+  err = dom.Serialize<kSerializeInfNan>(wb);
+  EXPECT_STREQ(wb.ToString(), "\"-NaN\"");
+}
+
 TYPED_TEST(DocumentTest, swap) {
   using Document = TypeParam;
   Document doc1;

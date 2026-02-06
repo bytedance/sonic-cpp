@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <cmath>
+#include <cstring>
+
 #include "sonic/dom/flags.h"
 #include "sonic/dom/type.h"
 #include "sonic/error.h"
@@ -54,8 +57,12 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   internal::Stack stk;
   ParentCtx* parent;
 
-  wb.Clear();
-  wb.Reserve(estimate);
+  if ((serializeFlags & kSerializeAppendBuffer) == 0) {
+    wb.Clear();
+    wb.Reserve(estimate);
+  } else {
+    wb.Reserve(estimate + wb.Size());
+  }
 
   bool is_single = (!node->IsContainer()) || node->Empty();
   if (sonic_unlikely(is_single)) {
@@ -75,7 +82,9 @@ val_begin:
       inc_len = str_len * 6 + 32 + 3;
       wb.Grow(inc_len);
       str_ptr = node->GetStringView().data();
-      rn = internal::Quote(str_ptr, str_len, wb.End<char>()) - wb.End<char>();
+      rn = internal::Quote(str_ptr, str_len, wb.End<char>(),
+                           (serializeFlags & kSerializeEscapeEmoji) != 0) -
+           wb.End<char>();
       wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(is_key ? ':' : ',');
       member_cnt -= is_key;
@@ -94,14 +103,42 @@ val_begin:
                wb.End<char>();
           break;
         case kReal: {
-          rn = internal::F64toa(wb.End<char>(), node->GetDouble());
-          if (rn <= 0) goto inf_err;
+          const double d = node->GetDouble();
+          rn = internal::F64toa(wb.End<char>(), d);
+          // support Infinity/-Infinity or NaN/-NaN
+
+          if (sonic_unlikely(rn <= 0)) {
+            if (serializeFlags & kSerializeInfNan) {
+              if (sonic_unlikely(std::isinf(d))) {
+                const bool neg_inf = std::signbit(d);
+                const char* s = neg_inf ? "\"-Infinity\"" : "\"Infinity\"";
+                rn = neg_inf ? 11 : 10;
+                std::memcpy(wb.End<char>(), s, (size_t)rn);
+              } else if (sonic_unlikely(std::isnan(d))) {
+                const bool neg_nan = std::signbit(d);
+                const char* s = neg_nan ? "\"-NaN\"" : "\"NaN\"";
+                rn = neg_nan ? 6 : 5;
+                std::memcpy(wb.End<char>(), s, (size_t)rn);
+              } else {
+                goto inf_err;
+              }
+            } else {
+              goto inf_err;
+            }
+          }
           break;
-          default:
-            break;
         }
+        case kNumStr: {
+          rn = 0;
+          str_len = node->Size();
+          wb.Grow(str_len + 1);
+          wb.PushUnsafe(node->GetStringNumber().data(), str_len);
+          break;
+        }
+        default:
+          break;
       }
-      sonic_assert(rn > 0 && rn <= 32);
+      sonic_assert(rn >= 0 && rn <= 32);
       wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(',');
       break;

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <cstring>
 
 #include "sonic/allocator.h"
 #include "sonic/macro.h"
@@ -26,7 +27,11 @@ namespace internal {
 
 class Stack {
  public:
-  Stack(size_t cap = defaultCapcity()) : cap_(cap) { Reserve(cap); }
+  Stack(size_t cap = defaultCapcity()) : cap_(cap) {
+    buf_ = nullptr;
+    top_ = nullptr;
+    Reserve(cap);
+  }
   Stack(const Stack&) = delete;
   Stack(Stack&& rhs) : buf_(rhs.buf_), top_(rhs.top_), cap_(rhs.cap_) {
     rhs.setZero();
@@ -75,7 +80,15 @@ class Stack {
   template <typename T>
   sonic_force_inline void Push(T v) {
     Grow(sizeof(T));
+#if defined(__GNUC__) && __GNUC__ >= 8
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     *reinterpret_cast<T*>(top_) = v;
+#if defined(__GNUC__) && __GNUC__ >= 8
+#pragma GCC diagnostic pop
+#endif
     top_ += sizeof(T);
   }
 
@@ -86,7 +99,15 @@ class Stack {
    */
   sonic_force_inline void Push(const char* s, size_t n) {
     Grow(n + 1);
+#if defined(__GNUC__) && __GNUC__ >= 8
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     std::memcpy(top_, s, n);
+#if defined(__GNUC__) && __GNUC__ >= 8
+#pragma GCC diagnostic pop
+#endif
     top_ += n;
   }
   sonic_force_inline void PushUnsafe(const char* s, size_t cnt) {

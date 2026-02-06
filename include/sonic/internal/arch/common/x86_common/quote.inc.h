@@ -61,7 +61,9 @@
 
 using common::handle_unicode_codepoint;
 
-sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
+sonic_force_inline size_t
+parseStringInplace(uint8_t *&src, SonicError &err,
+                   bool allow_unescaped_control_chars = false) {
 #define SONIC_REPEAT8(v) {v v v v v v v v}
 
   uint8_t *dst = src;
@@ -69,13 +71,13 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
   while (1) {
   find:
     auto block = StringBlock::Find(src);
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst(allow_unescaped_control_chars)) {
       int idx = block.QuoteIndex();
       src += idx;
       *src++ = '\0';
       return src - sdst - 1;
     }
-    if (block.HasUnescaped()) {
+    if (!allow_unescaped_control_chars && block.HasUnescaped()) {
       err = kParseErrorUnEscaped;
       return 0;
     }
@@ -115,11 +117,12 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
     VecType v(src);
     block = StringBlock{
         static_cast<uint32_t>((v == '\\').to_bitmask()),  // bs_bits
-        static_cast<uint32_t>((v == '"').to_bitmask()),   // quote_bits
+
+        static_cast<uint32_t>((v == '"').to_bitmask()),  // quote_bits
         static_cast<uint32_t>((v <= '\x1f').to_bitmask()),
     };
     // If the next thing is the end quote, copy and return
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst(allow_unescaped_control_chars)) {
       // we encountered quotes first. Move dst to point to quotes and exit
       while (1) {
         SONIC_REPEAT8(if (sonic_unlikely(*src == '"')) break;
@@ -129,7 +132,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
       src++;
       return dst - sdst;
     }
-    if (block.HasUnescaped()) {
+    if (!allow_unescaped_control_chars && block.HasUnescaped()) {
       err = kParseErrorUnEscaped;
       return 0;
     }
@@ -151,13 +154,20 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 #undef SONIC_REPEAT8
 }
 
-static sonic_force_inline int CopyAndGetEscapMask(const char *src, char *dst) {
+static sonic_force_inline int CopyAndGetEscapMask(const char *src, char *dst,
+                                                  bool escape_emoji) {
   VecType v(reinterpret_cast<const uint8_t *>(src));
   v.store(reinterpret_cast<uint8_t *>(dst));
-  return ((v < '\x20') | (v == '\\') | (v == '"')).to_bitmask();
+  if (escape_emoji) {
+    return ((v < '\x20') | (v == '\\') | (v == '"') | (v >= '\xF0'))
+        .to_bitmask();
+  } else {
+    return ((v < '\x20') | (v == '\\') | (v == '"')).to_bitmask();
+  }
 }
 
-sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
+sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
+                                bool escape_emoji) {
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint32_t mm;
@@ -167,10 +177,10 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
   while (nb >= VEC_LEN) {
     /* check for matches */
     // TODO: optimize: exploit the simd bitmask in the escape block.
-    if ((mm = CopyAndGetEscapMask(src, dst)) != 0) {
+    if ((mm = CopyAndGetEscapMask(src, dst, escape_emoji)) != 0) {
       cn = __builtin_ctz(mm);
       MOVE_N_CHARS(src, cn);
-      DoEscape(src, dst, nb);
+      DoEscape(src, dst, nb, escape_emoji);
     } else {
       /* move to next block */
       MOVE_N_CHARS(src, VEC_LEN);
@@ -178,7 +188,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
   }
 
   if (nb > 0) {
-    char tmp_src[VEC_LEN * 2];
+    char tmp_src[VEC_LEN * 2] = {0};
     const char *src_r;
 #ifdef SONIC_USE_SANITIZE
     if (0) {
@@ -192,11 +202,12 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
       src_r = tmp_src;
     }
     while (nb > 0) {
-      mm = CopyAndGetEscapMask(src_r, dst) & (VEC_FULL_MASK >> (VEC_LEN - nb));
+      mm = CopyAndGetEscapMask(src_r, dst, escape_emoji) &
+           (VEC_FULL_MASK >> (VEC_LEN - nb));
       if (mm) {
         cn = __builtin_ctz(mm);
         MOVE_N_CHARS(src_r, cn);
-        DoEscape(src_r, dst, nb);
+        DoEscape(src_r, dst, nb, escape_emoji);
       } else {
         dst += nb;
         nb = 0;

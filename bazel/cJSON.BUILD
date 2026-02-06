@@ -7,4 +7,3 @@ cc_library(
   hdrs = ["cJSON.h"],
   copts = ['-O3' ,'-DNDEBUG',],
 )
-

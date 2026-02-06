@@ -829,23 +829,38 @@ static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
   char* p = out + 1;
   char* end = FormatSignificand(v.sig, p, cnt);
   while (*(end - 1) == '0') end--;
-
-  /* print decimal point if needed */
   *out = *p;
+#ifdef SONIC_SPARK_FORMAT
+  *p = '.';
+  if ((end - p) <= 1) {
+    *(++p) = '0';
+    end = p + 1;
+  }
+
+#else
+  /* print decimal point if needed */
   if (end - p > 1) {
     *p = '.';
   } else {
     end--;
   }
+#endif
 
   /* print the exponent */
+#ifdef SONIC_SPARK_FORMAT
+  *end++ = 'E';
+#else
   *end++ = 'e';
+#endif
+
   int32_t exp = v.exp + (int32_t)cnt - 1;
   if (exp < 0) {
     *end++ = '-';
     exp = -exp;
   } else {
+#ifndef SONIC_SPARK_FORMAT
     *end++ = '+';
+#endif
   }
 
   if (exp >= 100) {
@@ -1018,6 +1033,7 @@ sonic_static_noinline int F64toa(char* out, double fp) {
     c = rsig | F64_HIDDEN_BIT;
     q = rexp - F64_EXP_BIAS - F64_SIG_BITS;
 
+#ifndef SONIC_SPARK_FORMAT
     /* fast path for integer */
     if (q <= 0 && q >= -F64_SIG_BITS && IsDivPow2(c, -q)) {
       uint64_t u = c >> -q;
@@ -1026,6 +1042,7 @@ sonic_static_noinline int F64toa(char* out, double fp) {
       *p++ = '0';
       return p - out;
     }
+#endif
 
   } else {
     c = rsig;
@@ -1035,15 +1052,27 @@ sonic_static_noinline int F64toa(char* out, double fp) {
   F64Decimal dec = F64ToDecimal(rsig, rexp, c, q);
   int cnt = Ctz10(dec.sig);
   int dot = cnt + dec.exp;
+
+#ifdef SONIC_SPARK_FORMAT
+  /*
+   * Floating point values in the range 1.0E-3 <= x < 1.0E7 have to be printed
+   * without exponent. This test checks the values at those boundaries.
+   * reference from
+   * https://github.com/FasterXML/jackson-core/blob/511704247fe020f81b8b37303d3c8acffab6aa0b/src/main/java/com/fasterxml/jackson/core/io/schubfach/DoubleToDecimal.java#L500
+   *
+   */
+  int sci_exp = cnt - 1 + dec.exp;
+  bool exp_fmt = !(sci_exp >= -3 && sci_exp < 7);
+#else
   int sci_exp = dot - 1;
   bool exp_fmt = sci_exp < -6 || sci_exp > 20;
-  bool has_dot = dot < cnt;
+#endif
 
   if (exp_fmt) {
     return FormatExponent(dec, p, cnt) - out;
   }
 
-  if (has_dot) {
+  if (dec.exp < 0) {
     return FormatDecimal(dec, p, cnt) - out;
   }
 
