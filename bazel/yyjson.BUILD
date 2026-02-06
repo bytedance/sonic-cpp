@@ -8,4 +8,3 @@ cc_library(
   includes = ["src"],
   copts = ['-O3', '-DNDEBUG', '-g'],
 )
-

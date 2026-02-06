@@ -24,37 +24,37 @@
 namespace sonic_json {
 namespace internal {
 __attribute__((target("default"))) inline size_t parseStringInplace(
-    uint8_t *&, SonicError &) {
+    uint8_t *&, SonicError &, bool) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
-                                                      char *) {
+                                                      char *, bool) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
 __attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err) {
-  return sse::parseStringInplace(src, err);
+    uint8_t *&src, SonicError &err, bool allow_unescaped_control_chars) {
+  return sse::parseStringInplace(src, err, allow_unescaped_control_chars);
 }
 
 __attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
-                                                           size_t nb,
-                                                           char *dst) {
-  return sse::Quote(src, nb, dst);
+                                                           size_t nb, char *dst,
+                                                           bool escape_emoji) {
+  return sse::Quote(src, nb, dst, escape_emoji);
 }
 
 __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err) {
-  return avx2::parseStringInplace(src, err);
+    uint8_t *&src, SonicError &err, bool allow_unescaped_control_chars) {
+  return avx2::parseStringInplace(src, err, allow_unescaped_control_chars);
 }
 
 __attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
-                                                          size_t nb,
-                                                          char *dst) {
-  return avx2::Quote(src, nb, dst);
+                                                          size_t nb, char *dst,
+                                                          bool escape_emoji) {
+  return avx2::Quote(src, nb, dst, escape_emoji);
 }
 
 }  // namespace internal

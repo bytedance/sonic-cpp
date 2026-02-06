@@ -163,6 +163,10 @@ class SchemaHandler {
     return true;
   }
 
+  sonic_force_inline bool Raw(const char * /*data*/, size_t /*len*/) {
+    return false;
+  }
+
   sonic_force_inline bool Key(StringView s) {
     if (parent_node_ && parent_node_->IsObject()) {
       if (found_node_count_ >= parent_node_->Size()) {
@@ -226,6 +230,13 @@ class SchemaHandler {
     NodeType *cur = &st_[np_ - 1];
     cur->o.next.ofs = parent_;
     parent_ = np_ - 1;
+    return true;
+  }
+
+  sonic_force_inline bool NumStr(StringView s) {
+    SONIC_ADD_NODE();
+    st_[np_ - 1].setLength(s.size(), kNumStr);
+    st_[np_ - 1].sv.p = s.data();
     return true;
   }
 

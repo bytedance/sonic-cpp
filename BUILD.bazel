@@ -5,10 +5,11 @@ load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 common_copts = ['-mavx2', '-mbmi', '-mpclmul']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 
-avx2_copts = ['-mavx2', '-mbmi', '-mpclmul']
+avx2_copts = ['-mavx2', '-mbmi', '-mpclmul', '-mlzcnt']
 sse_copts = ['-msse', '-msse2', '-msse4.1', '-msse4.2','-mpclmul']
 arm_copts = ['-march=armv8-a']
 apple_silicon_copts = [ '-mcpu=apple-m1' ]
+sve2_copts = ['-march=armv8-a+sve2', '-msve-vector-bits=128']
 default_copts = ['-march=native']
 benchmark_copts = ['-O3', '-DNDEBUG', '-std=c++17']
 static_dispatch_copts = []
@@ -52,6 +53,11 @@ config_setting(
 config_setting(
     name = "avx2_build",
     flag_values = {":sonic_arch": "haswell"},
+)
+
+config_setting(
+    name = "sve2_build",
+    flag_values = {":sonic_arch": "sve2"},
 )
 
 config_setting(
@@ -126,6 +132,7 @@ cc_binary(
     # copts = common_copts + ['-DNDEBUG', '-std=c++17'],
     copts = select({
                 "arm_build": arm_copts + benchmark_copts,
+                "sve2_build": sve2_copts + benchmark_copts,
                 "sse_build": sse_copts + benchmark_copts,
                 "avx2_build": avx2_copts + benchmark_copts,
                 "apple_silicon_build": apple_silicon_copts + benchmark_copts,
@@ -150,7 +157,10 @@ cc_test(
         ":string_view",
         "@googletest//:gtest_main",
     ],
-    data = glob([ "testdata/*.json"]),
+   data = glob([
+        "testdata/*.json",
+        "testdata/num/*",
+    ]),
     linkopts = filesystem_linkopts + ['-fstack-protector-all'] +\
         select({
             "no_san": [],
@@ -158,7 +168,7 @@ cc_test(
             "clang_san": sanitize_copts + clang_san_linkopts,
         }),
     copts = [
-        '-O3', '-g', '-UNDEBUG', '-std=c++14',
+        '-O3', '-g', '-UNDEBUG',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ]  + \
@@ -169,6 +179,7 @@ cc_test(
         }) + \
         select({
             "arm_build": arm_copts + benchmark_copts,
+            "sve2_build": sve2_copts + benchmark_copts,
             "sse_build": sse_copts + benchmark_copts,
             "avx2_build": avx2_copts + benchmark_copts,
             "apple_silicon_build": apple_silicon_copts + benchmark_copts,
@@ -192,7 +203,10 @@ cc_test(
         ":string_view",
         "@googletest//:gtest_main",
     ],
-    data = glob([ "testdata/*.json"]),
+    data = glob([
+        "testdata/*.json",
+        "testdata/num/*",
+    ]),
     linkopts = sanitize_copts + filesystem_linkopts + [
         '-fstack-protector-all',
     ],
@@ -210,11 +224,14 @@ cc_test(
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
-    deps = [ 
+    deps = [
         ":string_view",
         "@googletest//:gtest_main",
     ],
-    data = glob([ "testdata/*.json"]),
+    data = glob([
+        "testdata/*.json",
+        "testdata/num/*",
+    ]),
     linkopts = sanitize_copts + [
         '-fstack-protector-all',
         '-fsanitize-link-c++-runtime'
@@ -233,11 +250,14 @@ cc_test(
             "include/sonic/*",
             "include/sonic/**/*",
         ]),
-    deps = [ 
+    deps = [
         ":string_view",
         "@googletest//:gtest_main",
     ],
-    data = glob([ "testdata/*.json"]),
+    data = glob([
+        "testdata/*.json",
+        "testdata/num/*",
+    ]),
     linkopts = sanitize_copts + filesystem_linkopts + [
         '-fstack-protector-all',
         '-fsanitize-link-c++-runtime'
@@ -271,4 +291,3 @@ cc_test(
         '-fprofile-arcs', '-ftest-coverage',
     ],
 )
-

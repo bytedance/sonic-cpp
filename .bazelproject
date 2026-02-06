@@ -1,0 +1,8 @@
+directories:
+    # include
+    .
+    # exclude generated files
+    -bazel-bin
+    -bazel-out
+    -bazel-testlogs
+    -bazel-sonic-cpp
