@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <cstdlib>
 #include <map>
 #include <string>
 
@@ -782,6 +783,71 @@ TEST(DNodeTest, AllocatorReturnNull) {
   EXPECT_TRUE(node1.Size() == 0);
   EXPECT_EQ(node1.GetString(), "");
   EXPECT_EQ(node1.GetStringView(), "");
+}
+
+// Allocator for verifying owned-buffer free behavior.
+class CountingAllocator {
+ public:
+  void* Malloc(size_t size) {
+    ++malloc_cnt;
+    return size ? std::malloc(size) : nullptr;
+  }
+  void* Realloc(void* old_ptr, size_t /*old_size*/, size_t new_size) {
+    if (new_size == 0) {
+      Free(old_ptr);
+      return nullptr;
+    }
+    ++realloc_cnt;
+    return std::realloc(old_ptr, new_size);
+  }
+
+  static void Free(void* ptr) {
+    ++free_cnt;
+    std::free(ptr);
+  }
+
+  static void Reset() {
+    malloc_cnt = 0;
+    realloc_cnt = 0;
+    free_cnt = 0;
+  }
+
+  static inline size_t malloc_cnt = 0;
+  static inline size_t realloc_cnt = 0;
+  static inline size_t free_cnt = 0;
+  static constexpr bool kNeedFree = true;
+};
+
+TEST(DNodeTest, OwnedRawAndNumStrFreed) {
+  using NodeType = DNode<CountingAllocator>;
+  CountingAllocator a;
+
+  // Copy a raw node into a kNeedFree allocator should not assert and should be
+  // freed on destruction.
+  CountingAllocator::Reset();
+  {
+    Document doc;
+    const char* json = "123";
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>(json, 3);
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.IsRaw());
+
+    NodeType copied(doc, a);
+    EXPECT_TRUE(copied.IsRaw());
+    EXPECT_EQ(copied.GetRaw(), "123");
+  }
+  EXPECT_EQ(CountingAllocator::malloc_cnt, CountingAllocator::free_cnt);
+
+  // SetStringNumber with allocator should also be freed on destruction.
+  CountingAllocator::Reset();
+  {
+    NodeType n;
+    std::string s = "18446744073709551616";
+    n.SetStringNumber(StringView(s.data(), s.size()), a);
+    EXPECT_TRUE(n.IsStringNumber());
+    EXPECT_EQ(n.GetStringView(), s);
+  }
+  EXPECT_EQ(CountingAllocator::malloc_cnt, CountingAllocator::free_cnt);
 }
 
 TYPED_TEST(NodeTest, SourceAllocator) {

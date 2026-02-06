@@ -16,11 +16,14 @@
 
 #include <benchmark/benchmark.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string_view>
+#include <system_error>
+#include <vector>
 
 #include "cjson.hpp"
 #include "jsoncpp.hpp"
@@ -30,12 +33,48 @@
 #include "sonic.hpp"
 #include "yyjson.hpp"
 
-static std::string get_json(const std::string_view file) {
-  std::ifstream ifs;
+static std::string get_json(const std::filesystem::path &file) {
+  std::ifstream ifs(file, std::ios::in | std::ios::binary);
+  if (!ifs.is_open()) return {};
+
   std::stringstream ss;
-  ifs.open(file.data());
   ss << ifs.rdbuf();
   return ss.str();
+}
+
+static void add_testdata_candidates(std::vector<std::filesystem::path> &out,
+                                    const std::filesystem::path &root) {
+  if (root.empty()) return;
+
+  out.push_back(root / "testdata");
+  out.push_back(root / "_main" / "testdata");
+
+  std::error_code ec;
+  if (!std::filesystem::is_directory(root, ec)) return;
+  for (const auto &e : std::filesystem::directory_iterator(root, ec)) {
+    if (e.is_directory(ec)) out.push_back(e.path() / "testdata");
+  }
+}
+
+static std::filesystem::path find_testdata_dir(const char *argv0) {
+  std::vector<std::filesystem::path> candidates;
+  candidates.emplace_back("testdata");
+
+  if (const char *p = std::getenv("RUNFILES_DIR"))
+    add_testdata_candidates(candidates, std::filesystem::path(p));
+  if (const char *p = std::getenv("TEST_SRCDIR"))
+    add_testdata_candidates(candidates, std::filesystem::path(p));
+
+  if (argv0 && *argv0) {
+    add_testdata_candidates(
+        candidates, std::filesystem::path(std::string(argv0) + ".runfiles"));
+  }
+
+  std::error_code ec;
+  for (const auto &c : candidates) {
+    if (std::filesystem::is_directory(c, ec)) return c;
+  }
+  return {};
 }
 
 template <typename Json, typename PR, typename SR>
@@ -173,7 +212,7 @@ static void BM_Decode(benchmark::State &state, std::string filename,
   state.SetBytesProcessed(int64_t(state.iterations()) * int64_t(data.size()));
 }
 
-static void regitser_OnDemand() {
+static void regitser_OnDemand(const std::filesystem::path &testdata_dir) {
   std::vector<OnDemand> tests = {
       {"twitter", "Normal", {"search_metadata", "count"}, 100, true},
       {"citm_catalog",
@@ -185,7 +224,7 @@ static void regitser_OnDemand() {
   };
 
   for (auto &t : tests) {
-    auto file_path = std::string("testdata/") + t.file + ".json";
+    auto file_path = testdata_dir / (t.file + ".json");
     t.json = get_json(file_path);
 
 #define REG_ONDEMAND(JSON)                                                   \
@@ -203,14 +242,24 @@ static void regitser_OnDemand() {
 int main(int argc, char **argv) {
   benchmark::Initialize(&argc, argv);
 
+  auto testdata_dir = find_testdata_dir(argv[0]);
+  if (testdata_dir.empty()) {
+    std::cerr << "Cannot locate 'testdata' directory. Try running with Bazel "
+                 "runfiles."
+              << std::endl;
+    return 1;
+  }
+
   // Read the data from json files
   std::vector<std::pair<std::filesystem::path, std::string>> jsons;
-  for (const auto &entry : std::filesystem::directory_iterator("testdata"))
+  std::error_code ec;
+  for (const auto &entry :
+       std::filesystem::directory_iterator(testdata_dir, ec)) {
     if (entry.path().extension() == ".json")
-      jsons.push_back(
-          std::make_pair(entry.path(), get_json(entry.path().string())));
+      jsons.push_back(std::make_pair(entry.path(), get_json(entry.path())));
+  }
 
-  regitser_OnDemand();
+  regitser_OnDemand(testdata_dir);
 #define ADD_JSON_BMK(JSON, ACT)                                      \
   do {                                                               \
     benchmark::RegisterBenchmark(                                    \

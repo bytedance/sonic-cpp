@@ -1,5 +1,9 @@
 name: Test ARM
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ master ]
@@ -34,6 +38,6 @@ jobs:
       - name: Build and test SVE2
         if: steps.sve_check.outputs.supported == 'true'
         run: |
-          cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON -DENABLE_ASAN=OFF
+          cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON
           cmake --build build-sve
-          ./build-sve/tests/unittest
+          ASAN_OPTIONS=detect_stack_use_after_return=0 ./build-sve/tests/unittest

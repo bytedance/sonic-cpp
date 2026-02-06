@@ -117,6 +117,8 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 }
 
 // return true if container is closed.
+// the implementation is inspired from JSONSki
+// reference: https://dl.acm.org/doi/10.1145/3503222.3507719
 sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
                                       size_t len, uint8_t left, uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;

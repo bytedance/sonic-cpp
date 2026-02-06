@@ -51,7 +51,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   friend BaseNode;
   template <typename>
   friend class DNode;
-  template <unsigned serializeFlags, typename NodeType>
+  template <SerializeFlags serializeFlags, typename NodeType>
   friend SonicError internal::SerializeImpl(const NodeType*, WriteBuffer&);
 
   // constructor
@@ -120,6 +120,24 @@ class DNode : public GenericNode<DNode<Allocator>> {
         }
         break;
       }
+      case kNumber: {
+        if (rhs.GetType() != kNumStr) {
+          std::memcpy(&(this->data), &rhs, sizeof(this->data));
+          break;
+        }
+        [[fallthrough]];
+      }
+      case kRaw: {
+        size_t len = rhs.Size();
+        // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
+        this->sv.len = rhs.getTypeAndLen() | kOwnedStringMask;
+        this->sv.p = (char*)(alloc.Malloc(len + 1));
+        sonic_assert(this->sv.p != nullptr);
+        std::memcpy(const_cast<char*>(this->sv.p), rhs.GetStringView().data(),
+                    len);
+        const_cast<char*>(this->sv.p)[len] = '\0';
+        break;
+      }
       default:
         std::memcpy(&(this->data), &rhs, sizeof(this->data));
         break;
@@ -146,8 +164,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
   DNode& operator=(DNode&& rhs) {
     if (sonic_likely(this != &rhs)) {
       // Can't destroy "this" before assigning "rhs", otherwise "rhs"
-      // could be used after free if it's an sub-node of "this",
-      // hence the temporary danse.
+      // could be used after free if it's a sub-node of "this",
+      // hence the temporary dance.
       // Copied from RapidJSON.
       DNode temp;
       temp.rawAssign(rhs);
@@ -241,7 +259,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline MemberIterator FindMember(const char* key,
@@ -257,7 +275,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline ConstMemberIterator FindMember(const char* key,
@@ -293,8 +311,18 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return true;
   }
 
+  bool atJsonPathImpl(const internal::JsonPath& path, size_t index,
+                      std::vector<DNode*>& res) {
+    return atJsonPathImplCommon<DNode*>(this, path, index, res);
+  }
+
+  bool atJsonPathImpl(const internal::JsonPath& path, size_t index,
+                      std::vector<const DNode*>& res) const {
+    return atJsonPathImplCommon<const DNode*>(this, path, index, res);
+  }
+
   /**
-   * @brief Destory the created map. This means that you don't want maintain the
+   * @brief Destroy the created map. This means that you don't want maintain the
    * map anymore.
    */
   void DestroyMap() {
@@ -432,10 +460,42 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return *this;
   }
 
-  DNode& setRawImpl(const char* s, size_t len) {
+  DNode& setRawImpl(StringView s) { return setRawLikeImpl(s, kRaw); }
+
+  DNode& setRawImpl(StringView s, Allocator& alloc) {
+    return setRawLikeImpl(s, kRaw, alloc);
+  }
+
+  DNode& setStringNumberImpl(StringView s) {
+    return setRawLikeImpl(s, kNumStr);
+  }
+
+  DNode& setStringNumberImpl(StringView s, Allocator& alloc) {
+    return setRawLikeImpl(s, kNumStr, alloc);
+  }
+
+  DNode& setRawLikeImpl(StringView s, TypeFlag typ) {
     this->destroy();
-    this->raw.p = s;
-    this->setLength(len, kRaw);
+    this->raw.p = s.data();
+    this->setLength(s.size(), typ);
+    return *this;
+  }
+
+  DNode& setRawLikeImpl(StringView s, TypeFlag typ, Allocator& alloc) {
+    this->destroy();
+    size_t len = s.size();
+    char* p = static_cast<char*>(alloc.Malloc(len + 1));
+    if (p) {
+      std::memcpy(p, s.data(), len);
+      p[len] = '\0';
+      this->raw.p = p;
+      // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
+      this->setLength(len, static_cast<TypeFlag>(static_cast<uint64_t>(typ) |
+                                                 kOwnedStringMask));
+    } else {
+      this->raw.p = "";
+      this->setLength(0, typ);
+    }
     return *this;
   }
 
@@ -475,6 +535,69 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   size_t capacityImpl() const noexcept {
     return children() != nullptr ? meta()->cap : 0;
+  }
+
+  template <typename ResPtr, typename SelfPtr>
+  static bool atJsonPathImplCommon(SelfPtr self, const internal::JsonPath& path,
+                                   size_t index, std::vector<ResPtr>& res) {
+    static_assert(std::is_pointer<ResPtr>::value,
+                  "ResPtr must be a pointer type");
+    if (index >= path.size()) {
+      res.push_back(reinterpret_cast<ResPtr>(self));
+      return true;
+    }
+
+    if (path[index].is_wildcard()) {
+      // select nothing from the primitive JSON value
+      if (!self->IsObject() && !self->IsArray()) {
+        return true;
+      }
+      using CurPtr = std::conditional_t<
+          std::is_const<std::remove_pointer_t<ResPtr>>::value, const DNode*,
+          DNode*>;
+      CurPtr n = reinterpret_cast<CurPtr>(self->getChildrenFirstUnsafe()) +
+                 (self->IsObject() ? 1 : 0);
+      size_t step = self->IsObject() ? 2 : 1;
+      for (size_t i = 0; i < self->Size(); ++i) {
+        CurPtr cur = (n + i * step);
+        atJsonPathImplCommon<ResPtr>(cur, path, index + 1, res);
+      }
+      return true;
+    }
+
+    if (path[index].is_key()) {
+      if (!self->IsObject()) {
+        return false;
+      }
+      auto m = self->FindMember(path[index].key());
+      if (m != self->MemberEnd()) {
+        auto* child =
+            reinterpret_cast<std::remove_pointer_t<ResPtr>*>(&m->value);
+        return atJsonPathImplCommon<ResPtr>(child, path, index + 1, res);
+      }
+      return false;
+    }
+
+    if (path[index].is_index()) {
+      if (!self->IsArray()) {
+        return false;
+      }
+
+      // index maybe negative
+      int64_t idx = path[index].index();
+      if (idx < 0) {
+        idx = self->Size() + idx;
+      }
+
+      if (idx >= int64_t(self->Size()) || idx < 0) {
+        return false;
+      }
+      auto& child_ref = self->findValueImpl(size_t(idx));
+      auto* child =
+          reinterpret_cast<std::remove_pointer_t<ResPtr>*>(&child_ref);
+      return atJsonPathImplCommon<ResPtr>(child, path, index + 1, res);
+    }
+    return false;
   }
 
   DNode& memberReserveImpl(size_t new_cap, Allocator& alloc) {
@@ -561,6 +684,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   sonic_force_inline DNode* getArrChildrenFirstUnsafe() const {
     sonic_assert(this->IsArray());
+    return (DNode*)((char*)this->a.next.children +
+                    sizeof(MetaNode) / sizeof(char));
+  }
+
+  sonic_force_inline DNode* getChildrenFirstUnsafe() const {
     return (DNode*)((char*)this->a.next.children +
                     sizeof(MetaNode) / sizeof(char));
   }
@@ -787,7 +915,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   DNode& pushBackImpl(DNode& value, Allocator& alloc) {
     constexpr size_t k_default_array_cap = 16;
     sonic_assert(this->IsArray());
-    // reseve capacity
+    // reserve capacity
     size_t cap = this->Capacity();
     if (this->Size() >= cap) {
       size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;
@@ -817,7 +945,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return start;
   }
 
-  template <unsigned serializeFlags = kSerializeDefault>
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
   SonicError serializeImpl(WriteBuffer& wb) const {
     return internal::SerializeImpl<serializeFlags>(this, wb);
   }
@@ -831,6 +959,19 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (!Allocator::kNeedFree) {
       return;
     }
+
+    // Free owned string buffers for Raw / NumStr.
+    // Note: We use the extra ownership bit in the 8-bit type info
+    // (kOwnedStringMask) while keeping GetType() stable (it masks by
+    // kSubTypeMask).
+    const uint8_t info = static_cast<uint8_t>(this->sv.len & kInfoMask);
+    if ((info & kOwnedStringMask) != 0) {
+      if (this->getBasicType() == kRaw || this->GetType() == kNumStr) {
+        Allocator::Free((void*)this->sv.p);
+        return;
+      }
+    }
+
     switch (this->GetType()) {
       case kObject: {
         if (children()) {

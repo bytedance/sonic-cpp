@@ -163,6 +163,17 @@ class SchemaHandler {
     return true;
   }
 
+  sonic_force_inline bool Raw(const char *data, size_t len) {
+    if (cur_node_) {
+      cur_node_->setRaw(StringView(data, len));
+      return true;
+    }
+    SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
+    st_[np_ - 1].setRaw(StringView(data, len));
+    return true;
+  }
+
   sonic_force_inline bool Key(StringView s) {
     if (parent_node_ && parent_node_->IsObject()) {
       if (found_node_count_ >= parent_node_->Size()) {
@@ -210,6 +221,7 @@ class SchemaHandler {
       return true;
     }
     SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
     NodeType *cur = &st_[np_ - 1];
     cur->o.next.ofs = parent_;
     parent_ = np_ - 1;
@@ -223,9 +235,18 @@ class SchemaHandler {
       cur_node_ = nullptr;
     }
     SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
     NodeType *cur = &st_[np_ - 1];
     cur->o.next.ofs = parent_;
     parent_ = np_ - 1;
+    return true;
+  }
+
+  sonic_force_inline bool NumStr(StringView s) {
+    SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
+    st_[np_ - 1].setLength(s.size(), kNumStr);
+    st_[np_ - 1].sv.p = s.data();
     return true;
   }
 
@@ -245,7 +266,7 @@ class SchemaHandler {
       obj_ptr = parent_st_.back();
       obj_member_ptr = &st_[0];
       parent_st_.pop_back();
-      // resotre parent node ptr
+      // restore parent node ptr
       parent_node_ = parent_st_.back();
       parent_st_.pop_back();
       cur_node_ = nullptr;
@@ -306,6 +327,7 @@ class SchemaHandler {
 
   sonic_force_inline bool stringImpl(StringView s) {
     SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
     st_[np_ - 1].setLength(s.size(), kStringCopy);
     st_[np_ - 1].sv.p = s.data();
     return true;

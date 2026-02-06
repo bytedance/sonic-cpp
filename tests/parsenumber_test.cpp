@@ -57,6 +57,35 @@ void TestParseDouble(double num, const std::string& input) {
   { EXPECT_DOUBLE_EQ(num, internal::AtofNative(input.data(), input.size())); }
 }
 
+void testStringNumberNode(const std::string& expect, Node& node) {
+  EXPECT_TRUE(node.IsStringNumber()) << expect;
+  EXPECT_EQ(expect, node.GetStringView()) << expect;
+  EXPECT_EQ(expect, node.Dump()) << expect;
+}
+
+void TestStringNumber(const std::string& expect, const std::string& input) {
+  auto doc_ptr = std::make_unique<Document>();
+  doc_ptr->Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                        input.size());
+  EXPECT_FALSE(doc_ptr->HasParseError()) << input;
+  testStringNumberNode(expect, *doc_ptr);
+
+  // test copy
+  MemoryPoolAllocator<> a;
+  Node copied(*doc_ptr, a);
+  doc_ptr.reset();
+  testStringNumberNode(expect, copied);
+
+  // test set
+  Node n;
+  n.SetStringNumber(input);
+  testStringNumberNode(expect, n);
+
+  // test set with copy
+  n.SetStringNumber(std::string(input), a);
+  testStringNumberNode(expect, n);
+}
+
 void TestParseError(const std::string& input, size_t off, SonicError err) {
   Document doc;
   doc.Parse(input.data(), input.size());
@@ -119,6 +148,67 @@ TEST(ParserTest, ParseNumber) {
   TestParseDouble(-1234567890123456789012345.0, "-1234567890123456789012345");
 }
 
+TEST(ParserTest, ParseIntegerAsRaw) {
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>("0", 1);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsRaw());
+    EXPECT_EQ(doc.GetRaw(), "0");
+  }
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>("-0", 2);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsRaw());
+    EXPECT_EQ(doc.GetRaw(), "-0");
+  }
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>("123", 3);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsRaw());
+    EXPECT_EQ(doc.GetRaw(), "123");
+  }
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>("-123", 4);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsRaw());
+    EXPECT_EQ(doc.GetRaw(), "-123");
+  }
+  {
+    // Scientific notation is not treated as integer.
+    Document doc;
+    doc.Parse<ParseFlags::kParseIntegerAsRaw>("0e+1", 4);
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_TRUE(doc.IsDouble());
+    EXPECT_DOUBLE_EQ(doc.GetDouble(), 0.0);
+  }
+}
+
+TEST(ParserTest, AllowUnescapedControlChars) {
+  std::string s = "\"";
+  s.push_back('\t');
+  s += "\"";
+
+  {
+    Document doc;
+    doc.Parse(s.data(), s.size());
+    EXPECT_TRUE(doc.HasParseError());
+  }
+
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseAllowUnescapedControlChars>(s.data(), s.size());
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.IsString());
+    auto sv = doc.GetStringView();
+    ASSERT_EQ(sv.size(), 1U);
+    EXPECT_EQ(sv[0], '\t');
+  }
+}
+
 void ParseFloatInFiles() {
   std::vector<std::string> files = {"./testdata/num/float-1.txt",
                                     "./testdata/num/float-8.txt"};
@@ -155,7 +245,7 @@ TEST(ParserTest, ParseFloatExponent) {
   TestParseDouble(0, "-0.00e+0456");
   TestParseDouble(0, "-0e+456");
 
-  // zero exponets
+  // zero exponents
   TestParseDouble(1, "1e0");
   TestParseDouble(12, "12e-00");
 
@@ -222,6 +312,7 @@ TEST(ParserTest, ParseInvalidNumber) {
   TestParseInval(1, "-");
   TestParseInval(1, "00");
   TestParseInval(1, "01");
+  TestParseInval(2, "-01");
   TestParseInval(2, "0.");
   TestParseInval(1, "0-");
   TestParseInval(2, "0e");
@@ -235,6 +326,40 @@ TEST(ParserTest, ParseInvalidNumber) {
   TestParseInval(8, "-1234567.");
   TestParseInval(
       8, "1234567 123");  // Only support parse single JSON value one time
+}
+
+TEST(ParserTest, ParseStringNumber) {
+  TestStringNumber("-9223372036854775809", "-9223372036854775809");
+  TestStringNumber("18446744073709551616", "18446744073709551616");
+  TestStringNumber("-4.94065645841247E-324", "-4.94065645841247E-324");
+  TestStringNumber("4.94065645841247E-324", "4.94065645841247E-324");
+  TestStringNumber("1.79769313486231E308", "1.79769313486231E308");
+  TestStringNumber("-1.79769313486231E308", "-1.79769313486231E308");
+}
+
+TEST(ParserTest, ParseStringNumber_NormalFloat) {
+  TestStringNumber("1.0", "1.0");
+  TestStringNumber("0.1", "0.1");
+  TestStringNumber("1e2", "1e2");
+}
+
+TEST(ParserTest, ParseStringNumber_ZeroExponentStaysDouble) {
+  Document doc;
+  std::string input = "0e+123";
+  doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(), input.size());
+  EXPECT_FALSE(doc.HasParseError()) << input;
+  EXPECT_TRUE(doc.IsDouble()) << input;
+  EXPECT_DOUBLE_EQ(0.0, doc.GetDouble()) << input;
+}
+
+TEST(ParserTest, ParseStringNumber_Uint64KeepsType) {
+  Document doc;
+  std::string input = "18446744073709551615";  // ULLONG_MAX
+  doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(), input.size());
+  EXPECT_FALSE(doc.HasParseError()) << input;
+  EXPECT_TRUE(doc.IsUint64()) << input;
+  EXPECT_EQ(18446744073709551615ULL, doc.GetUint64()) << input;
+  EXPECT_EQ(input, doc.Dump()) << input;
 }
 
 }  // namespace

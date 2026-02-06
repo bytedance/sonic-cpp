@@ -1,6 +1,10 @@
 # yaml-language-server: $schema=https://json-schema.org/draft-07/schema#
 name: Test Coverage
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 on:
   push:
   pull_request:

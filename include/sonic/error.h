@@ -45,12 +45,19 @@ enum SonicError {
   kParseErrorMismatchType =
       10,  ///< ParseOnDemand: the target type is not matched.
   kSerErrorUnsupportedType = 11,  ///< Serialize: DOM has invalid node type.
-  kSerErrorInfinity = 12,         ///< Serialize: DOM has inifinity number node.
+  kSerErrorInfinity = 12,         ///< Serialize: DOM has infinity number node.
   kSerErrorInvalidObjKey = 13,  ///< Serialize: The type of object's key is not
                                 ///< string.
   kErrorNoMem = 14,             ///< Memory is not enough to allocate.
   kParseErrorUnexpect = 15,     ///< Unexpected Errors
 
+  kSaxTermination = 16,       ///< Parse: SAX handler return false to
+                              ///< terminate parsing.
+  kUnsupportedJsonPath = 17,  ///< JsonPath: Unsupported json path.
+  kNotFoundByJsonPath = 18,   ///< JsonPath: Not found the target by json path.
+  kUnmatchedTypeInJsonPath =
+      19,                  ///< JsonPath: The type of node is not matched.
+  kErrorNoneNoMatch = 20,  ///< JsonPath: No node is matched by the json path.
   kErrorNums,
 };
 
@@ -79,13 +86,30 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kParseErrorMismatchType,
        "ParseOnDemand: the target type is not matched."},
       {kSerErrorUnsupportedType, "Serialize: DOM has invalid node type."},
-      {kSerErrorInfinity, "Serialize: DOM has inifinity number node."},
+      {kSerErrorInfinity, "Serialize: DOM has infinity number node."},
       {kSerErrorInvalidObjKey,
        "Serialize: The type of object's key is not string."},
       {kErrorNoMem, "Memory is not enough to allocate."},
       {kParseErrorUnexpect, "Unexpected Errors"},
+      {kSaxTermination,
+       "Parse: SAX handler return false to terminate parsing."},
+      {kUnsupportedJsonPath, "JsonPath: Unsupported json path."},
+      {kNotFoundByJsonPath, "JsonPath: Not found the target by json path."},
+      {kUnmatchedTypeInJsonPath, "JsonPath: The type of node is not matched."},
+      {kErrorNoneNoMatch, "JsonPath: no match."},
+
   };
-  return kErrorMsg[error].msg;
+
+  const int idx = static_cast<int>(error);
+  if (idx < 0 || idx >= static_cast<int>(kErrorNums)) {
+    return "Unknown error";
+  }
+
+  const SonicErrorInfo& info = kErrorMsg[idx];
+  if (info.err != error || info.msg == nullptr) {
+    return "Unknown error";
+  }
+  return info.msg;
 }
 
 struct ParseResult {
