@@ -51,7 +51,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   friend BaseNode;
   template <typename>
   friend class DNode;
-  template <unsigned serializeFlags, typename NodeType>
+  template <SerializeFlags serializeFlags, typename NodeType>
   friend SonicError internal::SerializeImpl(const NodeType*, WriteBuffer&);
 
   // constructor
@@ -923,7 +923,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return start;
   }
 
-  template <unsigned serializeFlags = kSerializeDefault>
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
   SonicError serializeImpl(WriteBuffer& wb) const {
     return internal::SerializeImpl<serializeFlags>(this, wb);
   }

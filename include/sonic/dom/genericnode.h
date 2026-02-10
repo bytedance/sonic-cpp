@@ -1050,7 +1050,7 @@ class GenericNode {
    * @param wb write buffer where you want to store json string.
    * @return EndcodeError
    */
-  template <unsigned serializeFlags = kSerializeDefault>
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
   SonicError Serialize(WriteBuffer& wb) const {
     return downCast()->template serializeImpl<serializeFlags>(wb);
   }
@@ -1060,7 +1060,7 @@ class GenericNode {
    * @param serializeFlags combination of different SerializeFlag.
    * @return empty string if there are errors when serializing.
    */
-  template <unsigned serializeFlags = kSerializeDefault>
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
   std::string Dump() const {
     WriteBuffer wb;
     SonicError err = Serialize<serializeFlags>(wb);

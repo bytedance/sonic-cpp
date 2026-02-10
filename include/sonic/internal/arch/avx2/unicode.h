@@ -38,10 +38,10 @@ using sonic_json::internal::common::handle_unicode_codepoint;
 struct StringBlock {
  public:
   sonic_force_inline static StringBlock Find(const uint8_t *src);
-  template <unsigned parseFlag>
+  template <ParseFlags parseFlags>
   sonic_force_inline bool HasQuoteFirst() {
     constexpr bool kAllowUnescapedControlChars =
-        (parseFlag & kParseAllowUnescapedControlChars) != 0;
+        (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
     if constexpr (kAllowUnescapedControlChars) {
       return (((bs_bits - 1) & quote_bits) != 0);
     } else {

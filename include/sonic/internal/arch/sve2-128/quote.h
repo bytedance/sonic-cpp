@@ -28,7 +28,7 @@ namespace sve2_128 {
 
 using sonic_json::internal::arm_common::Quote;
 
-template <unsigned parseFlags = kParseDefault>
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 #define SONIC_REPEAT8(v) \
   { v v v v v v v v }

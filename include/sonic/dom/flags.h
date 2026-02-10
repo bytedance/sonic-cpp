@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cstdint>
+
 // ParseFlag is one-hot encoded for different parsing option.
 // User can define customized flags through combinations.
-enum ParseFlag {
+enum class ParseFlags : uint32_t {
   kParseDefault = 0,
   kParseAllowUnescapedControlChars = 1 << 1,
   // parse all integer as raw number
@@ -28,9 +30,18 @@ enum ParseFlag {
   kParseOverflowNumAsNumStr = 1 << 3,
 };
 
+constexpr ParseFlags operator|(ParseFlags lhs, ParseFlags rhs) {
+  return static_cast<ParseFlags>(static_cast<uint32_t>(lhs) |
+                                 static_cast<uint32_t>(rhs));
+}
+
+constexpr bool operator&(ParseFlags lhs, ParseFlags rhs) {
+  return (static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs)) != 0;
+}
+
 // SerializeFlags is one-hot encoded for different serializing option.
 // User can define customized flags through combinations.
-enum SerializeFlags {
+enum class SerializeFlags : uint32_t {
   kSerializeDefault = 0,
   kSerializeAppendBuffer = 1 << 1,
   kSerializeEscapeEmoji = 1 << 2,
@@ -39,5 +50,14 @@ enum SerializeFlags {
   kSerializeFloatFormatJava = 1 << 5,
 };
 
-constexpr static unsigned kSerializeJavaStyleFlag =
-    kSerializeFloatFormatJava | kSerializeUnicodeEscapeUppercase;
+constexpr SerializeFlags operator|(SerializeFlags lhs, SerializeFlags rhs) {
+  return static_cast<SerializeFlags>(static_cast<uint32_t>(lhs) |
+                                     static_cast<uint32_t>(rhs));
+}
+constexpr bool operator&(SerializeFlags lhs, SerializeFlags rhs) {
+  return (static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs)) != 0;
+}
+
+constexpr static auto kSerializeJavaStyleFlag =
+    SerializeFlags::kSerializeFloatFormatJava |
+    SerializeFlags::kSerializeUnicodeEscapeUppercase;

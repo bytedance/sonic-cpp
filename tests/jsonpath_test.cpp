@@ -505,8 +505,9 @@ TEST(JsonPath, DISABLED_JsonInfiniteLoop) {
     json.push_back((char)i);
   }
 
-  auto got = GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(
-      json, "$.motor_content_boost");
+  auto got =
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          json, "$.motor_content_boost");
   EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
   EXPECT_EQ(std::get<0>(got), "");
 }
@@ -519,8 +520,9 @@ TEST(JsonPath, JsonInfiniteLoop2) {
   auto ints = splitToInts(integers);
   std::string json("[8");
 
-  auto got = GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(
-      json, "$.motor_content_boost");
+  auto got =
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          json, "$.motor_content_boost");
   EXPECT_EQ(std::get<1>(got), kParseErrorEof);
   EXPECT_EQ(std::get<0>(got), "");
 }
@@ -529,7 +531,8 @@ TEST(JsonPath, JsonInfiniteLoop3) {
   std::string json = R"json([{"a":["c"]},)json";
   std::string path = "$[*].a";
   auto got =
-      GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(json, path);
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          json, path);
   EXPECT_EQ(std::get<1>(got), kParseErrorEof);
   EXPECT_EQ(std::get<0>(got), "");
 }
@@ -537,7 +540,8 @@ TEST(JsonPath, JsonInfiniteLoop3) {
 TEST(JsonPath, JsonTuple) {
   auto json = R"({a:1, b:2c})";
   auto got =
-      GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(json, "$.b");
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          json, "$.b");
   EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
   EXPECT_EQ(std::get<0>(got), "");
 }

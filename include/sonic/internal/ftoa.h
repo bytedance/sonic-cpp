@@ -825,7 +825,7 @@ static sonic_force_inline bool IsDivPow2(uint64_t val, int32_t e) {
   return (val & mask) == 0;
 }
 
-template <unsigned serializeFlags>
+template <SerializeFlags serializeFlags>
 static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
                                                unsigned cnt) {
   char* p = out + 1;
@@ -833,7 +833,7 @@ static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
   while (*(end - 1) == '0') end--;
   *out = *p;
 
-  if constexpr (serializeFlags & kSerializeFloatFormatJava) {
+  if constexpr (serializeFlags & SerializeFlags::kSerializeFloatFormatJava) {
     *p = '.';
     if ((end - p) <= 1) {
       *(++p) = '0';
@@ -855,7 +855,8 @@ static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
     *end++ = '-';
     exp = -exp;
   } else {
-    if constexpr (!(serializeFlags & kSerializeFloatFormatJava)) {
+    if constexpr (!(serializeFlags &
+                    SerializeFlags::kSerializeFloatFormatJava)) {
       *end++ = '+';
     }
   }
@@ -996,7 +997,7 @@ static sonic_force_inline F64Decimal F64ToDecimal(uint64_t rsig, int32_t rexp,
   return dec;
 }
 
-template <unsigned serializeFlags = kSerializeDefault>
+template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
 sonic_static_noinline int F64toa(char* out, double fp) {
   char* p = out;
   uint64_t raw = F64ToRaw(fp);
@@ -1030,7 +1031,8 @@ sonic_static_noinline int F64toa(char* out, double fp) {
     /* double is normal */
     c = rsig | F64_HIDDEN_BIT;
     q = rexp - F64_EXP_BIAS - F64_SIG_BITS;
-    if constexpr (!(serializeFlags & kSerializeFloatFormatJava)) {
+    if constexpr (!(serializeFlags &
+                    SerializeFlags::kSerializeFloatFormatJava)) {
       /* fast path for integer */
       if (q <= 0 && q >= -F64_SIG_BITS && IsDivPow2(c, -q)) {
         uint64_t u = c >> -q;
@@ -1051,7 +1053,7 @@ sonic_static_noinline int F64toa(char* out, double fp) {
   int dot = cnt + dec.exp;
   int sci_exp = 0;
   bool exp_fmt = false;
-  if constexpr (serializeFlags & kSerializeFloatFormatJava) {
+  if constexpr (serializeFlags & SerializeFlags::kSerializeFloatFormatJava) {
     /*
      * Floating point values in the range 1.0E-3 <= x < 1.0E7 have to be printed
      * without exponent. This test checks the values at those boundaries.

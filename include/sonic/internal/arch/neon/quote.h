@@ -28,12 +28,12 @@ namespace neon {
 
 using sonic_json::internal::arm_common::Quote;
 
-template <unsigned parseFlags = kParseDefault>
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 #define SONIC_REPEAT8(v) \
   { v v v v v v v v }
   constexpr bool kAllowUnescapedControlChars =
-      (parseFlags & kParseAllowUnescapedControlChars) != 0;
+      (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
   uint8_t *dst = src;
   uint8_t *sdst = src;
   while (1) {

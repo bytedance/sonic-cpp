@@ -61,18 +61,18 @@
 
 using common::handle_unicode_codepoint;
 
-template <unsigned parseFlag = kParseDefault>
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 #define SONIC_REPEAT8(v) \
   { v v v v v v v v }
   constexpr bool kAllowUnescapedControlChars =
-      (parseFlag & kParseAllowUnescapedControlChars) != 0;
+      (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
   uint8_t *dst = src;
   uint8_t *sdst = src;
   while (1) {
   find:
     auto block = StringBlock::Find(src);
-    if (block.HasQuoteFirst<parseFlag>()) {
+    if (block.HasQuoteFirst<parseFlags>()) {
       int idx = block.QuoteIndex();
       src += idx;
       *src++ = '\0';
@@ -125,7 +125,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
         static_cast<uint32_t>((v <= '\x1f').to_bitmask()),
     };
     // If the next thing is the end quote, copy and return
-    if (block.HasQuoteFirst<parseFlag>()) {
+    if (block.HasQuoteFirst<parseFlags>()) {
       // we encountered quotes first. Move dst to point to quotes and exit
       while (1) {
         SONIC_REPEAT8(if (sonic_unlikely(*src == '"')) break;
@@ -171,9 +171,10 @@ static sonic_force_inline int CopyAndGetEscapMask(const char *src, char *dst) {
   }
 }
 
-template <unsigned serializeFlags>
+template <SerializeFlags serializeFlags>
 sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
-  constexpr bool EscapeEmoji = serializeFlags & kSerializeEscapeEmoji;
+  constexpr bool EscapeEmoji =
+      serializeFlags & SerializeFlags::kSerializeEscapeEmoji;
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint32_t mm;

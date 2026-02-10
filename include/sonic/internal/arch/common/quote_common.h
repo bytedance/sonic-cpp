@@ -44,11 +44,12 @@ sonic_static_inline void writeHex(uint32_t value, char*& dst) {
   *dst++ = kHexChars[value & 0xf];
 }
 
-template <unsigned serializeFlags>
+template <SerializeFlags serializeFlags>
 sonic_static_inline void DoEscape(const char*& src, char*& dst, size_t& nb) {
   constexpr bool UnicodeEscapeUpperCase =
-      serializeFlags & kSerializeUnicodeEscapeUppercase;
-  constexpr bool EscapeEmoji = serializeFlags & kSerializeEscapeEmoji;
+      serializeFlags & SerializeFlags::kSerializeUnicodeEscapeUppercase;
+  constexpr bool EscapeEmoji =
+      serializeFlags & SerializeFlags::kSerializeEscapeEmoji;
 
   const auto& quote_tab =
       UnicodeEscapeUpperCase ? kQuoteTabUpperCase : kQuoteTabLowerCase;

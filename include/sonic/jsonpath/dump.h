@@ -26,7 +26,9 @@ sonic_force_inline std::tuple<std::string, SonicError> Serialize(
     if (root->IsString()) {
       wb.Push(root->GetStringView().data(), root->Size());
     } else {
-      auto err = result.nodes[0]->template Serialize<kSerializeEscapeEmoji>(wb);
+      auto err =
+          result.nodes[0]
+              ->template Serialize<SerializeFlags::kSerializeEscapeEmoji>(wb);
       if (err != kErrorNone) {
         return std::make_tuple("", err);
       }
@@ -34,8 +36,9 @@ sonic_force_inline std::tuple<std::string, SonicError> Serialize(
   } else {
     wb.Push('[');
     for (const auto& node : result.nodes) {
-      auto err = node->template Serialize<kSerializeAppendBuffer |
-                                          kSerializeEscapeEmoji>(wb);
+      auto err =
+          node->template Serialize<SerializeFlags::kSerializeAppendBuffer |
+                                   SerializeFlags::kSerializeEscapeEmoji>(wb);
       if (err != kErrorNone) {
         return std::make_tuple("", err);
       }

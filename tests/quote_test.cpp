@@ -34,7 +34,8 @@ typedef struct quoteTests {
 void TestQuote(const std::string& input, const std::string& expect) {
   size_t n = input.size();
   auto buf = std::unique_ptr<char[]>(new char[(n + 2) * 6 + 32]);
-  char* end = Quote<kSerializeDefault>(input.data(), n, buf.get());
+  char* end =
+      Quote<SerializeFlags::kSerializeDefault>(input.data(), n, buf.get());
   *end = '\0';
   EXPECT_STREQ(buf.get(), expect.data());
 }
