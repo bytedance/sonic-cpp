@@ -601,12 +601,12 @@ TYPED_TEST(DocumentTest, SerialzeInfinity) {
   Document dom;
   dom.SetDouble(std::numeric_limits<double>::infinity());
   WriteBuffer wb;
-  SonicError err = dom.Serialize<kSerializeInfNan>(wb);
+  SonicError err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
   EXPECT_EQ(err, kErrorNone);
   EXPECT_STREQ(wb.ToString(), "\"Infinity\"");
 
   dom.SetDouble(-std::numeric_limits<double>::infinity());
-  err = dom.Serialize<kSerializeInfNan>(wb);
+  err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
   EXPECT_EQ(err, kErrorNone);
   EXPECT_STREQ(wb.ToString(), "\"-Infinity\"");
 }
@@ -615,12 +615,12 @@ TYPED_TEST(DocumentTest, SerialzeNaN) {
   Document dom;
   dom.SetDouble(std::numeric_limits<double>::quiet_NaN());
   WriteBuffer wb;
-  SonicError err = dom.Serialize<kSerializeInfNan>(wb);
+  SonicError err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
   EXPECT_EQ(err, kErrorNone);
   auto out = std::string(wb.ToString());
   EXPECT_STREQ(wb.ToString(), "\"NaN\"");
   dom.SetDouble(-std::numeric_limits<double>::quiet_NaN());
-  err = dom.Serialize<kSerializeInfNan>(wb);
+  err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
   EXPECT_STREQ(wb.ToString(), "\"-NaN\"");
 }
 

@@ -14,16 +14,15 @@ struct JsonPathRawResult {
   std::vector<StringView> raw;
   SonicError error;
 };
-template <unsigned int serializeFlags>
+template <SerializeFlags serializeFlags>
 class JsonGenerator
     : public internal::SkipScanner2::JsonGeneratorInterface<serializeFlags> {
  public:
   JsonGenerator(Document& dom_doc, WriteBuffer& wb)
       : dom_doc_(dom_doc), wb_(wb) {}
   bool writeRaw(StringView raw) override {
-    dom_doc_
-        .template Parse<kParseAllowUnescapedControlChars | kParseIntegerAsRaw>(
-            raw);
+    dom_doc_.template Parse<ParseFlags::kParseAllowUnescapedControlChars |
+                            ParseFlags::kParseIntegerAsRaw>(raw);
     auto n = &dom_doc_;
     // check parse error
     if (dom_doc_.HasParseError()) {
@@ -50,15 +49,15 @@ class JsonGenerator
     return true;
   }
   bool copyCurrentStructure(StringView raw) override {
-    dom_doc_
-        .template Parse<kParseAllowUnescapedControlChars | kParseIntegerAsRaw>(
-            raw);
+    dom_doc_.template Parse<ParseFlags::kParseAllowUnescapedControlChars |
+                            ParseFlags::kParseIntegerAsRaw>(raw);
     // check parse error
     if (dom_doc_.HasParseError()) {
       return false;
     }
     auto n = &dom_doc_;
-    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji |
+    n->template Serialize<SerializeFlags::kSerializeAppendBuffer |
+                          SerializeFlags::kSerializeEscapeEmoji |
                           serializeFlags>(wb_);
 
     return true;
@@ -68,9 +67,8 @@ class JsonGenerator
       std::vector<std::optional<std::string>>& result,
       internal::SkipScanner2::JsonValueType type) override {
     wb_.Clear();
-    dom_doc_
-        .template Parse<kParseAllowUnescapedControlChars | kParseIntegerAsRaw>(
-            raw);
+    dom_doc_.template Parse<ParseFlags::kParseAllowUnescapedControlChars |
+                            ParseFlags::kParseIntegerAsRaw>(raw);
     // check parse error
     if (dom_doc_.HasParseError()) {
       return false;
@@ -84,7 +82,8 @@ class JsonGenerator
       return true;
     }
 
-    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji |
+    n->template Serialize<SerializeFlags::kSerializeAppendBuffer |
+                          SerializeFlags::kSerializeEscapeEmoji |
                           serializeFlags>(wb_);
 
     result[index] = std::string(wb_.ToStringView());
@@ -101,7 +100,7 @@ class JsonGenerator
   WriteBuffer& wb_;
 };
 
-template <unsigned serializeFlags = kSerializeDefault>
+template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
 sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
     StringView json, StringView jsonpath) {
   internal::SkipScanner2 scan;
@@ -151,7 +150,7 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
   return std::make_tuple(std::string(wb.ToStringView()), scan.error_);
 }
 
-template <unsigned serializeFlags = kSerializeDefault>
+template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
 sonic_force_inline std::vector<std::optional<std::string>> JsonTupleWithCodeGen(
     StringView json, std::vector<StringView> const& keys, const bool legacy) {
   internal::SkipScanner2 scan;

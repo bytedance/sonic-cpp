@@ -65,7 +65,8 @@ void testStringNumberNode(const std::string& expect, Node& node) {
 
 void TestStringNumber(const std::string& expect, const std::string& input) {
   auto doc_ptr = std::make_unique<Document>();
-  doc_ptr->Parse<kParseOverflowNumAsNumStr>(input.data(), input.size());
+  doc_ptr->Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                        input.size());
   EXPECT_FALSE(doc_ptr->HasParseError()) << input;
   testStringNumberNode(expect, *doc_ptr);
 

@@ -38,10 +38,10 @@ struct StringBlock {
   sonic_force_inline static StringBlock Find(const uint8_t* src);
   sonic_force_inline static StringBlock Find(uint8x16_t& v);
   // has quote, and no backslash or unescaped before it
-  template <unsigned parseFlag>
+  template <ParseFlags parseFlags>
   sonic_force_inline bool HasQuoteFirst() const {
     constexpr bool kAllowUnescapedControlChars =
-        (parseFlag & kParseAllowUnescapedControlChars) != 0;
+        (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
     if constexpr (kAllowUnescapedControlChars) {
       return (bs_index > quote_index);
     } else {

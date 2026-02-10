@@ -177,7 +177,7 @@ class SkipScanner {
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace<kParseDefault>(nsrc, err);
+      slen = parseStringInplace<ParseFlags::kParseDefault>(nsrc, err);
       if (err) {
         pos = (start - data) + (nsrc - &kbuf[0]);
         return err;
@@ -210,7 +210,7 @@ class SkipScanner {
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace<kParseDefault>(nsrc, err);
+      slen = parseStringInplace<ParseFlags::kParseDefault>(nsrc, err);
       if (err) {
         pos = (start - data) + (nsrc - &kbuf[0]);
         return err;
@@ -624,7 +624,7 @@ class SkipScanner2 {
   enum WriteStyle { RAW, FLATTEN, QUOTE };
   enum JsonValueType { STRING, OTHER };
 
-  template <unsigned serializeFlags>
+  template <SerializeFlags serializeFlags>
   class JsonGeneratorInterface {
    public:
     virtual bool writeRaw(StringView sv) = 0;
@@ -641,12 +641,13 @@ class SkipScanner2 {
     virtual bool isBeginArray() = 0;
     virtual ~JsonGeneratorInterface() {}
   };
-  template <unsigned serializeFlags>
+  template <SerializeFlags serializeFlags>
   using JsonGeneratorFactory =
       std::function<std::shared_ptr<JsonGeneratorInterface<serializeFlags>>(
           WriteBuffer &)>;
 
-  template <WriteStyle style, unsigned serializeFlags = kSerializeJavaStyleFlag>
+  template <WriteStyle style,
+            SerializeFlags serializeFlags = kSerializeJavaStyleFlag>
   inline bool getJsonPathArrayIndex(
       const JsonPath &path, size_t index,
       JsonGeneratorInterface<serializeFlags> *jsonGenerator,
@@ -676,7 +677,7 @@ class SkipScanner2 {
     RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
     return dirty;
   }
-  template <unsigned serializeFlags>
+  template <SerializeFlags serializeFlags>
   inline bool jsonTupleWithCodeGenImpl(
       std::vector<StringView> const &keys,
       JsonGeneratorInterface<serializeFlags> *jsonGenerator,
@@ -713,7 +714,7 @@ class SkipScanner2 {
 
     return true;
   }
-  template <unsigned serializeFlags>
+  template <SerializeFlags serializeFlags>
   inline std::vector<std::optional<std::string>> jsonTupleWithCodeGen(
       std::vector<StringView> const &keys,
       JsonGeneratorInterface<serializeFlags> *jsonGenerator, bool legacy) {
@@ -728,7 +729,8 @@ class SkipScanner2 {
 
     return result;
   }
-  template <WriteStyle style, unsigned serializeFlags = kSerializeJavaStyleFlag>
+  template <WriteStyle style,
+            SerializeFlags serializeFlags = kSerializeJavaStyleFlag>
   inline bool getJsonPath(
       const JsonPath &path, size_t index,
       JsonGeneratorInterface<serializeFlags> *jsonGenerator,

@@ -36,10 +36,10 @@ struct StringBlock {
  public:
   sonic_force_inline static StringBlock Find(const uint8_t *src);
   sonic_force_inline static StringBlock Find(uint8x16_t &v);
-  template <unsigned parseFlags>
+  template <ParseFlags parseFlags>
   sonic_force_inline bool HasQuoteFirst() const {
     constexpr bool kAllowUnescapedControlChars =
-        parseFlags & kParseAllowUnescapedControlChars;
+        parseFlags & ParseFlags::kParseAllowUnescapedControlChars;
     if constexpr (kAllowUnescapedControlChars) {
       return (((bs_bits - 1) & quote_bits) != 0);
     } else {

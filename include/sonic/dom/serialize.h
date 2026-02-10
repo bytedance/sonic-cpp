@@ -32,7 +32,7 @@ namespace sonic_json {
 
 namespace internal {
 
-template <unsigned serializeFlags, typename NodeType>
+template <SerializeFlags serializeFlags, typename NodeType>
 sonic_force_inline SonicError SerializeImpl(const NodeType* node,
                                             WriteBuffer& wb) {
   struct ParentCtx {
@@ -56,7 +56,8 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   ssize_t rn = 0;
   internal::Stack stk;
   ParentCtx* parent;
-  if constexpr ((serializeFlags & kSerializeAppendBuffer) == 0) {
+  if constexpr ((serializeFlags & SerializeFlags::kSerializeAppendBuffer) ==
+                0) {
     wb.Clear();
     wb.Reserve(estimate);
   } else {
@@ -106,7 +107,7 @@ val_begin:
           // support Infinity/-Infinity or NaN/-NaN
 
           if (sonic_unlikely(rn <= 0)) {
-            if (serializeFlags & kSerializeInfNan) {
+            if (serializeFlags & SerializeFlags::kSerializeInfNan) {
               if (sonic_unlikely(std::isinf(d))) {
                 const bool neg_inf = std::signbit(d);
                 const char* s = neg_inf ? "\"-Infinity\"" : "\"Infinity\"";

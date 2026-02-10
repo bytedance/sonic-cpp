@@ -88,9 +88,10 @@ static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char* src,
   return to_bitmask(mask);
 }
 
-template <unsigned serializeFlags>
+template <SerializeFlags serializeFlags>
 sonic_static_inline char* Quote(const char* src, size_t nb, char* dst) {
-  constexpr bool EscapeEmoji = serializeFlags & kSerializeEscapeEmoji;
+  constexpr bool EscapeEmoji =
+      serializeFlags & SerializeFlags::kSerializeEscapeEmoji;
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint64_t mm;

@@ -54,7 +54,7 @@ ParseResult GetOnDemand(StringView json,
   return ParseResult(kErrorNone, pos);
 }
 
-template <unsigned parseFlags>
+template <ParseFlags parseFlags>
 class Parser {
  public:
   explicit Parser() noexcept = default;
@@ -220,7 +220,7 @@ class Parser {
   template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
     // check flags
-    if constexpr (parseFlags & kParseOverflowNumAsNumStr) {
+    if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
       return parseNumberAsString(sax);
     }
 
@@ -319,7 +319,7 @@ class Parser {
       }
 
       // Zero Integer
-      if constexpr (parseFlags & kParseIntegerAsRaw) {
+      if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
         if (!sax.Raw(s + start_idx, i - start_idx))
           RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
         RETURN_SET_ERROR_CODE(kErrorNone);
@@ -360,7 +360,7 @@ class Parser {
     if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) goto double_exp;
 
     // Integer
-    if constexpr (parseFlags & kParseIntegerAsRaw) {
+    if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
       if (!sax.Raw(s + start_idx, i - start_idx))
         RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
       RETURN_SET_ERROR_CODE(kErrorNone);

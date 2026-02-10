@@ -25,7 +25,7 @@ namespace sonic_json {
 
 namespace internal {
 
-template <typename NodeType, typename Allocator, unsigned parseFlags>
+template <typename NodeType, typename Allocator, ParseFlags parseFlags>
 static inline ParseResult ParseLazy(NodeType &node, StringView json,
                                     Allocator &alloc) {
   LazySAXHandler<NodeType> sax(alloc);
@@ -40,7 +40,7 @@ static inline ParseResult ParseLazy(NodeType &node, StringView json,
   return ret;
 }
 
-template <typename NodeType, typename Allocator, unsigned parseFlags>
+template <typename NodeType, typename Allocator, ParseFlags parseFlags>
 static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
                                         Allocator &alloc) {
   ParseResult ret;
@@ -88,7 +88,7 @@ static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
  * @param target the target json
  * @param source the source json
  */
-template <unsigned parseFlags = kParseDefault>
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 static inline std::string UpdateLazy(StringView target, StringView source) {
   using Allocator = Node::AllocatorType;
   Allocator alloc;
