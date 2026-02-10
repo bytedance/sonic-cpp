@@ -2,7 +2,7 @@ package(default_visibility = ["//visibility:public"])
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_binary", "cc_test")
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
-common_copts = ['-mavx2', '-mbmi', '-mpclmul']
+common_copts = ['-std=c++17']
 sanitize_copts = ['-fsanitize=address,undefined', '-fsanitize-recover=address']
 
 avx2_copts = ['-mavx2', '-mbmi', '-mpclmul', '-mlzcnt']
@@ -97,6 +97,15 @@ config_setting(
     ],
 )
 
+auto_arch_copts = select({
+    "arm_build": arm_copts,
+    "sve2_build": sve2_copts,
+    "sse_build": sse_copts,
+    "avx2_build": avx2_copts,
+    "apple_silicon_build": apple_silicon_copts,
+    "//conditions:default": default_copts,
+}) + common_copts
+
 cc_library(
     name = "string_view",
     hdrs = glob(["include/thirdparty/**/*.h"]),
@@ -124,20 +133,12 @@ cc_binary(
         ":sonic-cpp",
         "@google_benchmark//:benchmark",
         "@rapidjson",
-        "@cJSON",
+        "@cjson",
         "@yyjson",
         "@simdjson",
         "@jsoncpp//:jsoncpp",
     ],
-    # copts = common_copts + ['-DNDEBUG', '-std=c++17'],
-    copts = select({
-                "arm_build": arm_copts + benchmark_copts,
-                "sve2_build": sve2_copts + benchmark_copts,
-                "sse_build": sse_copts + benchmark_copts,
-                "avx2_build": avx2_copts + benchmark_copts,
-                "apple_silicon_build": apple_silicon_copts + benchmark_copts,
-                "//conditions:default": default_copts + benchmark_copts,
-            }) +\
+    copts = auto_arch_copts +\
             macos_version_copts +\
             select({
                 "static_dispatch": static_dispatch_copts,
@@ -177,14 +178,8 @@ cc_test(
             "gcc_san": sanitize_copts,
             "clang_san": sanitize_copts,
         }) + \
-        select({
-            "arm_build": arm_copts + benchmark_copts,
-            "sve2_build": sve2_copts + benchmark_copts,
-            "sse_build": sse_copts + benchmark_copts,
-            "avx2_build": avx2_copts + benchmark_copts,
-            "apple_silicon_build": apple_silicon_copts + benchmark_copts,
-            "//conditions:default": default_copts + benchmark_copts,
-        }) +\
+        auto_arch_copts + \
+        benchmark_copts +\
         macos_version_copts +\
         select({
             "static_dispatch": static_dispatch_copts,
@@ -210,8 +205,8 @@ cc_test(
     linkopts = sanitize_copts + filesystem_linkopts + [
         '-fstack-protector-all',
     ],
-    copts = common_copts + sanitize_copts + [
-        '-O3', '-g', '-UNDEBUG', '-std=c++14',
+    copts = auto_arch_copts + sanitize_copts + [
+        '-O3', '-g', '-UNDEBUG',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
     ],
@@ -237,9 +232,12 @@ cc_test(
         '-fsanitize-link-c++-runtime'
     ],
     copts = sanitize_copts + [
-        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=armv8-a',
+        '-O3', '-g', '-UNDEBUG', '-march=armv8-a',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:arm64",
     ],
 )
 
@@ -262,10 +260,13 @@ cc_test(
         '-fstack-protector-all',
         '-fsanitize-link-c++-runtime'
     ],
-    copts = sanitize_copts + [
-        '-O3', '-g', '-UNDEBUG', '-std=c++14', '-march=westmere',
+    copts = sanitize_copts + sse_copts + [
+        '-O3', '-g', '-UNDEBUG',
         '-fstack-protector-all',
         '-Iinclude', '-Wall', '-Wextra', '-Werror',
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
     ],
 )
 
@@ -285,7 +286,7 @@ cc_test(
     linkopts = filesystem_linkopts + [
         '-lgcov', '-fprofile-arcs', '-ftest-coverage',
     ],
-    copts = common_copts + [
+    copts = auto_arch_copts + [
         '-O0', '-g', '-UNDEBUG', '-std=c++17',
         '-Iinclude',
         '-fprofile-arcs', '-ftest-coverage',

@@ -17,7 +17,7 @@
 #pragma once
 
 // ParseFlag is one-hot encoded for different parsing option.
-// User can define customed flags through combinations.
+// User can define customized flags through combinations.
 enum ParseFlag {
   kParseDefault = 0,
   kParseAllowUnescapedControlChars = 1 << 1,
@@ -29,10 +29,15 @@ enum ParseFlag {
 };
 
 // SerializeFlags is one-hot encoded for different serializing option.
-// User can define customed flags through combinations.
+// User can define customized flags through combinations.
 enum SerializeFlags {
   kSerializeDefault = 0,
   kSerializeAppendBuffer = 1 << 1,
   kSerializeEscapeEmoji = 1 << 2,
   kSerializeInfNan = 1 << 3,
+  kSerializeUnicodeEscapeUppercase = 1 << 4,
+  kSerializeFloatFormatJava = 1 << 5,
 };
+
+constexpr static unsigned kSerializeJavaStyleFlag =
+    kSerializeFloatFormatJava | kSerializeUnicodeEscapeUppercase;

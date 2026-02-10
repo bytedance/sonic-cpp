@@ -113,7 +113,7 @@ TEST(UpdateLazy, Basic) {
   };
 
   for (const auto &t : tests) {
-    auto ret = sonic_json::UpdateLazy(t.target, t.source);
+    auto ret = sonic_json::UpdateLazy<kParseDefault>(t.target, t.source);
     EXPECT_STREQ(ret.c_str(), t.updated.c_str());
   }
 }

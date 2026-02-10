@@ -406,7 +406,7 @@ int main() {
   // Not need the map anymore.
   node->DestroyMap();
 
-  std::cout << "Quering finish!\n";
+  std::cout << "Querying finish!\n";
   return 0;
 
 }

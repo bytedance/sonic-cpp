@@ -38,8 +38,15 @@ struct StringBlock {
   sonic_force_inline static StringBlock Find(const uint8_t* src);
   sonic_force_inline static StringBlock Find(uint8x16_t& v);
   // has quote, and no backslash or unescaped before it
-  sonic_force_inline bool HasQuoteFirst(bool allow_unesc) const {
-    return (bs_index > quote_index) && (allow_unesc || !HasUnescaped());
+  template <unsigned parseFlag>
+  sonic_force_inline bool HasQuoteFirst() const {
+    constexpr bool kAllowUnescapedControlChars =
+        (parseFlag & kParseAllowUnescapedControlChars) != 0;
+    if constexpr (kAllowUnescapedControlChars) {
+      return (bs_index > quote_index);
+    } else {
+      return (bs_index > quote_index) && (!HasUnescaped());
+    }
   }
   // has backslash, and no quote before it
   sonic_force_inline bool HasBackslash() const {

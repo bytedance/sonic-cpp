@@ -1,8 +1,24 @@
 directories:
-    # include
-    .
-    # exclude generated files
-    -bazel-bin
-    -bazel-out
-    -bazel-testlogs
-    -bazel-sonic-cpp
+  # include
+  .
+  # exclude generated files
+  -bazel-bin
+  -bazel-out
+  -bazel-testlogs
+  -bazel-sonic-cpp
+
+  -.git
+  -.idea
+  -.vscode
+  -.vs
+
+  -cmake-build-debug
+  -cmake-build-release
+  -build
+  -out
+targets:
+  //...:all
+build_flags:
+  --cxxopt=-std=c++17
+test_flags:
+  --test_output=errors

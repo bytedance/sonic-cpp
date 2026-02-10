@@ -54,6 +54,7 @@ ParseResult GetOnDemand(StringView json,
   return ParseResult(kErrorNone, pos);
 }
 
+template <unsigned parseFlags>
 class Parser {
  public:
   explicit Parser() noexcept = default;
@@ -64,12 +65,12 @@ class Parser {
   sonic_force_inline Parser &operator=(Parser &&other) noexcept = default;
   ~Parser() noexcept = default;
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   sonic_force_inline ParseResult Parse(char *data, size_t len, SAX &sax) {
     reset();
     json_buf_ = reinterpret_cast<uint8_t *>(data);
     len_ = len;
-    parseImpl<parseFlags>(sax);
+    parseImpl(sax);
     if (!err_ && hasTrailingChars()) {
       err_ = kParseErrorInvalidChar;
     }
@@ -129,24 +130,22 @@ class Parser {
     return false;
   }
 
-  template <unsigned parseFlags = kParseDefault>
   sonic_force_inline StringView parseStringHelper() {
     uint8_t *src = json_buf_ + pos_;
     uint8_t *sdst = src;
-    size_t n = internal::parseStringInplace(
-        src, err_, (parseFlags & kParseAllowUnescapedControlChars));
+    size_t n = internal::parseStringInplace<parseFlags>(src, err_);
     pos_ = src - json_buf_;
     return StringView(reinterpret_cast<char *>(sdst), n);
   }
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   sonic_force_inline bool parseStrInPlace(SAX &sax) {
-    return sax.String(parseStringHelper<parseFlags>());
+    return sax.String(parseStringHelper());
   }
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   sonic_force_inline bool parseKeyInPlace(SAX &sax) {
-    return sax.Key(parseStringHelper<parseFlags>());
+    return sax.Key(parseStringHelper());
   }
 
   sonic_force_inline bool carry_one(char c, uint64_t &sum) const {
@@ -169,12 +168,12 @@ class Parser {
   sonic_force_inline bool parseFloatingFast(double &d, int exp10,
                                             uint64_t man) const {
     d = (double)man;
-    // if man is small, but exp is large, also can parse excactly
+    // if man is small, but exp is large, also can parse exactly
     if (exp10 > 0) {
       if (exp10 > 22) {
         d *= internal::kPow10Tab[exp10 - 22];
         if (d > 1e15 || d < -1e15) {
-          // the exponent is tooo large
+          // the exponent is too large
           return false;
         }
         d *= internal::kPow10Tab[22];
@@ -218,10 +217,10 @@ class Parser {
     }
   }
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
     // check flags
-    if ((parseFlags & kParseOverflowNumAsNumStr) != 0) {
+    if constexpr (parseFlags & kParseOverflowNumAsNumStr) {
       return parseNumberAsString(sax);
     }
 
@@ -273,7 +272,7 @@ class Parser {
     static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
     int sgn = -1;
     int man_nd = 0;  // # digits of mantissa, 10 ^ 19 fits uint64_t
-    int exp10 = 0;   // 10-based exponet of float point number
+    int exp10 = 0;   // 10-based exponent of float point number
     int trunc = 0;
     uint64_t man = 0;  // mantissa of float point number
     size_t i = pos_ - 1;
@@ -320,7 +319,7 @@ class Parser {
       }
 
       // Zero Integer
-      if ((parseFlags & kParseIntegerAsRaw) != 0) {
+      if constexpr (parseFlags & kParseIntegerAsRaw) {
         if (!sax.Raw(s + start_idx, i - start_idx))
           RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
         RETURN_SET_ERROR_CODE(kErrorNone);
@@ -361,7 +360,7 @@ class Parser {
     if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) goto double_exp;
 
     // Integer
-    if ((parseFlags & kParseIntegerAsRaw) != 0) {
+    if constexpr (parseFlags & kParseIntegerAsRaw) {
       if (!sax.Raw(s + start_idx, i - start_idx))
         RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
       RETURN_SET_ERROR_CODE(kErrorNone);
@@ -552,12 +551,12 @@ class Parser {
     man = str2int(s, i);
     man_nd = i - digit_start;
 
-    if (man_nd == '0') {
+    if (man_nd == 0) {
       RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
     }
 
     // if man_nd > 19, the number should store as string, no need to
-    // calcuate correct man
+    // calculate correct man
 
     if (sonic_likely(s[i] == '.')) {
       i++;
@@ -620,7 +619,7 @@ class Parser {
     RETURN_SET_ERROR_CODE(kErrorNone);
   }
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   void parsePrimitives(SAX &sax) {
     switch (json_buf_[pos_ - 1]) {
       case '0':
@@ -634,10 +633,10 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber<parseFlags>(sax);
+        parseNumber(sax);
         break;
       case '"':
-        parseStrInPlace<parseFlags>(sax);
+        parseStrInPlace(sax);
         // only need check length when parsing string primitives, because the
         // padding "x\"x" makes parsing other invalid JSON always failed
         if (pos_ > len_) {
@@ -665,7 +664,7 @@ class Parser {
   struct CheckKeyReturn<T, decltype((void)T::check_key_return, 0)>
       : std::true_type {};
 
-  template <unsigned parseFlags, typename SAX>
+  template <typename SAX>
   sonic_force_inline void parseImpl(SAX &sax) {
 #define sonic_check_err()     \
   do {                        \
@@ -704,7 +703,7 @@ class Parser {
         goto obj_key;
       }
       default:
-        parsePrimitives<parseFlags>(sax);
+        parsePrimitives(sax);
         goto doc_end;
     }
 
@@ -766,7 +765,7 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber<parseFlags>(sax);
+        parseNumber(sax);
         sonic_check_err();
         break;
       case 't':
@@ -782,7 +781,7 @@ class Parser {
         sonic_check_err();
         break;
       case '"':
-        parseStrInPlace<parseFlags>(sax);
+        parseStrInPlace(sax);
         sonic_check_err();
         break;
       default:
@@ -846,7 +845,7 @@ class Parser {
       case '8':
       case '9':
       case '-':
-        parseNumber<parseFlags>(sax);
+        parseNumber(sax);
         sonic_check_err();
         break;
       case 't':
@@ -862,7 +861,7 @@ class Parser {
         sonic_check_err();
         break;
       case '"':
-        parseStrInPlace<parseFlags>(sax);
+        parseStrInPlace(sax);
         sonic_check_err();
         break;
       default:
@@ -941,7 +940,7 @@ class Parser {
     if (sonic_unlikely(c != '"')) {
       goto err_invalid_char;
     }
-    // parse string in allocater if has esacped chars
+    // parse string in allocator if has escaped chars
     src = data + pos;
     sdst = src;
     skips = internal::SkipString(data, pos, len);
@@ -955,7 +954,7 @@ class Parser {
       uint8_t *dst = (uint8_t *)alloc.Malloc(sn + 32);
       sdst = dst;
       std::memcpy(dst, src, sn);
-      sn = internal::parseStringInplace(dst, err);
+      sn = internal::parseStringInplace<parseFlags>(dst, err);
       if (err) {
         // update the error positions
         pos = (src - data) + (dst - sdst);

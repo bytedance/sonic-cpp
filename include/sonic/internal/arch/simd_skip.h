@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "simd_dispatch.h"
+#include "sonic/dom/flags.h"
 #include "sonic/error.h"
 #include "sonic/jsonpath/jsonpath.h"
 
@@ -110,7 +111,7 @@ class SkipScanner {
   }
 
   // SkipOne skip one raw json value and return the start of value, return the
-  // negtive if errors.
+  // negative if errors.
   sonic_force_inline long SkipOne(const uint8_t *data, size_t &pos,
                                   size_t len) {
     uint8_t c = SkipSpaceSafe(data, pos, len);
@@ -176,7 +177,7 @@ class SkipScanner {
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace(nsrc, err);
+      slen = parseStringInplace<kParseDefault>(nsrc, err);
       if (err) {
         pos = (start - data) + (nsrc - &kbuf[0]);
         return err;
@@ -209,7 +210,7 @@ class SkipScanner {
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace(nsrc, err);
+      slen = parseStringInplace<kParseDefault>(nsrc, err);
       if (err) {
         pos = (start - data) + (nsrc - &kbuf[0]);
         return err;
@@ -623,6 +624,7 @@ class SkipScanner2 {
   enum WriteStyle { RAW, FLATTEN, QUOTE };
   enum JsonValueType { STRING, OTHER };
 
+  template <unsigned serializeFlags>
   class JsonGeneratorInterface {
    public:
     virtual bool writeRaw(StringView sv) = 0;
@@ -639,21 +641,24 @@ class SkipScanner2 {
     virtual bool isBeginArray() = 0;
     virtual ~JsonGeneratorInterface() {}
   };
-
+  template <unsigned serializeFlags>
   using JsonGeneratorFactory =
-      std::function<std::shared_ptr<JsonGeneratorInterface>(WriteBuffer &)>;
+      std::function<std::shared_ptr<JsonGeneratorInterface<serializeFlags>>(
+          WriteBuffer &)>;
 
-  inline bool getJsonPathSparkArrayIndex(
-      const JsonPath &path, size_t index, WriteStyle style,
-      std::shared_ptr<JsonGeneratorInterface> jsonGenerator,
-      JsonGeneratorFactory jsonGeneratorFactory, int64_t const idx) {
+  template <WriteStyle style, unsigned serializeFlags = kSerializeJavaStyleFlag>
+  inline bool getJsonPathArrayIndex(
+      const JsonPath &path, size_t index,
+      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
+      JsonGeneratorFactory<serializeFlags> jsonGeneratorFactory,
+      int64_t const idx) {
     RETURN_FALSE_IF_PARSE_ERROR(consume('['));
     int64_t cur_idx = 0;
     bool dirty = false;
     while (peek() != ']') {
       if (cur_idx == idx) {
-        dirty = getJsonPathSpark(path, index + 1, style, jsonGenerator,
-                                 jsonGeneratorFactory);
+        dirty = getJsonPath<style, serializeFlags>(
+            path, index + 1, jsonGenerator, jsonGeneratorFactory);
         while (peek() != ']') {
           RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
           if (peek() == ']') {
@@ -671,10 +676,10 @@ class SkipScanner2 {
     RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
     return dirty;
   }
-
+  template <unsigned serializeFlags>
   inline bool jsonTupleWithCodeGenImpl(
       std::vector<StringView> const &keys,
-      std::shared_ptr<JsonGeneratorInterface> jsonGenerator,
+      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
       std::vector<std::optional<std::string>> &result) {
     RETURN_FALSE_IF_PARSE_ERROR(consume('{'));
 
@@ -708,10 +713,10 @@ class SkipScanner2 {
 
     return true;
   }
-
+  template <unsigned serializeFlags>
   inline std::vector<std::optional<std::string>> jsonTupleWithCodeGen(
       std::vector<StringView> const &keys,
-      std::shared_ptr<JsonGeneratorInterface> jsonGenerator, bool legacy) {
+      JsonGeneratorInterface<serializeFlags> *jsonGenerator, bool legacy) {
     std::vector<std::optional<std::string>> result(keys.size(), std::nullopt);
     const auto success = jsonTupleWithCodeGenImpl(keys, jsonGenerator, result);
 
@@ -723,11 +728,11 @@ class SkipScanner2 {
 
     return result;
   }
-
-  inline bool getJsonPathSpark(
-      const JsonPath &path, size_t index, WriteStyle style,
-      std::shared_ptr<JsonGeneratorInterface> jsonGenerator,
-      JsonGeneratorFactory const &jsonGeneratorFactory) {
+  template <WriteStyle style, unsigned serializeFlags = kSerializeJavaStyleFlag>
+  inline bool getJsonPath(
+      const JsonPath &path, size_t index,
+      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
+      JsonGeneratorFactory<serializeFlags> const &jsonGeneratorFactory) {
     const bool path_is_nil = index >= path.size();
     const auto c = peek();
     const bool is_field_name = getAndClearIsFieldName();
@@ -749,26 +754,30 @@ class SkipScanner2 {
       return false;
     }
 
-    if (value_string && path_is_nil && style == RAW) {
-      const auto sv = getOne();
-      if (error_ != kErrorNone) {
-        return false;
+    if (value_string && path_is_nil) {
+      if constexpr (style == RAW) {
+        const auto sv = getOne();
+        if (error_ != kErrorNone) {
+          return false;
+        }
+        jsonGenerator->writeRaw(sv);
+        return true;
       }
-      jsonGenerator->writeRaw(sv);
-      return true;
     }
 
-    if (c == '[' && path_is_nil && style == FLATTEN) {
-      RETURN_FALSE_IF_PARSE_ERROR(consume('['));
-      bool dirty = false;
+    if (c == '[' && path_is_nil) {
+      if constexpr (style == FLATTEN) {
+        RETURN_FALSE_IF_PARSE_ERROR(consume('['));
+        bool dirty = false;
 
-      while (peek() != ']') {
-        dirty |= getJsonPathSpark(path, index + 1, style, jsonGenerator,
-                                  jsonGeneratorFactory);
-        RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+        while (peek() != ']') {
+          dirty |= getJsonPath<FLATTEN, serializeFlags>(
+              path, index + 1, jsonGenerator, jsonGeneratorFactory);
+          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+        }
+        RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
+        return dirty;
       }
-      RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
-      return dirty;
     }
 
     if (path_is_nil) {
@@ -804,8 +813,8 @@ class SkipScanner2 {
         } else {
           // The next "string_value" is a key
           setIsFieldName();
-          dirty = getJsonPathSpark(path, index, style, jsonGenerator,
-                                   jsonGeneratorFactory);
+          dirty = getJsonPath<style, serializeFlags>(path, index, jsonGenerator,
+                                                     jsonGeneratorFactory);
 
           RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
         }
@@ -824,8 +833,8 @@ class SkipScanner2 {
       jsonGenerator->writeStartArray();
       while (peek() != ']') {
         const auto index_plus_two = index + 2;
-        dirty |= getJsonPathSpark(path, index_plus_two, FLATTEN, jsonGenerator,
-                                  jsonGeneratorFactory);
+        dirty |= getJsonPath<FLATTEN, serializeFlags>(
+            path, index_plus_two, jsonGenerator, jsonGeneratorFactory);
         RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
       }
       jsonGenerator->writeEndArray();
@@ -833,47 +842,51 @@ class SkipScanner2 {
       return dirty;
     }
 
-    if (c == '[' && path[index].is_wildcard() && style != QUOTE) {
-      int64_t dirty = 0;
-      auto nextStyle = style == RAW ? QUOTE : style;
-      WriteBuffer wb;
-      auto localJsonGenerator = jsonGeneratorFactory(wb);
+    if (c == '[' && path[index].is_wildcard()) {
+      if constexpr (style != QUOTE) {
+        int64_t dirty = 0;
+        auto constexpr nextStyle = style == RAW ? QUOTE : style;
+        WriteBuffer wb;
+        auto localJsonGenerator = jsonGeneratorFactory(wb);
 
-      RETURN_FALSE_IF_PARSE_ERROR(consume('['));
-      while ((pos_ < len_) && peek() != ']') {
-        size_t pos_before = pos_;
-        dirty += getJsonPathSpark(path, index + 1, nextStyle,
-                                  localJsonGenerator, jsonGeneratorFactory)
-                     ? 1
-                     : 0;
-        if (pos_ == pos_before) {
-          if (pos_ < len_) {
-            pos_++;
-          } else {
-            setError(SonicError::kParseErrorEof);
-            return false;
+        RETURN_FALSE_IF_PARSE_ERROR(consume('['));
+        while ((pos_ < len_) && peek() != ']') {
+          size_t pos_before = pos_;
+          dirty += getJsonPath<nextStyle, serializeFlags>(
+                       path, index + 1, localJsonGenerator.get(),
+                       jsonGeneratorFactory)
+                       ? 1
+                       : 0;
+          if (pos_ == pos_before) {
+            if (pos_ < len_) {
+              pos_++;
+            } else {
+              setError(SonicError::kParseErrorEof);
+              return false;
+            }
           }
+          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
         }
-        RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
-      }
-      if (sonic_unlikely(pos_ == len_)) {
-        setError(SonicError::kParseErrorEof);
-        return false;
-      }
-      RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
-      if (dirty > 1) {
-        if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
-          jsonGenerator->writeComma();
+        if (sonic_unlikely(pos_ == len_)) {
+          setError(SonicError::kParseErrorEof);
+          return false;
         }
-        jsonGenerator->writeStartArray();
-        // should always use explicit `Size`, because there maybe '\0' in the wb
-        jsonGenerator->writeRawValue(wb.ToStringView());
-        jsonGenerator->writeEndArray();
-      } else if (dirty == 1) {
-        jsonGenerator->writeRawValue(wb.ToStringView());
-      }
+        RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
+        if (dirty > 1) {
+          if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
+            jsonGenerator->writeComma();
+          }
+          jsonGenerator->writeStartArray();
+          // should always use explicit `Size`, because there maybe '\0' in the
+          // wb
+          jsonGenerator->writeRawValue(wb.ToStringView());
+          jsonGenerator->writeEndArray();
+        } else if (dirty == 1) {
+          jsonGenerator->writeRawValue(wb.ToStringView());
+        }
 
-      return dirty > 0;
+        return dirty > 0;
+      }
     }
 
     if (c == '[' && path[index].is_wildcard()) {
@@ -886,8 +899,8 @@ class SkipScanner2 {
       while (peek() != ']') {
         const auto index_plus_one = index + 1;
 
-        dirty |= getJsonPathSpark(path, index_plus_one, QUOTE, jsonGenerator,
-                                  jsonGeneratorFactory);
+        dirty |= getJsonPath<QUOTE, serializeFlags>(
+            path, index_plus_one, jsonGenerator, jsonGeneratorFactory);
         RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
       }
       RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
@@ -897,15 +910,15 @@ class SkipScanner2 {
 
     if (c == '[' && path[index].is_index()) {
       const auto array_index = path[index].index();
-      auto nextStyle = style;
 
       const bool path_has_two_more = index + 2 < path.size();
       if (path_has_two_more && path[index + 1].is_wildcard()) {
-        nextStyle = QUOTE;
+        return getJsonPathArrayIndex<QUOTE, serializeFlags>(
+            path, index, jsonGenerator, jsonGeneratorFactory, array_index);
       }
 
-      return getJsonPathSparkArrayIndex(path, index, nextStyle, jsonGenerator,
-                                        jsonGeneratorFactory, array_index);
+      return getJsonPathArrayIndex<style, serializeFlags>(
+          path, index, jsonGenerator, jsonGeneratorFactory, array_index);
     }
 
     if (field_name && path[index].is_key()) {
@@ -917,8 +930,8 @@ class SkipScanner2 {
       if (found) {
         // if not null
         if (peek() != 'n') {
-          return getJsonPathSpark(path, index + 1, style, jsonGenerator,
-                                  jsonGeneratorFactory);
+          return getJsonPath<style, serializeFlags>(
+              path, index + 1, jsonGenerator, jsonGeneratorFactory);
         } else {
           // skip null
           RETURN_FALSE_IF_PARSE_ERROR(skipOne());
@@ -931,8 +944,8 @@ class SkipScanner2 {
     if (field_name && path[index].is_wildcard()) {
       RETURN_FALSE_IF_PARSE_ERROR(skipOne());
       RETURN_FALSE_IF_PARSE_ERROR(consume(':'));
-      return getJsonPathSpark(path, index + 1, style, jsonGenerator,
-                              jsonGeneratorFactory);
+      return getJsonPath<style, serializeFlags>(path, index + 1, jsonGenerator,
+                                                jsonGeneratorFactory);
     }
 
     if (c == '{' || c == '[') {
@@ -955,7 +968,7 @@ class SkipScanner2 {
     return false;
   }
   // SkipOne skip one raw json value and return the start of value, return the
-  // negtive if errors.
+  // negative if errors.
   inline SonicError getJsonPath(const JsonPath &path, size_t index,
                                 std::vector<StringView> &res,
                                 bool complete = false) {

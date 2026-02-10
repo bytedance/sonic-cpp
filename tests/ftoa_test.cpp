@@ -34,7 +34,7 @@ using namespace sonic_json;
 
 static void TestF64toa(const std::string& expect, double val) {
   char out[32];
-  int len = F64toa(out, val);
+  int len = F64toa<kSerializeDefault>(out, val);
   out[len] = '\0';
   EXPECT_STREQ(expect.data(), out);
   EXPECT_EQ(expect.size(), len);

@@ -38,9 +38,15 @@ using sonic_json::internal::common::handle_unicode_codepoint;
 struct StringBlock {
  public:
   sonic_force_inline static StringBlock Find(const uint8_t *src);
-  sonic_force_inline bool HasQuoteFirst(bool allow_unesc) {
-    return (((bs_bits - 1) & quote_bits) != 0) &&
-           (allow_unesc || !HasUnescaped());
+  template <unsigned parseFlag>
+  sonic_force_inline bool HasQuoteFirst() {
+    constexpr bool kAllowUnescapedControlChars =
+        (parseFlag & kParseAllowUnescapedControlChars) != 0;
+    if constexpr (kAllowUnescapedControlChars) {
+      return (((bs_bits - 1) & quote_bits) != 0);
+    } else {
+      return (((bs_bits - 1) & quote_bits) != 0) && (!HasUnescaped());
+    }
   }
   sonic_force_inline bool HasBackslash() {
     return ((quote_bits - 1) & bs_bits) != 0;

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define SONIC_SPARK_FORMAT
-
 #include <gtest/gtest.h>
 
 #include "sonic/sonic.h"
@@ -24,32 +22,13 @@ namespace {
 
 using namespace sonic_json;
 
-// void TestOk(const std::string json, const std::string path,
-//             const std::string expect) {
-//   auto got = GetByJsonPath(json, path);
-//   ASSERT_EQ(std::get<0>(got), expect)
-//       << "json: " << json << ", path: " << path
-//       << ", error: " << ErrorMsg(std::get<1>(got));
-// }
-
-#define TestOk(json, path, expect)                    \
-  {                                                   \
-    auto got = GetByJsonPathOnDemand(json, path);     \
-    EXPECT_EQ(std::get<0>(got), expect)               \
-        << "json: " << json << ", path: " << path     \
-        << ", error: " << ErrorMsg(std::get<1>(got)); \
+#define TestOk(json, path, expect)                                         \
+  {                                                                        \
+    auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, path); \
+    EXPECT_EQ(std::get<0>(got), expect)                                    \
+        << "json: " << json << ", path: " << path                          \
+        << ", error: " << ErrorMsg(std::get<1>(got));                      \
   }
-
-// void TestFail(const std::string json, const std::string path) {
-//   // ASSERT_NE(std::get<1>(GetByJsonPathOnDemand(json, path)), kErrorNone)
-//   //     << "json: " << json << ", path: " << path;
-// }
-/**
-// #define TestFail(json, path) {\
-// EXPECT_NE(std::get<1>(GetByJsonPathOnDemand(json, path)), kErrorNone)\
-// << "json: " << json << ", path: " << path;\
-//   }
- **/
 
 TEST(JsonTuple, Basic) {
   auto json = R"({
@@ -58,7 +37,8 @@ TEST(JsonTuple, Basic) {
         "c": {"33": 123}
         })";
   // StringView json, std::vector<StringView> keys
-  auto result = JsonTupleWithCodeGen(json, {"b"}, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, {"b"}, true);
   std::vector<std::optional<std::string>> expected = {R"([0,1,2,3])"};
   EXPECT_EQ(result, expected);
 }
@@ -66,14 +46,16 @@ TEST(JsonTuple, sparkCornerCase) {
   std::string json = R"({"1.a": "b"})";
   std::vector<std::string_view> paths{"1.a"};
   std::vector<std::optional<std::string>> expected = {R"(b)"};
-  auto result = JsonTupleWithCodeGen(json, paths, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   EXPECT_EQ(result, expected);
 }
 TEST(JsonTuple, escapeQuote) {
   std::string json = R"({"1.a": "{\"options\"}")";
   std::vector<std::string_view> paths{"1.a"};
   std::vector<std::optional<std::string>> expected = {R"({"options"})"};
-  auto result = JsonTupleWithCodeGen(json, paths, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   EXPECT_EQ(result, expected);
 }
 TEST(JsonTuple, japanese) {
@@ -145,7 +127,8 @@ TEST(JsonTuple, japanese) {
       "description",
       "entities.url.urls[0].indices[1]",
   };
-  auto result = JsonTupleWithCodeGen(json, paths, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   std::vector<std::optional<std::string>> expected = {
       "903487807", "903487807", "関西    ↓詳しいプロ↓",
       "無言フォローはあまり好みません "
@@ -154,7 +137,7 @@ TEST(JsonTuple, japanese) {
       std::nullopt};
 
   EXPECT_EQ(result, expected);
-  result = JsonTupleWithCodeGen(json, paths, false);
+  result = JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, false);
   EXPECT_EQ(result, expected);
 }
 
@@ -163,10 +146,11 @@ TEST(JsonTuple, invalidValue) {
   std::vector<std::string_view> paths{"a", "b"};
   std::vector<std::optional<std::string>> expected = {"1", std::nullopt};
 
-  auto result = JsonTupleWithCodeGen(json, paths, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   EXPECT_EQ(result, expected);
   expected = {std::nullopt, std::nullopt};
-  result = JsonTupleWithCodeGen(json, paths, false);
+  result = JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, false);
   EXPECT_EQ(result, expected);
 }
 
@@ -178,10 +162,11 @@ TEST(JsonTuple, malformed) {
   std::vector<std::optional<std::string>> expected2 = {
       std::nullopt, std::nullopt, std::nullopt, std::nullopt};
 
-  auto result = JsonTupleWithCodeGen(json, paths, true);
+  auto result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   EXPECT_EQ(result, expected);
 
-  result = JsonTupleWithCodeGen(json, paths, false);
+  result = JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, false);
   EXPECT_EQ(result, expected2);
 }
 

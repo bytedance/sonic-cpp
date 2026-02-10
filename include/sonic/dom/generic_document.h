@@ -23,6 +23,9 @@
 #include "sonic/dom/parser.h"
 
 namespace sonic_json {
+
+template <unsigned parseFlags>
+class Parser;
 template <typename NodeType>
 class GenericDocument : public NodeType {
  public:
@@ -59,7 +62,7 @@ class GenericDocument : public NodeType {
   }
 
   /**
-   * @brief Move assignement
+   * @brief Move assignment
    */
   GenericDocument& operator=(GenericDocument&& rhs) {
     // Step1: clear self memory
@@ -208,7 +211,7 @@ class GenericDocument : public NodeType {
 
   template <unsigned parseFlags>
   GenericDocument& parseImpl(const char* json, size_t len) {
-    Parser p;
+    Parser<parseFlags> p;
     SAXHandler<NodeType> sax(*alloc_);
     parse_result_ = allocateStringBuffer(json, len);
     if (sonic_unlikely(HasParseError())) {
@@ -218,7 +221,7 @@ class GenericDocument : public NodeType {
       parse_result_ = kErrorNoMem;
       return *this;
     }
-    parse_result_ = p.template Parse<parseFlags>(str_, len, sax);
+    parse_result_ = p.Parse(str_, len, sax);
     if (sonic_unlikely(HasParseError())) {
       return *this;
     }
@@ -228,7 +231,7 @@ class GenericDocument : public NodeType {
 
   template <unsigned parseFlags>
   GenericDocument& parseSchemaImpl(const char* json, size_t len) {
-    Parser p;
+    Parser<parseFlags> p;
     SchemaHandler<NodeType> sax(this, *alloc_);
     parse_result_ = allocateSchemaStringBuffer(json, len);
     if (sonic_unlikely(HasParseError())) {
@@ -238,7 +241,7 @@ class GenericDocument : public NodeType {
       parse_result_ = kErrorNoMem;
       return *this;
     }
-    parse_result_ = p.template Parse<parseFlags>(schema_str_, len, sax);
+    parse_result_ = p.Parse(schema_str_, len, sax);
     return *this;
   }
 
@@ -283,7 +286,7 @@ class GenericDocument : public NodeType {
     schema_str_[len + 2] = 'x';
     return kErrorNone;
   }
-
+  template <unsigned P>
   friend class Parser;
 
   // Note: it is a callback function in parse.parse_impl

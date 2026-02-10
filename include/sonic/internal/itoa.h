@@ -56,7 +56,6 @@ sonic_force_inline char *Utoa_1_8(char *out, uint32_t val) {
     lz = val < 10;
     Copy2Digs(out, &kDigits[val * 2 + lz]);
     return out + 2 - lz;
-    ;
   } else if (val < 10000) {  // 3 ~ 4 digits
     hi = val / 100;
     lo = val % 100;

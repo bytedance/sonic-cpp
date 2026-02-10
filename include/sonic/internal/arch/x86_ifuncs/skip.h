@@ -26,7 +26,7 @@ namespace internal {
 
 using common::EqBytes4;
 using common::SkipLiteral;
-using sse::GetNextToken;  // !!!Not efficency
+using sse::GetNextToken;  // !!!Not efficiency
 
 __attribute__((target("default"))) inline int SkipString(const uint8_t*,
                                                          size_t&, size_t) {

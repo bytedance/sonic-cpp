@@ -23,38 +23,44 @@
 
 namespace sonic_json {
 namespace internal {
+template <unsigned parseFlags = kParseDefault>
 __attribute__((target("default"))) inline size_t parseStringInplace(
-    uint8_t *&, SonicError &, bool) {
+    uint8_t *&src, SonicError &err) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
+template <unsigned serializeFlags>
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
-                                                      char *, bool) {
+                                                      char *) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
+template <unsigned parseFlags = kParseDefault>
 __attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err, bool allow_unescaped_control_chars) {
-  return sse::parseStringInplace(src, err, allow_unescaped_control_chars);
+    uint8_t *&src, SonicError &err) {
+  return sse::parseStringInplace<parseFlags>(src, err);
 }
 
+template <unsigned serializeFlags>
 __attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
-                                                           size_t nb, char *dst,
-                                                           bool escape_emoji) {
-  return sse::Quote(src, nb, dst, escape_emoji);
+                                                           size_t nb,
+                                                           char *dst) {
+  return sse::Quote<serializeFlags>(src, nb, dst);
 }
 
+template <unsigned parseFlags = kParseDefault>
 __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err, bool allow_unescaped_control_chars) {
-  return avx2::parseStringInplace(src, err, allow_unescaped_control_chars);
+    uint8_t *&src, SonicError &err) {
+  return avx2::parseStringInplace<parseFlags>(src, err);
 }
 
+template <unsigned serializeFlags>
 __attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
-                                                          size_t nb, char *dst,
-                                                          bool escape_emoji) {
-  return avx2::Quote(src, nb, dst, escape_emoji);
+                                                          size_t nb,
+                                                          char *dst) {
+  return avx2::Quote<serializeFlags>(src, nb, dst);
 }
 
 }  // namespace internal

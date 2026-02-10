@@ -56,8 +56,7 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   ssize_t rn = 0;
   internal::Stack stk;
   ParentCtx* parent;
-
-  if ((serializeFlags & kSerializeAppendBuffer) == 0) {
+  if constexpr ((serializeFlags & kSerializeAppendBuffer) == 0) {
     wb.Clear();
     wb.Reserve(estimate);
   } else {
@@ -82,8 +81,7 @@ val_begin:
       inc_len = str_len * 6 + 32 + 3;
       wb.Grow(inc_len);
       str_ptr = node->GetStringView().data();
-      rn = internal::Quote(str_ptr, str_len, wb.End<char>(),
-                           (serializeFlags & kSerializeEscapeEmoji) != 0) -
+      rn = internal::Quote<serializeFlags>(str_ptr, str_len, wb.End<char>()) -
            wb.End<char>();
       wb.PushSizeUnsafe<char>(rn);
       wb.PushUnsafe<char>(is_key ? ':' : ',');
@@ -104,7 +102,7 @@ val_begin:
           break;
         case kReal: {
           const double d = node->GetDouble();
-          rn = internal::F64toa(wb.End<char>(), d);
+          rn = internal::F64toa<serializeFlags>(wb.End<char>(), d);
           // support Infinity/-Infinity or NaN/-NaN
 
           if (sonic_unlikely(rn <= 0)) {

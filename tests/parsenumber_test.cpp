@@ -183,7 +183,7 @@ TEST(ParserTest, ParseFloatExponent) {
   TestParseDouble(0, "-0.00e+0456");
   TestParseDouble(0, "-0e+456");
 
-  // zero exponets
+  // zero exponents
   TestParseDouble(1, "1e0");
   TestParseDouble(12, "12e-00");
 

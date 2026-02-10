@@ -884,7 +884,7 @@ static sonic_force_inline bool AtofEiselLemire64(uint64_t mant, int exp10,
 static sonic_force_inline bool is_digit(char c) { return '0' <= c && c <= '9'; }
 
 #define DECIMAL_MAX_DNUM 800
-/* decimical shift witout overflow, e.g. 9 << 61 overflow */
+/* decimal shift without overflow, e.g. 9 << 61 overflow */
 #define MAX_SHIFT 60
 
 /* Decimal represent the integer or float
@@ -1017,7 +1017,7 @@ static sonic_force_inline void SetDecimal(Decimal *d, const char *s, int len) {
         d->d[d->nd] = s[i];
         d->nd++;
       } else if (s[i] != '0') {
-        /* truncat the remaining digits */
+        /* truncate the remaining digits */
         d->trunc = 1;
       }
     } else if (s[i] == '.') {
@@ -1294,7 +1294,7 @@ static sonic_force_inline int DecimalToF64(Decimal *d, double *val) {
   /* Our range is [0.5,1) but floating point range is [1,2) */
   exp2--;
 
-  /* Minimum exp2 for doulbe is -1022.
+  /* Minimum exp2 for double is -1022.
    * If the exponent is smaller, move it up and
    * adjust d accordingly.
    */

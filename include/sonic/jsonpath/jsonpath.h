@@ -16,12 +16,12 @@
 namespace sonic_json {
 
 namespace internal {
-const char NONE = '\0';
-const char WILDCARD = '*';
-const char ROOT = '$';
-const char IS_KEY = '\x01';
-const char IS_INDEX = '\x02';
-const char KEY_OR_INDEX = '\x03';
+static constexpr char NONE = '\0';
+static constexpr char WILDCARD = '*';
+static constexpr char ROOT = '$';
+static constexpr char IS_KEY = '\x01';
+static constexpr char IS_INDEX = '\x02';
+static constexpr char KEY_OR_INDEX = '\x03';
 
 class JsonPathNode {
  public:
@@ -141,8 +141,8 @@ sonic_force_inline std::string paddingJsonPath(StringView path) {
 }
 
 /**
- * Respresent a JSON path. RFC is https://datatracker.ietf.org/doc/rfc9535/.
- * NOTE: descendant, slice, filter and curent node not support.
+ * Represent a JSON path. RFC is https://datatracker.ietf.org/doc/rfc9535/.
+ * NOTE: descendant, slice, filter and current node not support.
  */
 class JsonPath : public std::vector<JsonPathNode> {
  private:

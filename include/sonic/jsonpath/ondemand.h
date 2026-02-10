@@ -14,7 +14,9 @@ struct JsonPathRawResult {
   std::vector<StringView> raw;
   SonicError error;
 };
-class JsonGenerator : public internal::SkipScanner2::JsonGeneratorInterface {
+template <unsigned int serializeFlags>
+class JsonGenerator
+    : public internal::SkipScanner2::JsonGeneratorInterface<serializeFlags> {
  public:
   JsonGenerator(Document& dom_doc, WriteBuffer& wb)
       : dom_doc_(dom_doc), wb_(wb) {}
@@ -56,7 +58,8 @@ class JsonGenerator : public internal::SkipScanner2::JsonGeneratorInterface {
       return false;
     }
     auto n = &dom_doc_;
-    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji>(wb_);
+    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji |
+                          serializeFlags>(wb_);
 
     return true;
   }
@@ -81,7 +84,8 @@ class JsonGenerator : public internal::SkipScanner2::JsonGeneratorInterface {
       return true;
     }
 
-    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji>(wb_);
+    n->template Serialize<kSerializeAppendBuffer | kSerializeEscapeEmoji |
+                          serializeFlags>(wb_);
 
     result[index] = std::string(wb_.ToStringView());
     return true;
@@ -97,6 +101,7 @@ class JsonGenerator : public internal::SkipScanner2::JsonGeneratorInterface {
   WriteBuffer& wb_;
 };
 
+template <unsigned serializeFlags = kSerializeDefault>
 sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
     StringView json, StringView jsonpath) {
   internal::SkipScanner2 scan;
@@ -122,16 +127,18 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
   Document dom_doc;
   WriteBuffer wb;
 
-  const internal::SkipScanner2::JsonGeneratorFactory jsonGeneratorFactory =
-      [&](WriteBuffer& local_wb) {
-        std::shared_ptr<internal::SkipScanner2::JsonGeneratorInterface>
-            local_ret = std::make_shared<JsonGenerator>(dom_doc, local_wb);
+  const internal::SkipScanner2::JsonGeneratorFactory<serializeFlags>
+      jsonGeneratorFactory = [&](WriteBuffer& local_wb) {
+        std::shared_ptr<
+            internal::SkipScanner2::JsonGeneratorInterface<serializeFlags>>
+            local_ret = std::make_shared<JsonGenerator<serializeFlags>>(
+                dom_doc, local_wb);
         return local_ret;
       };
 
   const bool matched =
-      scan.getJsonPathSpark(path, 1, internal::SkipScanner2::WriteStyle::RAW,
-                            jsonGeneratorFactory(wb), jsonGeneratorFactory);
+      scan.getJsonPath<internal::SkipScanner2::WriteStyle::RAW, serializeFlags>(
+          path, 1, jsonGeneratorFactory(wb).get(), jsonGeneratorFactory);
   if (matched) {
     return std::make_tuple(std::string(wb.ToStringView()), kErrorNone);
   }
@@ -144,6 +151,7 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
   return std::make_tuple(std::string(wb.ToStringView()), scan.error_);
 }
 
+template <unsigned serializeFlags = kSerializeDefault>
 sonic_force_inline std::vector<std::optional<std::string>> JsonTupleWithCodeGen(
     StringView json, std::vector<StringView> const& keys, const bool legacy) {
   internal::SkipScanner2 scan;
@@ -154,14 +162,17 @@ sonic_force_inline std::vector<std::optional<std::string>> JsonTupleWithCodeGen(
   Document dom_doc;
   WriteBuffer wb;
 
-  const internal::SkipScanner2::JsonGeneratorFactory jsonGeneratorFactory =
-      [&](WriteBuffer& local_wb) {
-        std::shared_ptr<internal::SkipScanner2::JsonGeneratorInterface>
-            local_ret = std::make_shared<JsonGenerator>(dom_doc, local_wb);
+  const internal::SkipScanner2::JsonGeneratorFactory<serializeFlags>
+      jsonGeneratorFactory = [&](WriteBuffer& local_wb) {
+        std::shared_ptr<
+            internal::SkipScanner2::JsonGeneratorInterface<serializeFlags>>
+            local_ret = std::make_shared<JsonGenerator<serializeFlags>>(
+                dom_doc, local_wb);
         return local_ret;
       };
 
-  return scan.jsonTupleWithCodeGen(keys, jsonGeneratorFactory(wb), legacy);
+  return scan.jsonTupleWithCodeGen(keys, jsonGeneratorFactory(wb).get(),
+                                   legacy);
 }
 
 }  // namespace sonic_json

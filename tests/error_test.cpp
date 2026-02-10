@@ -34,7 +34,7 @@ TEST(Errors, Parse) {
   std::cout << ErrorMsg(err) << std::endl;
 }
 
-TEST(Errors, Serialze) {
+TEST(Errors, Serialize) {
   Document dom;
   dom.SetDouble(std::numeric_limits<double>::infinity());
   WriteBuffer wb;

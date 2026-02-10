@@ -813,7 +813,7 @@ class GenericNode {
 
   /**
    * @brief get specific node by json pointer(RFC 6901)
-   * @tparam StringType json pointer string type, can use StringView to aovoid
+   * @tparam StringType json pointer string type, can use StringView to avoid
    *      copying string.
    * @param pointer json pointer
    * @retval nullptr get node failed

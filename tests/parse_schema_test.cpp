@@ -58,7 +58,7 @@ void TestFailed(const std::string schema, const std::string json) {
   doc.ParseSchema(json);
 
   EXPECT_TRUE(doc.HasParseError())
-      << "unexpect parsing json success: " << json << std::endl;
+      << "unexpected parsing json success: " << json << std::endl;
 }
 
 TEST(ParseSchema, SuccessBasic) {

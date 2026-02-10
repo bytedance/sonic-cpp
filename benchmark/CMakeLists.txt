@@ -19,7 +19,7 @@ ExternalProject_Add(
     google_benchmark
     GIT_REPOSITORY https://github.com/google/benchmark.git
     PREFIX ${EP_PREFIX}
-    GIT_TAG  main
+    GIT_TAG  v1.9.5
     CMAKE_ARGS -DBENCHMARK_ENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
     INSTALL_COMMAND ""
 )
