@@ -260,7 +260,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline MemberIterator FindMember(const char* key,
@@ -276,7 +276,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline ConstMemberIterator FindMember(const char* key,
@@ -366,7 +366,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   }
 
   /**
-   * @brief Destory the created map. This means that you don't want maintain the
+   * @brief Destroy the created map. This means that you don't want maintain the
    * map anymore.
    */
   void DestroyMap() {
@@ -893,7 +893,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   DNode& pushBackImpl(DNode& value, Allocator& alloc) {
     constexpr size_t k_default_array_cap = 16;
     sonic_assert(this->IsArray());
-    // reseve capacity
+    // reserve capacity
     size_t cap = this->Capacity();
     if (this->Size() >= cap) {
       size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;

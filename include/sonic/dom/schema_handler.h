@@ -256,7 +256,7 @@ class SchemaHandler {
       obj_ptr = parent_st_.back();
       obj_member_ptr = &st_[0];
       parent_st_.pop_back();
-      // resotre parent node ptr
+      // restore parent node ptr
       parent_node_ = parent_st_.back();
       parent_st_.pop_back();
       cur_node_ = nullptr;

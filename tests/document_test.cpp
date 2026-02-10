@@ -764,10 +764,10 @@ TYPED_TEST(DocumentTest, NodeCopyControl) {
   EXPECT_TRUE(this->doc_["titles"].IsNull());
 
   // test swap
-  NodeType swaped;
-  EXPECT_TRUE(swaped.IsNull());
-  swaped.Swap(new_node);
-  EXPECT_FALSE(swaped.IsStringConst());
+  NodeType swapped;
+  EXPECT_TRUE(swapped.IsNull());
+  swapped.Swap(new_node);
+  EXPECT_FALSE(swapped.IsStringConst());
   EXPECT_TRUE(new_node.IsNull());
 }
 

@@ -36,9 +36,15 @@ struct StringBlock {
  public:
   sonic_force_inline static StringBlock Find(const uint8_t *src);
   sonic_force_inline static StringBlock Find(uint8x16_t &v);
-  sonic_force_inline bool HasQuoteFirst(bool allow_unesc) const {
-    return (((bs_bits - 1) & quote_bits) != 0) &&
-           (allow_unesc || !HasUnescaped());
+  template <unsigned parseFlags>
+  sonic_force_inline bool HasQuoteFirst() const {
+    constexpr bool kAllowUnescapedControlChars =
+        parseFlags & kParseAllowUnescapedControlChars;
+    if constexpr (kAllowUnescapedControlChars) {
+      return (((bs_bits - 1) & quote_bits) != 0);
+    } else {
+      return (((bs_bits - 1) & quote_bits) != 0) && (!HasUnescaped());
+    }
   }
   sonic_force_inline bool HasBackslash() const {
     return ((quote_bits - 1) & bs_bits) != 0;

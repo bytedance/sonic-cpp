@@ -68,11 +68,11 @@ namespace sonic_json {
 namespace internal {
 namespace arm_common {
 
-static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
-                                                          char *dst,
-                                                          bool escape_emoji) {
-  uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t *>(src));
-  vst1q_u8(reinterpret_cast<uint8_t *>(dst), v);
+template <bool EscapeEmoji>
+static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char* src,
+                                                          char* dst) {
+  uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t*>(src));
+  vst1q_u8(reinterpret_cast<uint8_t*>(dst), v);
 
   uint8x16_t m1 = vceqq_u8(v, vdupq_n_u8('\\'));
   uint8x16_t m2 = vceqq_u8(v, vdupq_n_u8('"'));
@@ -80,7 +80,7 @@ static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
 
   uint8x16_t mask = vorrq_u8(m1, m2);
   mask = vorrq_u8(mask, m3);
-  if (escape_emoji) {
+  if constexpr (EscapeEmoji) {
     uint8x16_t m_emoji = vcgeq_u8(v, vdupq_n_u8(0xF0));
     mask = vorrq_u8(mask, m_emoji);
   }
@@ -88,8 +88,9 @@ static sonic_force_inline uint64_t CopyAndGetEscapMask128(const char *src,
   return to_bitmask(mask);
 }
 
-sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
-                                bool escape_emoji) {
+template <unsigned serializeFlags>
+sonic_static_inline char* Quote(const char* src, size_t nb, char* dst) {
+  constexpr bool EscapeEmoji = serializeFlags & kSerializeEscapeEmoji;
   *dst++ = '"';
   sonic_assert(nb < (1ULL << 32));
   uint64_t mm;
@@ -99,11 +100,11 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
   while (nb >= VEC_LEN) {
     /* check for matches */
     // TODO: optimize: exploit the simd bitmask in the escape block.
-    if ((mm = CopyAndGetEscapMask128(src, dst, escape_emoji)) != 0) {
+    if ((mm = CopyAndGetEscapMask128<EscapeEmoji>(src, dst)) != 0) {
       // cn = __builtin_ctz(mm);
       cn = TrailingZeroes(mm) >> 2;
       MOVE_N_CHARS(src, cn);
-      DoEscape(src, dst, nb, escape_emoji);
+      DoEscape<serializeFlags>(src, dst, nb);
     } else {
       /* move to next block */
       MOVE_N_CHARS(src, VEC_LEN);
@@ -112,7 +113,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
 
   if (nb > 0) {
     char tmp_src[64];
-    const char *src_r;
+    const char* src_r;
 #ifdef SONIC_USE_SANITIZE
     if (0) {
 #else
@@ -125,12 +126,12 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst,
       src_r = tmp_src;
     }
     while (nb > 0) {
-      mm = CopyAndGetEscapMask128(src_r, dst, escape_emoji) &
+      mm = CopyAndGetEscapMask128<EscapeEmoji>(src_r, dst) &
            (0xFFFFFFFFFFFFFFFF >> ((VEC_LEN - nb) << 2));
       if (mm) {
         cn = TrailingZeroes(mm) >> 2;
         MOVE_N_CHARS(src_r, cn);
-        DoEscape(src_r, dst, nb, escape_emoji);
+        DoEscape<serializeFlags>(src_r, dst, nb);
       } else {
         dst += nb;
         nb = 0;

@@ -36,3 +36,9 @@ repos:
     hooks:
       - id: shfmt
         args: ["-w", "-i", "2", "-bn", "-ci", "-sr"]
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        name: Spell Check
+        args: [ "-L", ".codespellrc" ]

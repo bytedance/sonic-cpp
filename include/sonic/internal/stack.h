@@ -94,7 +94,7 @@ class Stack {
 
   /**
    * @brief Push a string into buffer.
-   * @param s the begining of string
+   * @param s the beginning of string
    * @param n the string size
    */
   sonic_force_inline void Push(const char* s, size_t n) {

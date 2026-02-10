@@ -28,6 +28,7 @@
 
 #include <cstring>
 
+#include "sonic/dom/flags.h"
 #include "sonic/internal/itoa.h"
 #include "sonic/macro.h"
 
@@ -766,7 +767,7 @@ static sonic_force_inline unsigned Ctz10(const uint64_t v) {
     return 10;
 }
 
-// FormatSignificand trimed the trailing zeros.
+// Format Significand trimmed the trailing zeros.
 static sonic_force_inline char* FormatSignificand(uint64_t sig, char* out,
                                                   int cnt) {
   char* p = out + cnt;
@@ -824,43 +825,39 @@ static sonic_force_inline bool IsDivPow2(uint64_t val, int32_t e) {
   return (val & mask) == 0;
 }
 
+template <unsigned serializeFlags>
 static sonic_force_inline char* FormatExponent(F64Decimal v, char* out,
                                                unsigned cnt) {
   char* p = out + 1;
   char* end = FormatSignificand(v.sig, p, cnt);
   while (*(end - 1) == '0') end--;
   *out = *p;
-#ifdef SONIC_SPARK_FORMAT
-  *p = '.';
-  if ((end - p) <= 1) {
-    *(++p) = '0';
-    end = p + 1;
-  }
 
-#else
-  /* print decimal point if needed */
-  if (end - p > 1) {
+  if constexpr (serializeFlags & kSerializeFloatFormatJava) {
     *p = '.';
+    if ((end - p) <= 1) {
+      *(++p) = '0';
+      end = p + 1;
+    }
+    *end++ = 'E';
   } else {
-    end--;
+    /* print decimal point if needed */
+    if (end - p > 1) {
+      *p = '.';
+    } else {
+      end--;
+    }
+    *end++ = 'e';
   }
-#endif
-
-  /* print the exponent */
-#ifdef SONIC_SPARK_FORMAT
-  *end++ = 'E';
-#else
-  *end++ = 'e';
-#endif
 
   int32_t exp = v.exp + (int32_t)cnt - 1;
   if (exp < 0) {
     *end++ = '-';
     exp = -exp;
   } else {
-#ifndef SONIC_SPARK_FORMAT
-    *end++ = '+';
-#endif
+    if constexpr (!(serializeFlags & kSerializeFloatFormatJava)) {
+      *end++ = '+';
+    }
   }
 
   if (exp >= 100) {
@@ -999,6 +996,7 @@ static sonic_force_inline F64Decimal F64ToDecimal(uint64_t rsig, int32_t rexp,
   return dec;
 }
 
+template <unsigned serializeFlags = kSerializeDefault>
 sonic_static_noinline int F64toa(char* out, double fp) {
   char* p = out;
   uint64_t raw = F64ToRaw(fp);
@@ -1032,17 +1030,16 @@ sonic_static_noinline int F64toa(char* out, double fp) {
     /* double is normal */
     c = rsig | F64_HIDDEN_BIT;
     q = rexp - F64_EXP_BIAS - F64_SIG_BITS;
-
-#ifndef SONIC_SPARK_FORMAT
-    /* fast path for integer */
-    if (q <= 0 && q >= -F64_SIG_BITS && IsDivPow2(c, -q)) {
-      uint64_t u = c >> -q;
-      p = U64toa(p, u);
-      *p++ = '.';
-      *p++ = '0';
-      return p - out;
+    if constexpr (!(serializeFlags & kSerializeFloatFormatJava)) {
+      /* fast path for integer */
+      if (q <= 0 && q >= -F64_SIG_BITS && IsDivPow2(c, -q)) {
+        uint64_t u = c >> -q;
+        p = U64toa(p, u);
+        *p++ = '.';
+        *p++ = '0';
+        return p - out;
+      }
     }
-#endif
 
   } else {
     c = rsig;
@@ -1052,24 +1049,24 @@ sonic_static_noinline int F64toa(char* out, double fp) {
   F64Decimal dec = F64ToDecimal(rsig, rexp, c, q);
   int cnt = Ctz10(dec.sig);
   int dot = cnt + dec.exp;
-
-#ifdef SONIC_SPARK_FORMAT
-  /*
-   * Floating point values in the range 1.0E-3 <= x < 1.0E7 have to be printed
-   * without exponent. This test checks the values at those boundaries.
-   * reference from
-   * https://github.com/FasterXML/jackson-core/blob/511704247fe020f81b8b37303d3c8acffab6aa0b/src/main/java/com/fasterxml/jackson/core/io/schubfach/DoubleToDecimal.java#L500
-   *
-   */
-  int sci_exp = cnt - 1 + dec.exp;
-  bool exp_fmt = !(sci_exp >= -3 && sci_exp < 7);
-#else
-  int sci_exp = dot - 1;
-  bool exp_fmt = sci_exp < -6 || sci_exp > 20;
-#endif
-
+  int sci_exp = 0;
+  bool exp_fmt = false;
+  if constexpr (serializeFlags & kSerializeFloatFormatJava) {
+    /*
+     * Floating point values in the range 1.0E-3 <= x < 1.0E7 have to be printed
+     * without exponent. This test checks the values at those boundaries.
+     * reference from
+     * https://github.com/FasterXML/jackson-core/blob/511704247fe020f81b8b37303d3c8acffab6aa0b/src/main/java/com/fasterxml/jackson/core/io/schubfach/DoubleToDecimal.java#L500
+     *
+     */
+    sci_exp = cnt - 1 + dec.exp;
+    exp_fmt = !(sci_exp >= -3 && sci_exp < 7);
+  } else {
+    sci_exp = dot - 1;
+    exp_fmt = sci_exp < -6 || sci_exp > 20;
+  }
   if (exp_fmt) {
-    return FormatExponent(dec, p, cnt) - out;
+    return FormatExponent<serializeFlags>(dec, p, cnt) - out;
   }
 
   if (dec.exp < 0) {

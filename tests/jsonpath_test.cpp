@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define SONIC_SPARK_FORMAT
-
 #include <gtest/gtest.h>
 
 #include "sonic/sonic.h"
@@ -24,26 +22,20 @@ namespace {
 
 using namespace sonic_json;
 
-#define TestOk(json, path, expect)                    \
-  do {                                                \
-    auto got = GetByJsonPathOnDemand(json, path);     \
-    EXPECT_EQ(std::get<0>(got), expect)               \
-        << "json: " << json << ", path: " << path     \
-        << ", error: " << ErrorMsg(std::get<1>(got)); \
+#define TestOk(json, path, expect)                                         \
+  do {                                                                     \
+    auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, path); \
+    EXPECT_EQ(std::get<0>(got), expect)                                    \
+        << "json: " << json << ", path: " << path                          \
+        << ", error: " << ErrorMsg(std::get<1>(got));                      \
   } while (0)
 
 void TestFail(const std::string json, const std::string path) {
-  auto result = GetByJsonPathOnDemand(json, path);
+  auto result = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, path);
   ASSERT_NE(std::get<1>(result), kErrorNone)
       << "Expected error for json: " << json << ", path: " << path
       << ", but actual: " << std::get<0>(result);
 }
-/**
-// #define TestFail(json, path) {\
-// EXPECT_NE(std::get<1>(GetByJsonPathOnDemand(json, path)), kErrorNone)\
-// << "json: " << json << ", path: " << path;\
-//   }
- **/
 
 void ValidBatchOK(const std::string json,
                   const std::vector<std::string>& paths) {
@@ -54,7 +46,7 @@ void ValidBatchOK(const std::string json,
   auto batch = GetByJsonPaths(json, jsonpaths);
 
   ASSERT_EQ(std::get<1>(batch), kErrorNone)
-      << "json: " << json << ", parese failed.";
+      << "json: " << json << ", parse failed.";
   auto results = std::get<0>(batch);
   for (size_t i = 0; i < paths.size(); ++i) {
     auto result = GetByJsonPath(json, paths[i]);
@@ -123,19 +115,6 @@ TEST(JsonPath, UnicodeTest) {
       "Doe\"}");
 }
 
-/*
-  @Test
-  public void boundaryConditions() {
-    // x = 1.0E7
-    assertD2sEquals("1.0E7", 1.0E7d);
-    // x < 1.0E7
-    assertD2sEquals("9999999.999999998", 9999999.999999998d);
-    // x = 1.0E-3
-    assertD2sEquals("0.001", 0.001d);
-    // x < 1.0E-3
-    assertD2sEquals("9.999999999999998E-4", 0.0009999999999999998d);
-  }
-*/
 TEST(Root, Number) {
   TestOk("123  ", "$", "123");
   TestOk("1.23  ", "$", "1.23");
@@ -167,7 +146,6 @@ TEST(JsonPath, IndexSelector) {
     ])";
 
   TestOk(json, "$[0]", "0");
-  //   TestOk(json, "$[-7]", "0");
   TestOk(json, "$[1]", "1.23");
   TestOk(json, "$[1]", "1.23");
   TestOk(json, "$[2]", "4.0E56");
@@ -175,7 +153,6 @@ TEST(JsonPath, IndexSelector) {
   TestOk(json, "$[4]", "true");
   TestOk(json, "$[5]", "{}");
   TestOk(json, "$[6]", "[]");
-  //   TestOk(json, "$[-1]", "[]");
 
   TestOk("[1,2]", "$[1]", "2");
 
@@ -528,7 +505,8 @@ TEST(JsonPath, DISABLED_JsonInfiniteLoop) {
     json.push_back((char)i);
   }
 
-  auto got = GetByJsonPathOnDemand(json, "$.motor_content_boost");
+  auto got = GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(
+      json, "$.motor_content_boost");
   EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
   EXPECT_EQ(std::get<0>(got), "");
 }
@@ -541,7 +519,8 @@ TEST(JsonPath, JsonInfiniteLoop2) {
   auto ints = splitToInts(integers);
   std::string json("[8");
 
-  auto got = GetByJsonPathOnDemand(json, "$.motor_content_boost");
+  auto got = GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(
+      json, "$.motor_content_boost");
   EXPECT_EQ(std::get<1>(got), kParseErrorEof);
   EXPECT_EQ(std::get<0>(got), "");
 }
@@ -549,14 +528,16 @@ TEST(JsonPath, JsonInfiniteLoop2) {
 TEST(JsonPath, JsonInfiniteLoop3) {
   std::string json = R"json([{"a":["c"]},)json";
   std::string path = "$[*].a";
-  auto got = GetByJsonPathOnDemand(json, path);
+  auto got =
+      GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(json, path);
   EXPECT_EQ(std::get<1>(got), kParseErrorEof);
   EXPECT_EQ(std::get<0>(got), "");
 }
 
 TEST(JsonPath, JsonTuple) {
   auto json = R"({a:1, b:2c})";
-  auto got = GetByJsonPathOnDemand(json, "$.b");
+  auto got =
+      GetByJsonPathOnDemand<kSerializeUnicodeEscapeUppercase>(json, "$.b");
   EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
   EXPECT_EQ(std::get<0>(got), "");
 }

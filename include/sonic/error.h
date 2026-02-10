@@ -45,7 +45,7 @@ enum SonicError {
   kParseErrorMismatchType =
       10,  ///< ParseOnDemand: the target type is not matched.
   kSerErrorUnsupportedType = 11,  ///< Serialize: DOM has invalid node type.
-  kSerErrorInfinity = 12,         ///< Serialize: DOM has inifinity number node.
+  kSerErrorInfinity = 12,         ///< Serialize: DOM has infinity number node.
   kSerErrorInvalidObjKey = 13,  ///< Serialize: The type of object's key is not
                                 ///< string.
   kErrorNoMem = 14,             ///< Memory is not enough to allocate.
@@ -86,7 +86,7 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kParseErrorMismatchType,
        "ParseOnDemand: the target type is not matched."},
       {kSerErrorUnsupportedType, "Serialize: DOM has invalid node type."},
-      {kSerErrorInfinity, "Serialize: DOM has inifinity number node."},
+      {kSerErrorInfinity, "Serialize: DOM has infinity number node."},
       {kSerErrorInvalidObjKey,
        "Serialize: The type of object's key is not string."},
       {kErrorNoMem, "Memory is not enough to allocate."},

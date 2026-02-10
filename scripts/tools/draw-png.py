@@ -322,8 +322,8 @@ def draw_multibar_png(labels, algos, title, png):
         ax.bar(x + bar_mid, y, width, label = algo)
         bar_mid += width
 
-    ax.set_ylabel('perforamnce')
-    ax.set_title(title + ' performance comparsion (HIB)')
+    ax.set_ylabel('performance')
+    ax.set_title(title + ' performance comparison (HIB)')
     ax.set_xticks(x, labels)
     ax.legend()
 
