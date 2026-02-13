@@ -54,6 +54,7 @@ ParseResult GetOnDemand(StringView json,
   return ParseResult(kErrorNone, pos);
 }
 
+template <ParseFlags parseFlags>
 class Parser {
  public:
   explicit Parser() noexcept = default;
@@ -64,12 +65,12 @@ class Parser {
   sonic_force_inline Parser &operator=(Parser &&other) noexcept = default;
   ~Parser() noexcept = default;
 
-  template <unsigned parseFlags = kParseDefault, typename SAX>
+  template <typename SAX>
   sonic_force_inline ParseResult Parse(char *data, size_t len, SAX &sax) {
     reset();
     json_buf_ = reinterpret_cast<uint8_t *>(data);
     len_ = len;
-    parseImpl<parseFlags>(sax);
+    parseImpl(sax);
     if (!err_ && hasTrailingChars()) {
       err_ = kParseErrorInvalidChar;
     }
@@ -132,7 +133,7 @@ class Parser {
   sonic_force_inline StringView parseStringHelper() {
     uint8_t *src = json_buf_ + pos_;
     uint8_t *sdst = src;
-    size_t n = internal::parseStringInplace(src, err_);
+    size_t n = internal::parseStringInplace<parseFlags>(src, err_);
     pos_ = src - json_buf_;
     return StringView(reinterpret_cast<char *>(sdst), n);
   }
@@ -167,12 +168,12 @@ class Parser {
   sonic_force_inline bool parseFloatingFast(double &d, int exp10,
                                             uint64_t man) const {
     d = (double)man;
-    // if man is small, but exp is large, also can parse excactly
+    // if man is small, but exp is large, also can parse exactly
     if (exp10 > 0) {
       if (exp10 > 22) {
         d *= internal::kPow10Tab[exp10 - 22];
         if (d > 1e15 || d < -1e15) {
-          // the exponent is tooo large
+          // the exponent is too large
           return false;
         }
         d *= internal::kPow10Tab[22];
@@ -218,6 +219,11 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
+    // check flags
+    if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+      return parseNumberAsString(sax);
+    }
+
 #define FLOATING_LONGEST_DIGITS 17
 
 #define RETURN_SET_ERROR_CODE(error_code) \
@@ -266,10 +272,11 @@ class Parser {
     static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
     int sgn = -1;
     int man_nd = 0;  // # digits of mantissa, 10 ^ 19 fits uint64_t
-    int exp10 = 0;   // 10-based exponet of float point number
+    int exp10 = 0;   // 10-based exponent of float point number
     int trunc = 0;
     uint64_t man = 0;  // mantissa of float point number
     size_t i = pos_ - 1;
+    size_t start_idx = pos_ - 1;
     size_t exp10_s = i;
     const char *s = reinterpret_cast<const char *>(json_buf_);
     using internal::is_digit;
@@ -311,6 +318,12 @@ class Parser {
         SET_DOUBLE_AND_RETURN(0.0 * sgn);
       }
 
+      // Zero Integer
+      if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
+        if (!sax.Raw(s + start_idx, i - start_idx))
+          RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+        RETURN_SET_ERROR_CODE(kErrorNone);
+      }
       SET_UINT_AND_RETURN(0);
     }
 
@@ -347,6 +360,12 @@ class Parser {
     if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) goto double_exp;
 
     // Integer
+    if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
+      if (!sax.Raw(s + start_idx, i - start_idx))
+        RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+      RETURN_SET_ERROR_CODE(kErrorNone);
+    }
+
     if (exp10 == 0) {
       // less than or equal to 19 digits
       if (sgn == -1) {
@@ -476,8 +495,128 @@ class Parser {
     }
 
     return true;
+  }
 
-#undef CHECK_DIGIT
+  template <typename SAX>
+  sonic_force_inline bool parseNumberAsString(SAX &sax) {
+    size_t i = pos_ - 1;
+    size_t start = i;
+    uint64_t man = 0;
+    int man_nd = 0;
+    const char *s = reinterpret_cast<const char *>(json_buf_);
+    size_t digit_start = 0;
+    using internal::is_digit;
+    static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
+
+    bool neg = (s[i] == '-');
+    i += uint8_t(neg);
+    int sgn = neg ? -1 : 1;
+    if (s[i] == '0') {
+      i++;
+      if (sonic_likely(s[i] == '.')) {  // floating number, parse as string
+        i++;
+        CHECK_DIGIT();
+
+        while (s[i] == '0') {
+          i++;
+        }
+        if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) {
+          i++;
+          if (s[i] == '-' || s[i] == '+') i++;
+          CHECK_DIGIT();
+          while (is_digit(s[i])) {
+            i++;
+          }
+          SET_DOUBLE_AND_RETURN(0.0 * sgn);
+        }
+        goto double_string_fract;
+        // parse floating number as json string value
+        // if (!sax.String(StringView(reinterpret_cast<char*>(s + start), i -
+        // start))) {
+        //   RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+        // }
+        // RETURN_SET_ERROR_CODE(kErrorNone);
+      } else if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) {
+        i++;
+        if (s[i] == '-' || s[i] == '+') i++;
+        CHECK_DIGIT();
+        while (is_digit(s[i])) i++;
+        // parse as +/- 0.0
+        SET_DOUBLE_AND_RETURN(0.0 * sgn);
+      }
+      SET_UINT_AND_RETURN(0);
+    }
+
+    digit_start = i;
+    man = str2int(s, i);
+    man_nd = i - digit_start;
+
+    if (man_nd == 0) {
+      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+    }
+
+    // if man_nd > 19, the number should store as string, no need to
+    // calculate correct man
+
+    if (sonic_likely(s[i] == '.')) {
+      i++;
+      goto double_string_fract;
+    }
+    if (sonic_unlikely(s[i] == 'e' || s[i] == 'E')) goto double_string_exp;
+
+    // Integer
+    if (man_nd <= 19) {
+      if (neg) {
+        if (man > ((uint64_t)1 << 63)) {
+          goto double_string_fast;
+        } else {
+          SET_INT_AND_RETURN(-man);
+        }
+      } else {
+        SET_UINT_AND_RETURN(man);
+      }
+    } else if (man_nd == 20) {
+      // now we get 20 digits, it maybe overflow for uint64
+      man = 0;
+      for (int ii = 0; ii < 19; ++ii) {
+        man = man * 10 + (s[ii + digit_start] - '0');
+      }
+      unsigned num = s[i - 1] - '0';
+      if (man < kUint64Max / 10 ||
+          (man == kUint64Max / 10 && num <= UINT_MAX % 10)) {
+        man = man * 10 + num;
+        if (sgn == -1) {
+          goto double_string_fast;
+        } else {
+          SET_UINT_AND_RETURN(man);
+        }
+      } else {
+        goto double_string_fast;
+      }
+    } else {
+      goto double_string_fast;
+    }
+
+  double_string_fract:
+    while (is_digit(s[i])) i++;
+    if (sonic_likely(s[i] != 'e' && s[i] != 'E')) {
+      goto double_string_fast;
+    }
+  double_string_exp:
+    i++;
+    if (s[i] == '-' || s[i] == '+') {
+      i++;
+    }
+    CHECK_DIGIT();
+
+    while (is_digit(s[i])) i++;
+
+  double_string_fast:
+    // parse floating number as json string value
+    if (!sax.NumStr(StringView(const_cast<char *>(s + start), i - start))) {
+      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+    }
+    RETURN_SET_ERROR_CODE(kErrorNone);
   }
 
   template <typename SAX>
@@ -525,7 +664,7 @@ class Parser {
   struct CheckKeyReturn<T, decltype((void)T::check_key_return, 0)>
       : std::true_type {};
 
-  template <unsigned parseFlags, typename SAX>
+  template <typename SAX>
   sonic_force_inline void parseImpl(SAX &sax) {
 #define sonic_check_err()     \
   do {                        \
@@ -801,7 +940,7 @@ class Parser {
     if (sonic_unlikely(c != '"')) {
       goto err_invalid_char;
     }
-    // parse string in allocater if has esacped chars
+    // parse string in allocator if has escaped chars
     src = data + pos;
     sdst = src;
     skips = internal::SkipString(data, pos, len);
@@ -815,7 +954,7 @@ class Parser {
       uint8_t *dst = (uint8_t *)alloc.Malloc(sn + 32);
       sdst = dst;
       std::memcpy(dst, src, sn);
-      sn = internal::parseStringInplace(dst, err);
+      sn = internal::parseStringInplace<parseFlags>(dst, err);
       if (err) {
         // update the error positions
         pos = (src - data) + (dst - sdst);

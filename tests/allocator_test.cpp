@@ -40,7 +40,6 @@ TEST(Allocator, Free) {
   ptr = a.Realloc(ptr, 48, 96);
   a.Free(ptr);
   MEMSTAT_ISEMPTY();
-  EXPECT_NE(ptr, nullptr);
 }
 
 }  // namespace

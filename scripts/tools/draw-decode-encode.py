@@ -20,8 +20,8 @@ def run_r(cmd):
         if e.returncode:
             print (e.output)
             exit(1)
-    
-    return data.decode("utf-8") 
+
+    return data.decode("utf-8")
 
 def main():
     argparser = argparse.ArgumentParser(description='Tools to test the performance')

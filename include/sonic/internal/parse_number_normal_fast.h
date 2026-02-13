@@ -25,7 +25,7 @@ namespace sonic_json {
 namespace internal {
 inline bool ParseFloatingNormalFast(uint64_t& d_raw, int exp10, uint64_t man,
                                     int sgn) {
-  // This function is copyed from
+  // This function is copied from
   // https://github.com/ibireme/yyjson/blob/
   // 68d08a59faff64c598a84e6cc75e9df5699db44a/src/yyjson.c#L3404
   uint64_t sig1, sig2, sig2_ext, hi, lo, hi2, lo2, add, bits;

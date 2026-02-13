@@ -58,22 +58,22 @@ void TestFailed(const std::string schema, const std::string json) {
   doc.ParseSchema(json);
 
   EXPECT_TRUE(doc.HasParseError())
-      << "unexpect parsing json success: " << json << std::endl;
+      << "unexpected parsing json success: " << json << std::endl;
 }
 
 TEST(ParseSchema, SuccessBasic) {
   TestSuccess(
-      R"({"true": null, "false": null, "null":null, "int": null, "double":null, 
+      R"({"true": null, "false": null, "null":null, "int": null, "double":null,
         "string": null, "object": null, "array": null
     })",
-      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string", 
+      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string",
         "object": {
             "object": {},
             "array": []
         },
         "array": [{}, [], {"a":1}, [-1]]
     })",
-      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string", 
+      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string",
         "object": {
             "object": {},
             "array": []
@@ -81,16 +81,16 @@ TEST(ParseSchema, SuccessBasic) {
         "array": [{}, [], {"a":1}, [-1]]
     })");
   TestSuccess(
-      R"({"true": false, "false": true, "null": {}, "int": 2, "double":2.0, 
+      R"({"true": false, "false": true, "null": {}, "int": 2, "double":2.0,
         "string": "", "object": null, "array": []})",
-      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string", 
+      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string",
         "object": {
             "object": {},
             "array": [{}, [], [{}, []], true, null, "str", 1, 1.0]
         },
         "array": [{}, [], [{}, []], true, null, "str", 1, 1.0]
     })",
-      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string", 
+      R"({"true": true, "false": false, "null": null, "int": 1, "double": 1.0, "string": "string",
         "object": {
             "object": {},
             "array": [{}, [], [{}, []], true, null, "str", 1, 1.0]
@@ -98,7 +98,7 @@ TEST(ParseSchema, SuccessBasic) {
         "array": [{}, [], [{}, []], true, null, "str", 1, 1.0]
     })");
   TestSuccess(
-      R"({"true": null, "false": null, "null":null, "int": null, "double":null, 
+      R"({"true": null, "false": null, "null":null, "int": null, "double":null,
         "string": null, "object": null, "array": null})",
       R"([])", R"([])");
   TestSuccess(R"({"obj":{}})", R"({"obj":{"a":1}})", R"({"obj":{"a":1}})");
@@ -134,7 +134,7 @@ TEST(ParseSchema, SuccessBasic) {
         "obj2bool": {"a":1}, "obj2int":{"a":1}, "obj2dbl": {"a":1}, "obj2str":{"a":1},
         "obj2null": {"a":1}, "obj2obj": {"a":1}, "obj2arr": {"a":1},
         "arr2bool":[1], "arr2int":[1], "arr2dbl": [1], "arr2str": [1],
-        "arr2null": [1], "arr2obj": [1], "arr2arr": [1] 
+        "arr2null": [1], "arr2obj": [1], "arr2arr": [1]
     })",
       R"({
        "bool2bool":false, "bool2int":false, "bool2dbl": false, "bool2str": false,
@@ -150,7 +150,7 @@ TEST(ParseSchema, SuccessBasic) {
         "obj2bool": {"a":1}, "obj2int":{"a":1}, "obj2dbl": {"a":1}, "obj2str":{"a":1},
         "obj2null": {"a":1}, "obj2obj": {"a":1}, "obj2arr": {"a":1},
         "arr2bool":[1], "arr2int":[1], "arr2dbl": [1], "arr2str": [1],
-        "arr2null": [1], "arr2obj": [1], "arr2arr": [1] 
+        "arr2null": [1], "arr2obj": [1], "arr2arr": [1]
     })");
 }
 

@@ -130,6 +130,21 @@ class SAXHandler {
 
   sonic_force_inline bool String(StringView s) { return stringImpl(s); }
 
+  sonic_force_inline bool NumStr(StringView s) {
+    SONIC_ADD_NODE();
+    st_[np_ - 1].setLength(s.size(), kNumStr);
+    st_[np_ - 1].sv.p = s.data();
+    return true;
+  }
+
+  sonic_force_inline bool Raw(const char *data, size_t len) {
+    SONIC_ADD_NODE();
+    new (&st_[np_ - 1]) NodeType();
+    auto raw = StringView(data, len);
+    st_[np_ - 1].setRaw(raw);
+    return true;
+  }
+
   sonic_force_inline bool StartObject() noexcept {
     SONIC_ADD_NODE();
     NodeType *cur = &st_[np_ - 1];

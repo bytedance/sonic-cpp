@@ -207,8 +207,15 @@ static sonic_force_inline int cmp_lt_32(const void* _l, const void* _r,
   auto lhs = static_cast<const uint8_t*>(_l);
   auto rhs = static_cast<const uint8_t*>(_r);
   if (in_page_32(lhs, rhs)) {
+#if defined(__GNUC__) && __GNUC__ >= 11
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     __m256i vec_l = _mm256_loadu_si256((__m256i const*)rhs);
     __m256i vec_r = _mm256_loadu_si256((__m256i const*)lhs);
+#if defined(__GNUC__) && __GNUC__ >= 11
+#pragma GCC diagnostic pop
+#endif
     __m256i ans = _mm256_cmpeq_epi8(vec_l, vec_r);
     int mask = _mm256_movemask_epi8(ans) + 1;
     // mask = mask << (32 -s);

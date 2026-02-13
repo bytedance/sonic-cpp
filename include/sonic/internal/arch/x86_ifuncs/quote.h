@@ -23,38 +23,44 @@
 
 namespace sonic_json {
 namespace internal {
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 __attribute__((target("default"))) inline size_t parseStringInplace(
-    uint8_t *&, SonicError &) {
+    uint8_t *&src, SonicError &err) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
+template <SerializeFlags serializeFlags>
 __attribute__((target("default"))) inline char *Quote(const char *, size_t,
                                                       char *) {
   // TODO static_assert(!!!"Not Implemented!");
   return 0;
 }
 
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 __attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
     uint8_t *&src, SonicError &err) {
-  return sse::parseStringInplace(src, err);
+  return sse::parseStringInplace<parseFlags>(src, err);
 }
 
+template <SerializeFlags serializeFlags>
 __attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
                                                            size_t nb,
                                                            char *dst) {
-  return sse::Quote(src, nb, dst);
+  return sse::Quote<serializeFlags>(src, nb, dst);
 }
 
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 __attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
     uint8_t *&src, SonicError &err) {
-  return avx2::parseStringInplace(src, err);
+  return avx2::parseStringInplace<parseFlags>(src, err);
 }
 
+template <SerializeFlags serializeFlags>
 __attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
                                                           size_t nb,
                                                           char *dst) {
-  return avx2::Quote(src, nb, dst);
+  return avx2::Quote<serializeFlags>(src, nb, dst);
 }
 
 }  // namespace internal
