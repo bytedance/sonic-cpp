@@ -266,7 +266,7 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
   return offset > 0;
 }
 
-template <size_t BLOCK_SIZE>
+template <size_t SONIC_BLOCK_SIZE>
 sonic_force_inline uint64_t GetEscaped(uint64_t &prev_escaped,
                                        uint64_t backslash) {
   uint64_t with_prev_backslash = backslash & ~prev_escaped;
@@ -277,7 +277,7 @@ sonic_force_inline uint64_t GetEscaped(uint64_t &prev_escaped,
       odd_bits;
   // & backslash to clear escaped char
   uint64_t escaped_with_prev = (escaped ^ (backslash | prev_escaped));
-  prev_escaped = ((escaped & backslash) >> (BLOCK_SIZE - 1)) & 0x1ULL;
+  prev_escaped = ((escaped & backslash) >> (SONIC_BLOCK_SIZE - 1)) & 0x1ULL;
   return escaped_with_prev;
 }
 
