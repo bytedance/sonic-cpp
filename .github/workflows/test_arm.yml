@@ -1,0 +1,28 @@
+name: Test ARM
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  test_arm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ qemu-user-static
+      - name: Build and test NEON
+        run: |
+          cmake -S . -B build-neon -G Ninja
+          cmake --build build-neon
+          ASAN_OPTIONS=detect_stack_use_after_return=0 ./build-neon/tests/unittest
+      - name: Build and test SVE2
+        run: |
+          cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON -DENABLE_ASAN=OFF
+          cmake --build build-sve
+          qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve128=on ./build-sve/tests/unittest --gtest_filter="-Assert.Basic"
