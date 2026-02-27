@@ -14,7 +14,7 @@ std::string json = R"(
 )";
 
 int main() {
-  // The target is exsited in JSON
+  // The target is existed in JSON
   {
     sonic_json::Document doc;
     doc.ParseOnDemand(json, {"a", "a0", 8});
@@ -26,7 +26,7 @@ int main() {
     // output: Parse ondemand result is 8
   }
 
-  // The target is not exsited in JSON
+  // The target is not existed in JSON
   {
     sonic_json::Document doc;
     doc.ParseOnDemand(json, {"a", "a1", "unknown"});

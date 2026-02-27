@@ -42,7 +42,7 @@ int main() {
   // Not need the map anymore.
   node->DestroyMap();
 
-  std::cout << "Quering finish!\n";
+  std::cout << "Querying finish!\n";
   return 0;
 }
 // g++ -I../include/ -march=haswell --std=c++11 create_and_destroy_map.cpp -o

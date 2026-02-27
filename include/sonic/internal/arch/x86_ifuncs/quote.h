@@ -23,38 +23,86 @@
 
 namespace sonic_json {
 namespace internal {
-__attribute__((target("default"))) inline size_t parseStringInplace(
-    uint8_t *&, SonicError &) {
-  // TODO static_assert(!!!"Not Implemented!");
-  return 0;
+
+inline bool CpuSupportsHaswell() {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+  return __builtin_cpu_supports("avx2");
+#else
+  return false;
+#endif
 }
 
-__attribute__((target("default"))) inline char *Quote(const char *, size_t,
-                                                      char *) {
-  // TODO static_assert(!!!"Not Implemented!");
-  return 0;
+inline bool CpuSupportsWestmere() {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+  return __builtin_cpu_supports("sse4.2") && __builtin_cpu_supports("pclmul");
+#else
+  return false;
+#endif
 }
 
-__attribute__((target(SONIC_WESTMERE))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err) {
-  return sse::parseStringInplace(src, err);
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+struct ParseStringDispatcher {
+  using FuncType = size_t (*)(uint8_t *&, SonicError &);
+
+  static size_t DefaultImpl(uint8_t *& /*src*/, SonicError & /*err*/) {
+    // TODO static_assert(!!!"Not Implemented!");
+    return 0;
+  }
+
+  static FuncType Resolve() {
+    if (CpuSupportsHaswell()) {
+      return avx2::parseStringInplace<parseFlags>;
+    }
+    if (CpuSupportsWestmere()) {
+      return sse::parseStringInplace<parseFlags>;
+    }
+    return DefaultImpl;
+  }
+
+  static FuncType func;
+};
+
+template <ParseFlags parseFlags>
+typename ParseStringDispatcher<parseFlags>::FuncType
+    ParseStringDispatcher<parseFlags>::func =
+        ParseStringDispatcher<parseFlags>::Resolve();
+
+template <SerializeFlags serializeFlags>
+struct QuoteDispatcher {
+  using FuncType = char *(*)(const char *src, size_t nb, char *dst);
+
+  static char *DefaultImpl(const char * /*src*/, size_t /*nb*/,
+                           char * /*dst*/) {
+    // TODO static_assert(!!!"Not Implemented!");
+    return 0;
+  }
+
+  static FuncType Resolve() {
+    if (CpuSupportsHaswell()) {
+      return avx2::Quote<serializeFlags>;
+    }
+    if (CpuSupportsWestmere()) {
+      return sse::Quote<serializeFlags>;
+    }
+    return DefaultImpl;
+  }
+
+  static FuncType func;
+};
+
+template <SerializeFlags serializeFlags>
+typename QuoteDispatcher<serializeFlags>::FuncType
+    QuoteDispatcher<serializeFlags>::func =
+        QuoteDispatcher<serializeFlags>::Resolve();
+
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
+  return ParseStringDispatcher<parseFlags>::func(src, err);
 }
 
-__attribute__((target(SONIC_WESTMERE))) inline char *Quote(const char *src,
-                                                           size_t nb,
-                                                           char *dst) {
-  return sse::Quote(src, nb, dst);
-}
-
-__attribute__((target(SONIC_HASWELL))) inline size_t parseStringInplace(
-    uint8_t *&src, SonicError &err) {
-  return avx2::parseStringInplace(src, err);
-}
-
-__attribute__((target(SONIC_HASWELL))) inline char *Quote(const char *src,
-                                                          size_t nb,
-                                                          char *dst) {
-  return avx2::Quote(src, nb, dst);
+template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
+inline char *Quote(const char *src, size_t nb, char *dst) {
+  return QuoteDispatcher<serializeFlags>::func(src, nb, dst);
 }
 
 }  // namespace internal

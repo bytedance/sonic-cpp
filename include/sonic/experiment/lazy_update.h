@@ -25,11 +25,11 @@ namespace sonic_json {
 
 namespace internal {
 
-template <typename NodeType, typename Allocator>
+template <typename NodeType, typename Allocator, ParseFlags parseFlags>
 static inline ParseResult ParseLazy(NodeType &node, StringView json,
                                     Allocator &alloc) {
   LazySAXHandler<NodeType> sax(alloc);
-  Parser p;
+  Parser<parseFlags> p;
   ParseResult ret = p.ParseLazy(reinterpret_cast<const uint8_t *>(json.data()),
                                 json.size(), sax);
   if (ret.Error()) {
@@ -40,17 +40,19 @@ static inline ParseResult ParseLazy(NodeType &node, StringView json,
   return ret;
 }
 
-template <typename NodeType, typename Allocator>
+template <typename NodeType, typename Allocator, ParseFlags parseFlags>
 static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
                                         Allocator &alloc) {
   ParseResult ret;
   SonicError err = kErrorNone;
   // check the raw type
   if (target.IsRaw() && *target.GetRaw().data() == '{') {
-    ret = ParseLazy(target, target.GetRaw(), alloc);
+    ret = ParseLazy<NodeType, Allocator, parseFlags>(target, target.GetRaw(),
+                                                     alloc);
   }
   if (source.IsRaw() && *source.GetRaw().data() == '{') {
-    ret = ParseLazy(source, source.GetRaw(), alloc);
+    ret = ParseLazy<NodeType, Allocator, parseFlags>(source, source.GetRaw(),
+                                                     alloc);
   }
   if (ret.Error()) {
     return ret.Error();
@@ -68,7 +70,8 @@ static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
     if (match == target.MemberEnd()) {
       target.AddMember(key, std::move(iter->value), alloc);
     } else {
-      err = UpdateNodeLazy(match->value, iter->value, alloc);
+      err = UpdateNodeLazy<NodeType, Allocator, parseFlags>(match->value,
+                                                            iter->value, alloc);
       if (err) return err;
     }
   }
@@ -85,6 +88,7 @@ static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
  * @param target the target json
  * @param source the source json
  */
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 static inline std::string UpdateLazy(StringView target, StringView source) {
   using Allocator = Node::AllocatorType;
   Allocator alloc;
@@ -93,15 +97,18 @@ static inline std::string UpdateLazy(StringView target, StringView source) {
   ParseResult ret1, ret2;
 
   Node ntarget, nsource;
-  ret1 = internal::ParseLazy(ntarget, target, alloc);
-  ret2 = internal::ParseLazy(nsource, source, alloc);
+  ret1 =
+      internal::ParseLazy<Node, Allocator, parseFlags>(ntarget, target, alloc);
+  ret2 =
+      internal::ParseLazy<Node, Allocator, parseFlags>(nsource, source, alloc);
   if (ret2.Error()) {
     return ret1.Error() ? "{}" : std::string(target.data(), target.size());
   }
   if (ret1.Error()) {
     return std::string(source.data(), source.size());
   }
-  err = internal::UpdateNodeLazy(ntarget, nsource, alloc);
+  err = internal::UpdateNodeLazy<Node, Allocator, parseFlags>(ntarget, nsource,
+                                                              alloc);
   if (err) {
     return "{}";
   }

@@ -19,23 +19,23 @@ ExternalProject_Add(
     google_benchmark
     GIT_REPOSITORY https://github.com/google/benchmark.git
     PREFIX ${EP_PREFIX}
-    GIT_TAG  main
-    CMAKE_ARGS -DBENCHMARK_ENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=Release 
+    GIT_TAG  v1.9.5
+    CMAKE_ARGS -DBENCHMARK_ENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
     INSTALL_COMMAND ""
 )
 add_dependencies(bench google_benchmark)
 
 target_link_libraries(bench simdjson yyjson cjson jsoncpp_lib benchmark benchmark_main pthread)
-target_include_directories(bench 
+target_include_directories(bench
     PRIVATE ${rapidjson_SOURCE_DIR}/include
-    PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR} 
+    PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}
     PRIVATE ${EP_PREFIX}/src/google_benchmark/include/
     PRIVATE ${cjson_SOURCE_DIR}/
     PRIVATE ${yyjson_SOURCE_DIR}/src/
     PRIVATE ${simdjson_SOURCE_DIR}/singleheader/
     PRIVATE ${jsoncpp_SOURCE_DIR}/include/
 )
-target_link_directories(bench 
+target_link_directories(bench
     PRIVATE ${EP_PREFIX}/src/google_benchmark-build/src
     PRIVATE ${simdjson_SOURCE_DIR}/
 )

@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 #include "sonic/internal/arch/simd_itoa.h"
 #include "sonic/macro.h"
@@ -54,27 +55,26 @@ sonic_force_inline char *Utoa_1_8(char *out, uint32_t val) {
   if (val < 100) {  // 1 ~ 2 digits
     lz = val < 10;
     Copy2Digs(out, &kDigits[val * 2 + lz]);
-    out -= lz;
-    return out + 2;
+    return out + 2 - lz;
   } else if (val < 10000) {  // 3 ~ 4 digits
     hi = val / 100;
     lo = val % 100;
     lz = hi < 10;
     Copy2Digs(out, &kDigits[hi * 2 + lz]);
-    out -= lz;
-    Copy2Digs(out + 2, &kDigits[lo * 2]);
-    return out + 4;
+    out += 2 - lz;
+    Copy2Digs(out, &kDigits[lo * 2]);
+    return out + 2;
   } else if (val < 1000000) {  // 5 ~ 6 digits
     hi = val / 10000;
     lo = val % 10000;
     lz = hi < 10;
     Copy2Digs(out, &kDigits[hi * 2 + lz]);
-    out -= lz;
+    out += 2 - lz;
     a = lo / 100;
     b = lo % 100;
-    Copy2Digs(out + 2, &kDigits[a * 2]);
-    Copy2Digs(out + 4, &kDigits[b * 2]);
-    return out + 6;
+    Copy2Digs(out, &kDigits[a * 2]);
+    Copy2Digs(out + 2, &kDigits[b * 2]);
+    return out + 4;
   } else {  // 7 ~ 8 digits
     hi = val / 10000;
     lo = val % 10000;
@@ -84,11 +84,11 @@ sonic_force_inline char *Utoa_1_8(char *out, uint32_t val) {
     d = lo % 100;
     lz = a < 10;
     Copy2Digs(out, &kDigits[a * 2 + lz]);
-    out -= lz;
-    Copy2Digs(out + 2, &kDigits[b * 2]);
-    Copy2Digs(out + 4, &kDigits[c * 2]);
-    Copy2Digs(out + 6, &kDigits[d * 2]);
-    return out + 8;
+    out += 2 - lz;
+    Copy2Digs(out, &kDigits[b * 2]);
+    Copy2Digs(out + 2, &kDigits[c * 2]);
+    Copy2Digs(out + 4, &kDigits[d * 2]);
+    return out + 6;
   }
 }
 
@@ -106,9 +106,9 @@ sonic_force_inline char *U64toa_17_20(char *out, uint64_t val) {
     bb = hi % 100;
     lz = aa < 10;
     Copy2Digs(out, &kDigits[aa * 2 + lz]);
-    out -= lz;
-    Copy2Digs(out + 2, &kDigits[bb * 2]);
-    out += 4;
+    out += 2 - lz;
+    Copy2Digs(out, &kDigits[bb * 2]);
+    out += 2;
   }
   return Utoa_16(lo, out);
 }
@@ -132,7 +132,9 @@ sonic_force_inline char *U64toa(char *out, uint64_t val) {
 sonic_force_inline char *I64toa(char *buf, int64_t val) {
   size_t neg = val < 0;
   *buf = '-';
-  return U64toa(buf + neg, neg ? (uint64_t)(-val) : (uint64_t)val);
+  uint64_t uval = static_cast<uint64_t>(val);
+  uint64_t abs_val = neg ? (0 - uval) : uval;
+  return U64toa(buf + neg, abs_val);
 }
 
 }  // namespace internal

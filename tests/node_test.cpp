@@ -303,7 +303,7 @@ TYPED_TEST(NodeTest, FindMember) {
   TestFixture::CreateNode(obj, alloc);
   // Find with map
   EXPECT_TRUE(obj.FindMember("Array")->name == "Array");
-  EXPECT_TRUE(obj.FindMember(std::string("Unknwon")) == obj.MemberEnd());
+  EXPECT_TRUE(obj.FindMember(std::string("Unknown")) == obj.MemberEnd());
   EXPECT_TRUE(obj["Object"].IsObject());
   EXPECT_TRUE(obj["String"] == "Hello World!");
   EXPECT_TRUE(obj["Unknown"].IsNull());
@@ -312,14 +312,14 @@ TYPED_TEST(NodeTest, FindMember) {
     NodeType obj1;
     obj1.CopyFrom(obj, alloc);
     EXPECT_TRUE(obj.FindMember("Array")->name == "Array");
-    EXPECT_TRUE(obj.FindMember(std::string("Unknwon")) == obj.MemberEnd());
+    EXPECT_TRUE(obj.FindMember(std::string("Unknown")) == obj.MemberEnd());
     EXPECT_TRUE(obj["Object"].IsObject());
     EXPECT_TRUE(obj["String"] == "Hello World!");
     EXPECT_TRUE(obj["Unknown"].IsNull());
     EXPECT_TRUE(obj[std::string("False")].IsFalse());
   }
 
-  // Check return value always Null when provided key does'nt exist.
+  // Check return value always Null when provided key doesn't exist.
   {
     auto& value = obj["Unknown"];
     EXPECT_TRUE(value.IsNull());
@@ -402,7 +402,7 @@ TYPED_TEST(NodeTest, RemoveMember) {
     std::string key = "key" + std::to_string(i);
     EXPECT_TRUE(node1.RemoveMember(key));
     EXPECT_FALSE(node1.HasMember(key));
-    EXPECT_FALSE(node1.RemoveMember("Unkown"));
+    EXPECT_FALSE(node1.RemoveMember("Unknown"));
   }
   EXPECT_TRUE(node1.Empty());
 
@@ -410,17 +410,17 @@ TYPED_TEST(NodeTest, RemoveMember) {
     NodeType node2;
     TestFixture::Add100Nodes(node1, a);
     node2.CopyFrom(node1, a);
-    EXPECT_FALSE(node2.RemoveMember("Unkown"));
+    EXPECT_FALSE(node2.RemoveMember("Unknown"));
     for (int i = 99; i >= 0; --i) {
       std::string key = "key" + std::to_string(i);
       EXPECT_TRUE(node2.RemoveMember(key));
-      EXPECT_FALSE(node2.RemoveMember("Unkown"));
+      EXPECT_FALSE(node2.RemoveMember("Unknown"));
     }
     EXPECT_TRUE(node2.Empty());
-    EXPECT_FALSE(node2.RemoveMember("Unkown"));
+    EXPECT_FALSE(node2.RemoveMember("Unknown"));
 
     node2.SetObject();
-    EXPECT_FALSE(node2.RemoveMember("Unkown"));
+    EXPECT_FALSE(node2.RemoveMember("Unknown"));
   }
 }
 

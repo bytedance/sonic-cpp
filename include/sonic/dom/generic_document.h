@@ -16,11 +16,16 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/dom/parser.h"
 
 namespace sonic_json {
+
+template <ParseFlags parseFlags>
+class Parser;
 template <typename NodeType>
 class GenericDocument : public NodeType {
  public:
@@ -57,7 +62,7 @@ class GenericDocument : public NodeType {
   }
 
   /**
-   * @brief Move assignement
+   * @brief Move assignment
    */
   GenericDocument& operator=(GenericDocument&& rhs) {
     // Step1: clear self memory
@@ -117,23 +122,23 @@ class GenericDocument : public NodeType {
    * @note If using memorypool allocator, memory will be cleared every time
    * before parsing to avoid memory overuse.
    */
-  template <unsigned parseFlags = kParseDefault>
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
   GenericDocument& Parse(StringView json) {
     return Parse<parseFlags>(json.data(), json.size());
   }
 
-  template <unsigned parseFlags = kParseDefault>
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
   GenericDocument& Parse(const char* data, size_t len) {
     destroyDom();
     return parseImpl<parseFlags>(data, len);
   }
 
-  template <unsigned parseFlags = kParseDefault>
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
   GenericDocument& ParseSchema(StringView json) {
     return ParseSchema<parseFlags>(json.data(), json.size());
   }
 
-  template <unsigned parseFlags = kParseDefault>
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
   GenericDocument& ParseSchema(const char* data, size_t len) {
     return parseSchemaImpl<parseFlags>(data, len);
   }
@@ -147,14 +152,14 @@ class GenericDocument : public NodeType {
    * @note If using memorypool allocator, memory will be cleared every time
    * before parsing to avoid memory overuse.
    */
-  template <unsigned parseFlags = kParseDefault,
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
   GenericDocument& ParseOnDemand(StringView json,
                                  const GenericJsonPointer<JPStringType>& path) {
     return ParseOnDemand(json.data(), json.size(), path);
   }
 
-  template <unsigned parseFlags = kParseDefault,
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault,
             typename JPStringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>
   GenericDocument& ParseOnDemand(const char* data, size_t len,
                                  const GenericJsonPointer<JPStringType>& path) {
@@ -204,9 +209,9 @@ class GenericDocument : public NodeType {
     this->setType(kNull);
   }
 
-  template <unsigned parseFlags>
+  template <ParseFlags parseFlags>
   GenericDocument& parseImpl(const char* json, size_t len) {
-    Parser p;
+    Parser<parseFlags> p;
     SAXHandler<NodeType> sax(*alloc_);
     parse_result_ = allocateStringBuffer(json, len);
     if (sonic_unlikely(HasParseError())) {
@@ -216,7 +221,7 @@ class GenericDocument : public NodeType {
       parse_result_ = kErrorNoMem;
       return *this;
     }
-    parse_result_ = p.template Parse<parseFlags>(str_, len, sax);
+    parse_result_ = p.Parse(str_, len, sax);
     if (sonic_unlikely(HasParseError())) {
       return *this;
     }
@@ -224,9 +229,9 @@ class GenericDocument : public NodeType {
     return *this;
   }
 
-  template <unsigned parseFlags>
+  template <ParseFlags parseFlags>
   GenericDocument& parseSchemaImpl(const char* json, size_t len) {
-    Parser p;
+    Parser<parseFlags> p;
     SchemaHandler<NodeType> sax(this, *alloc_);
     parse_result_ = allocateSchemaStringBuffer(json, len);
     if (sonic_unlikely(HasParseError())) {
@@ -236,11 +241,11 @@ class GenericDocument : public NodeType {
       parse_result_ = kErrorNoMem;
       return *this;
     }
-    parse_result_ = p.template Parse<parseFlags>(schema_str_, len, sax);
+    parse_result_ = p.Parse(schema_str_, len, sax);
     return *this;
   }
 
-  template <unsigned parseFlags, typename JPStringType>
+  template <ParseFlags parseFlags, typename JPStringType>
   GenericDocument& parseOnDemandImpl(
       const char* json, size_t len,
       const GenericJsonPointer<JPStringType>& path) {
@@ -281,7 +286,7 @@ class GenericDocument : public NodeType {
     schema_str_[len + 2] = 'x';
     return kErrorNone;
   }
-
+  template <ParseFlags parseFlags>
   friend class Parser;
 
   // Note: it is a callback function in parse.parse_impl

@@ -28,23 +28,29 @@ namespace sve2_128 {
 
 using sonic_json::internal::arm_common::Quote;
 
+template <ParseFlags parseFlags = ParseFlags::kParseDefault>
 sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
-#define SONIC_REPEAT8(v) {v v v v v v v v}
+#define SONIC_REPEAT8(v) \
+  { v v v v v v v v }
+  constexpr bool kAllowUnescapedControlChars =
+      (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
 
   uint8_t *dst = src;
   uint8_t *sdst = src;
   while (1) {
   find:
     auto block = StringBlock::Find(src);
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst<parseFlags>()) {
       int idx = block.QuoteIndex();
       src += idx;
       *src++ = '\0';
       return src - sdst - 1;
     }
-    if (block.HasUnescaped()) {
-      err = kParseErrorUnEscaped;
-      return 0;
+    if constexpr (!kAllowUnescapedControlChars) {
+      if (block.HasUnescaped()) {
+        err = kParseErrorUnEscaped;
+        return 0;
+      }
     }
     if (!block.HasBackslash()) {
       src += VEC_LEN;
@@ -71,7 +77,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
       src += 2;
       dst += 1;
     }
-    // fast path for continous escaped chars
+    // fast path for continuous escaped chars
     if (*src == '\\') {
       bs_dist = 0;
       goto cont;
@@ -82,7 +88,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
     uint8x16_t v = vld1q_u8(src);
     block = StringBlock::Find(v);
     // If the next thing is the end quote, copy and return
-    if (block.HasQuoteFirst()) {
+    if (block.HasQuoteFirst<parseFlags>()) {
       // we encountered quotes first. Move dst to point to quotes and exit
       while (1) {
         SONIC_REPEAT8(if (sonic_unlikely(*src == '"')) break;
@@ -92,9 +98,11 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
       src++;
       return dst - sdst;
     }
-    if (block.HasUnescaped()) {
-      err = kParseErrorUnEscaped;
-      return 0;
+    if constexpr (!kAllowUnescapedControlChars) {
+      if (block.HasUnescaped()) {
+        err = kParseErrorUnEscaped;
+        return 0;
+      }
     }
     if (!block.HasBackslash()) {
       /* they are the same. Since they can't co-occur, it means we

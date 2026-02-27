@@ -51,7 +51,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   friend BaseNode;
   template <typename>
   friend class DNode;
-  template <unsigned serializeFlags, typename NodeType>
+  template <SerializeFlags serializeFlags, typename NodeType>
   friend SonicError internal::SerializeImpl(const NodeType*, WriteBuffer&);
 
   // constructor
@@ -118,6 +118,25 @@ class DNode : public GenericNode<DNode<Allocator>> {
         } else {
           this->sv.p = rhs.GetStringView().data();
         }
+        break;
+      }
+      case kNumber: {
+        if (rhs.GetType() != kNumStr) {
+          std::memcpy(&(this->data), &rhs, sizeof(this->data));
+          break;
+        }
+        [[fallthrough]];
+      }
+      case kRaw: {
+        // TODO(liuqiang.06@bytedance.com): support mark free for C-allocator
+        sonic_assert(!Allocator::kNeedFree);
+        size_t len = rhs.Size();
+        this->sv.len = rhs.getTypeAndLen();  // Copy size and type.
+        this->sv.p = (char*)(alloc.Malloc(len + 1));
+        sonic_assert(this->sv.p != nullptr);
+        std::memcpy(const_cast<char*>(this->sv.p), rhs.GetStringView().data(),
+                    len);
+        const_cast<char*>(this->sv.p)[len] = '\0';
         break;
       }
       default:
@@ -241,7 +260,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline MemberIterator FindMember(const char* key,
@@ -257,7 +276,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
    * @retval MemberEnd() not found
    * @retval others iterator for found member
    * @note If target name is a literal string, string_view can be optimized by
-   * compiler. This function will provide a better memcmp implemention than
+   * compiler. This function will provide a better memcmp implementation than
    * std::memcmp while length is not too large.
    */
   sonic_force_inline ConstMemberIterator FindMember(const char* key,
@@ -293,8 +312,61 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return true;
   }
 
+  bool atJsonPathImpl(const internal::JsonPath& path, size_t index,
+                      std::vector<DNode*>& res) {
+    if (index >= path.size()) {
+      res.push_back(this);
+      return true;
+    }
+
+    if (path[index].is_wildcard()) {
+      // select nothing from the primitive JSON value
+      if (!this->IsObject() && !this->IsArray()) {
+        return true;
+      }
+      DNode* n = (DNode*)getChildrenFirstUnsafe() + (this->IsObject() ? 1 : 0);
+      size_t step = this->IsObject() ? 2 : 1;
+      for (size_t i = 0; i < this->Size(); ++i) {
+        DNode* cur = (n + i * step);
+        cur->atJsonPathImpl(path, index + 1, res);
+      }
+      return true;
+    }
+
+    if (path[index].is_key()) {
+      if (!this->IsObject()) {
+        return false;
+      }
+      auto m = this->FindMember(path[index].key());
+      if (m != this->MemberEnd()) {
+        return m->value.atJsonPathImpl(path, index + 1, res);
+      } else {
+        return false;
+      }
+    }
+
+    if (path[index].is_index()) {
+      if (!this->IsArray()) {
+        return false;
+      }
+
+      // index maybe negative
+      int64_t idx = path[index].index();
+      if (idx < 0) {
+        idx = this->Size() + idx;
+      }
+
+      if (idx >= int64_t(this->Size()) || idx < 0) {
+        return false;
+      }
+      return this->findValueImpl(size_t(idx))
+          .atJsonPathImpl(path, index + 1, res);
+    }
+    return false;
+  }
+
   /**
-   * @brief Destory the created map. This means that you don't want maintain the
+   * @brief Destroy the created map. This means that you don't want maintain the
    * map anymore.
    */
   void DestroyMap() {
@@ -432,10 +504,39 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return *this;
   }
 
-  DNode& setRawImpl(const char* s, size_t len) {
+  DNode& setRawImpl(StringView s) { return setRawLikeImpl(s, kRaw); }
+
+  DNode& setRawImpl(StringView s, Allocator& alloc) {
+    return setRawLikeImpl(s, kRaw, alloc);
+  }
+
+  DNode& setStringNumberImpl(StringView s) {
+    return setRawLikeImpl(s, kNumStr);
+  }
+
+  DNode& setStringNumberImpl(StringView s, Allocator& alloc) {
+    return setRawLikeImpl(s, kNumStr, alloc);
+  }
+
+  DNode& setRawLikeImpl(StringView s, TypeFlag typ) {
     this->destroy();
-    this->raw.p = s;
-    this->setLength(len, kRaw);
+    this->raw.p = s.data();
+    this->setLength(s.size(), typ);
+    return *this;
+  }
+
+  DNode& setRawLikeImpl(StringView s, TypeFlag typ, Allocator& alloc) {
+    this->destroy();
+    size_t len = s.size();
+    char* p = static_cast<char*>(alloc.Malloc(len + 1));
+    if (p) {
+      std::memcpy(p, s.data(), len);
+      p[len] = '\0';
+      this->raw.p = p;
+    } else {
+      this->raw.p = "";
+    }
+    this->setLength(len, typ);
     return *this;
   }
 
@@ -561,6 +662,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   sonic_force_inline DNode* getArrChildrenFirstUnsafe() const {
     sonic_assert(this->IsArray());
+    return (DNode*)((char*)this->a.next.children +
+                    sizeof(MetaNode) / sizeof(char));
+  }
+
+  sonic_force_inline DNode* getChildrenFirstUnsafe() const {
     return (DNode*)((char*)this->a.next.children +
                     sizeof(MetaNode) / sizeof(char));
   }
@@ -787,7 +893,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   DNode& pushBackImpl(DNode& value, Allocator& alloc) {
     constexpr size_t k_default_array_cap = 16;
     sonic_assert(this->IsArray());
-    // reseve capacity
+    // reserve capacity
     size_t cap = this->Capacity();
     if (this->Size() >= cap) {
       size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;
@@ -817,7 +923,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return start;
   }
 
-  template <unsigned serializeFlags = kSerializeDefault>
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
   SonicError serializeImpl(WriteBuffer& wb) const {
     return internal::SerializeImpl<serializeFlags>(this, wb);
   }

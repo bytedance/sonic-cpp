@@ -52,7 +52,7 @@ sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
       vor = vorrq_u8(vor, vtmp);
     }
 
-    // neon doesn't have instrution same as movemask, to_bitmask uses shrn to
+    // neon doesn't have instruction same as movemask, to_bitmask uses shrn to
     // reduce 128bits -> 64bits. If a 128bits bool vector in x86 can convert
     // as 0101, neon shrn will convert it as 0000111100001111.
     uint64_t next = to_bitmask(vor);
