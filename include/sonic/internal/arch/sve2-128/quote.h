@@ -33,7 +33,7 @@ sonic_force_inline size_t parseStringInplace(uint8_t *&src, SonicError &err) {
 #define SONIC_REPEAT8(v) \
   { v v v v v v v v }
   constexpr bool kAllowUnescapedControlChars =
-      parseFlags & kAllowUnescapedControlChars;
+      (parseFlags & ParseFlags::kParseAllowUnescapedControlChars) != 0;
 
   uint8_t *dst = src;
   uint8_t *sdst = src;

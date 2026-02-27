@@ -26,6 +26,7 @@
 #include "../common/unicode_common.h"
 #include "base.h"
 #include "simd.h"
+#include "sonic/dom/flags.h"
 
 namespace sonic_json {
 namespace internal {
