@@ -15,13 +15,7 @@ bazel_dep(name = "yyjson", version = "0.10.0")
 bazel_dep(name = "cjson", version = "1.7.19-0.20240923110858-12c4bf1986c2.bcr.3")
 bazel_dep(name = "jsoncpp", version = "1.9.6")
 bazel_dep(name = "gflags", version = "2.2.2")
+bazel_dep(name = "simdjson", version = "4.2.4")
 
 new_git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "new_git_repository")
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-new_git_repository(
-    name = "simdjson",
-    branch = "v4.2.4",
-    build_file = "//:bazel/simdjson.BUILD",
-    remote = "https://github.com/simdjson/simdjson.git",
-)
