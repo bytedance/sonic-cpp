@@ -15,7 +15,7 @@ FetchContent_Declare(
   googletest
   # Specify the commit you depend on and update it regularly.
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip
+  URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
@@ -29,7 +29,7 @@ file(GLOB SONIC_TEST_FILES
      "${PROJECT_SOURCE_DIR}/tests/*.cpp"
 )
 add_executable(unittest ${SONIC_TEST_FILES})
-target_compile_features(unittest PRIVATE cxx_std_11)
+target_compile_features(unittest PRIVATE cxx_std_17)
 target_link_libraries(unittest PRIVATE gtest_main)
 target_include_directories(unittest PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR})
 

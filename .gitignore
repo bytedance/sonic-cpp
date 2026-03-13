@@ -33,10 +33,13 @@
 
 # Build Directories
 build/
+build-*/
+cmake-build-*/
 
 # IDE files
 .vscode/
 .idea
+.clwb
 
 # Temp files
 .bak/
@@ -64,3 +67,5 @@ coverage.dat
 
 # clangd cache files
 .cache
+MODULE.bazel
+MODULE.bazel.lock

@@ -7,7 +7,7 @@ on:
 
 jobs:
   test-coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GCC_VERSION: 12
 
@@ -15,10 +15,15 @@ jobs:
       - name: Checkout codebase
         uses: actions/checkout@v4
 
+      - name: Read Bazel version
+        shell: bash
+        run: |
+          echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
+
       - name: Setup bazel
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "8.5.1"
+          bazel-version: "${{ env.BAZEL_VERSION }}"
 
       - name: Setup GCC
         run: |

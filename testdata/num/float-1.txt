@@ -1,4 +1,4 @@
-# This file is copied from 
+# This file is copied from
 # https://github.com/ibireme/yyjson/
 # ==============================================================================
 # INT64 to double

@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: 'v11.1.0'
+    hooks:
+      - id: clang-format
+        name: clang-format C++ files
+        types_or: [c++, c]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/BlankSpruce/gersemi
+    rev: 0.25.1
+    hooks:
+    - id: gersemi
+      name: Check CMake files
+      args: ["--no-warn-about-unknown-commands"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: \.(patch|diff)$
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-toml
+      - id: check-yaml
+      - id: check-xml
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.12.0-2
+    hooks:
+      - id: shfmt
+        args: ["-w", "-i", "2", "-bn", "-ci", "-sr"]
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        name: Spell Check
+        args: [ "-L", ".codespellrc" ]

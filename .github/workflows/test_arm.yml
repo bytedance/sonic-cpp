@@ -15,14 +15,25 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ qemu-user-static
+          sudo apt-get install -y cmake ninja-build g++
       - name: Build and test NEON
         run: |
           cmake -S . -B build-neon -G Ninja
           cmake --build build-neon
           ASAN_OPTIONS=detect_stack_use_after_return=0 ./build-neon/tests/unittest
+      - name: Check for SVE2
+        id: sve_check
+        run: |
+          if grep -q "sve2" /proc/cpuinfo; then
+            echo "SVE2 supported!"
+            echo "supported=true" >> $GITHUB_OUTPUT
+          else
+            echo "SVE2 NOT supported, skipping..."
+            echo "supported=false" >> $GITHUB_OUTPUT
+          fi
       - name: Build and test SVE2
+        if: steps.sve_check.outputs.supported == 'true'
         run: |
           cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON -DENABLE_ASAN=OFF
           cmake --build build-sve
-          qemu-aarch64-static -L /usr/aarch64-linux-gnu -cpu max,sve128=on ./build-sve/tests/unittest --gtest_filter="-Assert.Basic"
+          ./build-sve/tests/unittest

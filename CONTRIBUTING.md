@@ -46,7 +46,7 @@ Your pr title and commit message should follow https://www.conventionalcommits.o
 
 ## Contribution Prerequisites
 - You need fully checking with lint tools before submit your pull request.
-- You are familiar with [Github](https://github.com) 
+- You are familiar with [Github](https://github.com)
 - Maybe you need familiar with [Actions](https://github.com/features/actions)(our default workflow tool).
 
 ## Code Style Guides

@@ -41,12 +41,12 @@ std::cout << wb.ToString() << std::endl;
 Node is the present for JSON value and supports all JSON value manipulation.
 
 ### Document
-Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree. 
+Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree.
 Document also the root of JSON value tree. There is an allocator in Document,
 which you should use to allocate memory for Node and Document.
 
 ### Query in object
-There are two ways to find members: `operator[]` or `FindMember`. We recommend 
+There are two ways to find members: `operator[]` or `FindMember`. We recommend
 using `FindMember`.
 ```c++
 #include "sonic/sonic.h"
@@ -69,7 +69,7 @@ if (node.IsObject()) { // Note: CHECK NODE TYPE IS VERY IMPORTANT.
 if (node.IsObject()) {
   const char* key1 = "key1";
   const char* key2 = "key2";
-  // You must sure that the keys are all existed.
+  // You must ensure that all keys exist.
   sonic_json::Node& val = node[key1][key2];
   // If key doesn't exist, operator[] will return reference to a static node
   // which type is Null. You SHOULD NOT MODIFY this static node. In this case,
@@ -406,7 +406,7 @@ int main() {
   // Not need the map anymore.
   node->DestroyMap();
 
-  std::cout << "Quering finish!\n";
+  std::cout << "Querying finish!\n";
   return 0;
 
 }
