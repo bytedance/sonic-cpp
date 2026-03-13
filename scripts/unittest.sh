@@ -85,17 +85,19 @@ done
 source "${CUR_DIR}/bazel_common.sh"
 BAZEL="$(sonic_pick_bazel "${TOP_DIR}")"
 
+cd "${TOP_DIR}"
+
 # default target
 set -x
 
-${BAZEL} run :unittest --//:sonic_arch=$UNIT_TEST_ARCH \
+${BAZEL} run //:unittest --//:sonic_arch=$UNIT_TEST_ARCH \
   --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} \
   --//:sonic_dispatch=${UNIT_TEST_DISPATCH} \
   --copt="-DSONIC_LOCKED_ALLOCATOR" -s
 
-${BAZEL} build :unittest --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} --copt="-DSONIC_DEBUG"
+${BAZEL} build //:unittest --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} --copt="-DSONIC_DEBUG"
 
-${BAZEL} build :benchmark
-${BAZEL} build :benchmark --copt="-DSONIC_DEBUG"
+${BAZEL} build //:benchmark
+${BAZEL} build //:benchmark --copt="-DSONIC_DEBUG"
 
 set +x

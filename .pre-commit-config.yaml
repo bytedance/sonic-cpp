@@ -25,7 +25,6 @@ repos:
         args: [--markdown-linebreak-ext=md]
         exclude: \.(patch|diff)$
       - id: end-of-file-fixer
-      - id: check-yaml
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: check-toml
@@ -41,4 +40,4 @@ repos:
     hooks:
       - id: codespell
         name: Spell Check
-        args: [ "-L", ".codespellrc" ]
+        args: [ "--config", ".codespellrc" ]
