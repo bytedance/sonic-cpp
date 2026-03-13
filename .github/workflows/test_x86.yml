@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   test-llvm:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -20,6 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Bazel version
+        if: matrix.tool == 'bazel'
+        shell: bash
+        run: |
+          echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
+
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
@@ -29,7 +35,7 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "8.5.1"
+          bazel-version: "${{ env.BAZEL_VERSION }}"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'
@@ -48,7 +54,7 @@ jobs:
           bash ./scripts/run_cmake.sh
 
   test-gcc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -72,6 +78,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Bazel version
+        if: matrix.tool == 'bazel'
+        shell: bash
+        run: |
+          echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
+
       - name: Install GCC
         run: |
           sudo apt-get install -y gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
@@ -80,7 +92,7 @@ jobs:
         if: matrix.tool == 'bazel'
         uses: jwlawson/actions-setup-bazel@v2
         with:
-          bazel-version: "8.5.1"
+          bazel-version: "${{ env.BAZEL_VERSION }}"
 
       - name: Setup cmake
         if: matrix.tool == 'cmake'

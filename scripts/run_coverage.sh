@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-CUR_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
-TOP_DIR="${CUR_DIR}/../"
+CUR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOP_DIR="$(cd "${CUR_DIR}/.." && pwd)"
 
-# apt update
-# apt install unzip openjdk-11-jdk -y
+source "${CUR_DIR}/bazel_common.sh"
+BAZEL_BIN="$(sonic_pick_bazel "${TOP_DIR}")"
+#
+# Pass through user-provided Bazel flags (e.g. --config=xxx / --copt=xxx).
+# Note: Bazel options must appear before the target.
+(cd "${TOP_DIR}" && "${BAZEL_BIN}" coverage --combined_report=lcov "$@" //:unittest-gcc-coverage)
 
-BAZEL=bazel
-if ! type bazel >/dev/null 2>&1; then
-	wget https://github.com/bazelbuild/bazel/releases/download/4.0.0/bazel-4.0.0-installer-linux-x86_64.sh; chmod +x bazel-4.0.0-installer-linux-x86_64.sh
-	./bazel-4.0.0-installer-linux-x86_64.sh --prefix=`pwd`
-	BAZEL=`pwd`/bin/bazel
+OUTPUT_PATH="$(cd "${TOP_DIR}" && "${BAZEL_BIN}" info output_path)"
+COV_DAT="${OUTPUT_PATH}/_coverage/_coverage_report.dat"
+if [[ ! -f "${COV_DAT}" ]]; then
+  echo "Coverage report not found: ${COV_DAT}" >&2
+  exit 1
 fi
 
-COPT=
-if [ $# -gt 0 ]; then
-    COPT=$1
-fi
-
-$BAZEL coverage --combined_report=lcov unittest-gcc-coverage
-mv -f "${TOP_DIR}"/bazel-out/_coverage/_coverage_report.dat "${TOP_DIR}"/coverage.dat
+mv -f "${COV_DAT}" "${TOP_DIR}/coverage.dat"

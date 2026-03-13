@@ -5,7 +5,7 @@ endif()
 
 enable_testing()
 
-file(GLOB SONIC_DATA 
+file(GLOB SONIC_DATA
     "${PROJECT_SOURCE_DIR}/testdata/**/*.json"
     "${PROJECT_SOURCE_DIR}/testdata/*.json"
 )
@@ -28,4 +28,3 @@ endif()
 
 add_test(test_fuzz ${CMAKE_CURRENT_BINARY_DIR}/fuzz -max_total_time=300 ${CMAKE_CURRENT_BINARY_DIR}/corpus)
 set_tests_properties(test_fuzz PROPERTIES TIMEOUT 600)
-

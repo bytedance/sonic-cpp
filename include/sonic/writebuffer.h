@@ -19,6 +19,7 @@
 #include <cstring>
 
 #include "sonic/internal/stack.h"
+#include "sonic/string_view.h"
 
 namespace sonic_json {
 
@@ -45,6 +46,10 @@ class WriteBuffer {
     stack_.Grow(1);
     *(stack_.template End<char>()) = '\0';
     return stack_.Begin<char>();
+  }
+
+  sonic_force_inline StringView ToStringView() const {
+    return StringView(ToString(), Size());
   }
 
   sonic_force_inline size_t Size() const { return stack_.Size(); }
@@ -80,6 +85,10 @@ class WriteBuffer {
   sonic_force_inline void PushUnsafe(const char* s, size_t n) {
     stack_.PushUnsafe(s, n);
   }
+  sonic_force_inline void PushStr(StringView s) {
+    stack_.Push(s.data(), s.size());
+  }
+
   template <typename T>
   sonic_force_inline void PushUnsafe(T v) {
     stack_.template PushUnsafe<T>(v);
