@@ -17,6 +17,6 @@ jobs:
     - name: Run clang-format style check.
       uses: jidicula/clang-format-action@v4.9.0
       with:
-        clang-format-version: '11'
+        clang-format-version: '14'
         check-path: ${{ matrix.path }}
         fallback-style: 'Google'
