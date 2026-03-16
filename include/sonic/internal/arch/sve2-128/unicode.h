@@ -70,7 +70,7 @@ struct StringBlock {
 
 // return bit position of the first occurrence of the token in a vector
 // return 16 if token does not exist in the vector
-sonic_force_inline unsigned locate_token(const svuint8x16_t v, char token) {
+sonic_force_inline unsigned LocateToken(const svuint8x16_t v, char token) {
   const svbool_t ptrue = svptrue_b8();
   // same as svcmpeq, but with higher performance
   const svbool_t pmatch =
@@ -81,7 +81,7 @@ sonic_force_inline unsigned locate_token(const svuint8x16_t v, char token) {
 
 // return bit position of the first occurrence of the token that is less or
 // equal to `token` return 16 if token does not exist in the vector
-sonic_force_inline unsigned locate_token_le(const svuint8x16_t v, char token) {
+sonic_force_inline unsigned LocateTokenLe(const svuint8x16_t v, char token) {
   const svbool_t ptrue = svptrue_b8();
   const svbool_t ple = svcmple_n_u8(ptrue, v, static_cast<uint8_t>(token));
   return static_cast<unsigned>(svcntp_b8(ptrue, svbrkb_z(ptrue, ple)));
@@ -90,17 +90,33 @@ sonic_force_inline unsigned locate_token_le(const svuint8x16_t v, char token) {
 sonic_force_inline StringBlock StringBlock::Find(const uint8_t* src) {
   svuint8x16_t v = svld1(svptrue_b8(), src);
   return {
-      locate_token(v, '\\'),
-      locate_token(v, '"'),
-      locate_token_le(v, '\x1f'),
+      LocateToken(v, '\\'),
+      LocateToken(v, '"'),
+      LocateTokenLe(v, '\x1f'),
   };
+}
+
+sonic_force_inline unsigned FirstIndexFromToBitmask(uint64_t bits) {
+  if (sonic_unlikely(bits == 0)) return 16;
+  // `to_bitmask()` uses 4 bits per byte lane.
+  return static_cast<unsigned>(TrailingZeroes(bits) >> 2);
+}
+
+sonic_force_inline unsigned LocateToken(const uint8x16_t v, char token) {
+  return FirstIndexFromToBitmask(
+      to_bitmask(vceqq_u8(v, vdupq_n_u8(static_cast<uint8_t>(token)))));
+}
+
+sonic_force_inline unsigned LocateTokenLe(const uint8x16_t v, char token) {
+  return FirstIndexFromToBitmask(
+      to_bitmask(vcleq_u8(v, vdupq_n_u8(static_cast<uint8_t>(token)))));
 }
 
 sonic_force_inline StringBlock StringBlock::Find(uint8x16_t& v) {
   return {
-      locate_token(v, '\\'),
-      locate_token(v, '"'),
-      locate_token_le(v, '\x1f'),
+      LocateToken(v, '\\'),
+      LocateToken(v, '"'),
+      LocateTokenLe(v, '\x1f'),
   };
 }
 
