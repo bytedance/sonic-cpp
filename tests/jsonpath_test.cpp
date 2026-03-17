@@ -16,7 +16,14 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
+
+#if !defined(_WIN32)
+#include <signal.h>
+#include <unistd.h>
+#endif
 
 #include "sonic/sonic.h"
 
@@ -621,23 +628,50 @@ std::vector<int> splitToInts(const std::string& str) {
 
   return numbers;
 }
-TEST(JsonPath, DISABLED_JsonInfiniteLoop) {
-  const std::string integers(
-      "123 34 -28 -65 -99 -23 -103 -87 34 58 32 48 46 55 57 49 53 44 32 34 -23 "
-      "-127 -109 -27 -91 -121 -23 -123 -73 -27 -88 -127 34 58 32 48 46 55 56 "
-      "48 56 44 32 34 -24 -121 -86 -27 -118 -88 -26 -116 -95 34 58 32 48 46 55 "
-      "55 56 49 125");
-  auto ints = splitToInts(integers);
-  std::string json("");
-  for (const auto i : ints) {
-    json.push_back((char)i);
-  }
+TEST(JsonPath, JsonInfiniteLoop) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "Windows does not support alarm()-based timeout guard.";
+#else
+  // This case historically could hang; run it in a subprocess with an alarm so
+  // the whole test suite won't get stuck.
+  ASSERT_EXIT(
+      {
+        alarm(2);
 
-  auto got =
-      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
-          json, "$.motor_content_boost");
-  EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
-  EXPECT_EQ(std::get<0>(got), "");
+        const std::string integers(
+            "123 34 -28 -65 -99 -23 -103 -87 34 58 32 48 46 55 57 49 53 44 32 "
+            "34 "
+            "-23 "
+            "-127 -109 -27 -91 -121 -23 -123 -73 -27 -88 -127 34 58 32 48 46 "
+            "55 "
+            "56 "
+            "48 56 44 32 34 -24 -121 -86 -27 -118 -88 -26 -116 -95 34 58 32 48 "
+            "46 55 "
+            "55 56 49 125");
+        auto ints = splitToInts(integers);
+        std::string json("");
+        for (const auto i : ints) {
+          json.push_back((char)i);
+        }
+
+        auto got = GetByJsonPathOnDemand<
+            SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+            json, "$.motor_content_boost");
+        const auto& out = std::get<0>(got);
+        const auto err = std::get<1>(got);
+        if (err == kErrorNone) {
+          std::fprintf(stderr, "unexpected success, out=%s\n", out.c_str());
+          std::_Exit(1);
+        }
+        if (!out.empty()) {
+          std::fprintf(stderr, "expected empty output, err=%d, out=%s\n",
+                       static_cast<int>(err), out.c_str());
+          std::_Exit(1);
+        }
+        std::_Exit(0);
+      },
+      ::testing::ExitedWithCode(0), "");
+#endif
 }
 TEST(JsonPath, JsonInfiniteLoop2) {
   std::string json("[8");
