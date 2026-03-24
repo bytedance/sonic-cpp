@@ -850,6 +850,49 @@ TEST(DNodeTest, OwnedRawAndNumStrFreed) {
   EXPECT_EQ(CountingAllocator::malloc_cnt, CountingAllocator::free_cnt);
 }
 
+TEST(DNodeTest, CopyRawOrNumStrWithNullAllocatorDoesNotCrash) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "Subprocess exit assertions are not enabled on Windows here.";
+#else
+  ASSERT_EXIT(
+      {
+        using FailingNode = DNode<InvalidAllocator>;
+        InvalidAllocator alloc;
+
+        {
+          Document doc;
+          const char* json = "123";
+          doc.Parse<ParseFlags::kParseIntegerAsRaw>(json, 3);
+          if (doc.HasParseError() || !doc.IsRaw()) {
+            std::_Exit(2);
+          }
+          FailingNode copied(doc, alloc);
+          if (!copied.IsRaw() || copied.Size() != 0 || copied.GetRaw() != "") {
+            std::_Exit(3);
+          }
+        }
+
+        {
+          Document doc;
+          const std::string json = "18446744073709551616";
+          doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(json.data(),
+                                                           json.size());
+          if (doc.HasParseError() || !doc.IsStringNumber()) {
+            std::_Exit(4);
+          }
+          FailingNode copied(doc, alloc);
+          if (!copied.IsStringNumber() || copied.Size() != 0 ||
+              copied.GetStringView() != "") {
+            std::_Exit(5);
+          }
+        }
+
+        std::_Exit(0);
+      },
+      ::testing::ExitedWithCode(0), "");
+#endif
+}
+
 TYPED_TEST(NodeTest, SourceAllocator) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;

@@ -222,6 +222,10 @@ TEST(JsonPathWildcard, Basic) {
   TestOk(R"([[123, 456], [], null])", "$[*][1]", "456");
 }
 
+TEST(JsonPathWildcard, SingleStringIsUnquotedOnDemand) {
+  TestOk(R"([{"a":"x"}, {}])", "$[*].a", "x");
+}
+
 TEST(JsonPathWildcard, Primitive) {
   TestOk("1", "$[*]", "");
   TestOk("null", "$[*]", "");
@@ -501,16 +505,19 @@ TEST(JsonPath, InvalidJsonPathMore) {
 
   // Empty key
   TestUnsupportedPath(json, "$.");
-  TestUnsupportedPath(json, R"($[""])");
-  TestUnsupportedPath(json, R"($[''])");
+  TestNoMatch(R"({})", R"($[""])");
+  TestNoMatch(R"({})", R"($[''])");
 
   // Index > INT64_MAX
   TestUnsupportedPath(json, "$[9223372036854775808]");
+  TestUnsupportedPath(json, "$[43788737869027501872]");
 }
 
 TEST(JsonPath, QuotedNameEscapes) {
   // Double-quoted name supports backslash escapes.
   TestOk(R"({"a\"b":1})", R"($["a\"b"])", "1");
+  TestOk(R"({"":1})", R"($[""])", "1");
+  TestOk(R"({"":1})", R"($[''])", "1");
 
   // Invalid escape sequence should fail parsing and be treated as unsupported.
   TestUnsupportedPath(R"({})", R"($["a\x"])");
@@ -766,7 +773,7 @@ TEST(JsonPathDump, SerializeCoversEmptySingleAndMulti) {
     ASSERT_EQ(result.error, kErrorNone);
     auto dumped = sonic_json::internal::Serialize(result);
     EXPECT_EQ(std::get<1>(dumped), kErrorNone);
-    EXPECT_EQ(std::get<0>(dumped), "null");
+    EXPECT_EQ(std::get<0>(dumped), "");
   }
 
   {
@@ -821,5 +828,53 @@ TEST(JsonPathDump, SerializeCoversSingleNonStringAndErrorPaths) {
     EXPECT_EQ(std::get<1>(dumped), kSerErrorInfinity);
     EXPECT_EQ(std::get<0>(dumped), "");
   }
+}
+
+TEST(JsonPathDump, SerializeMatchesPublicJsonPathForFilteredNullOnly) {
+  Document doc;
+  doc.Parse(R"({"a":null})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  auto result = doc.AtJsonPath("$.a");
+  ASSERT_EQ(result.error, kErrorNone);
+
+  auto dumped = sonic_json::internal::Serialize(result);
+  auto public_got = GetByJsonPath(R"({"a":null})", "$.a");
+
+  EXPECT_EQ(std::get<1>(dumped), std::get<1>(public_got));
+  EXPECT_EQ(std::get<0>(dumped), std::get<0>(public_got));
+}
+
+TEST(JsonPathDump, SerializeDoesNotMutateInputResult) {
+  Document doc;
+  doc.Parse(R"({"arr":[null,"x",1]})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  auto result = doc.AtJsonPath("$.arr[*]");
+  ASSERT_EQ(result.error, kErrorNone);
+  ASSERT_EQ(result.nodes.size(), 3U);
+  ASSERT_TRUE(result.nodes[0]->IsNull());
+
+  auto dumped = sonic_json::internal::Serialize(result);
+  EXPECT_EQ(std::get<1>(dumped), kErrorNone);
+  EXPECT_EQ(std::get<0>(dumped), R"(["x",1])");
+
+  ASSERT_EQ(result.nodes.size(), 3U);
+  EXPECT_TRUE(result.nodes[0]->IsNull());
+  EXPECT_TRUE(result.nodes[1]->IsString());
+}
+
+TEST(JsonPathDump, SerializeAcceptsConstResult) {
+  Document doc;
+  doc.Parse(R"({"s":"abc"})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  const Document& cdoc = doc;
+  const auto result = cdoc.AtJsonPath("$.s");
+  ASSERT_EQ(result.error, kErrorNone);
+
+  auto dumped = sonic_json::internal::Serialize(result);
+  EXPECT_EQ(std::get<1>(dumped), kErrorNone);
+  EXPECT_EQ(std::get<0>(dumped), "abc");
 }
 }  // namespace

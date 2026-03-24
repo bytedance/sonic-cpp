@@ -12,26 +12,27 @@ namespace sonic_json {
 namespace internal {
 template <typename NodeType>
 sonic_force_inline std::tuple<std::string, SonicError> Serialize(
-    JsonPathResult<NodeType>& result) {
+    const JsonPathResult<NodeType>& result) {
+  auto local = result;
   // filter the null nodes
-  result.nodes.erase(
-      std::remove_if(result.nodes.begin(), result.nodes.end(),
+  local.nodes.erase(
+      std::remove_if(local.nodes.begin(), local.nodes.end(),
                      [](const auto& node) { return node->IsNull(); }),
-      result.nodes.end());
+      local.nodes.end());
 
-  if (result.nodes.empty()) {
-    return std::make_tuple("null", kErrorNone);
+  if (local.nodes.empty()) {
+    return std::make_tuple("", kErrorNone);
   }
 
   WriteBuffer wb;
-  if (result.nodes.size() == 1) {
+  if (local.nodes.size() == 1) {
     // not serialize the single string
-    auto& root = result.nodes[0];
+    auto& root = local.nodes[0];
     if (root->IsString()) {
       wb.Push(root->GetStringView().data(), root->Size());
     } else {
       auto err =
-          result.nodes[0]
+          local.nodes[0]
               ->template Serialize<SerializeFlags::kSerializeEscapeEmoji>(wb);
       if (err != kErrorNone) {
         return std::make_tuple("", err);
@@ -39,7 +40,7 @@ sonic_force_inline std::tuple<std::string, SonicError> Serialize(
     }
   } else {
     wb.Push('[');
-    for (const auto& node : result.nodes) {
+    for (const auto& node : local.nodes) {
       auto err =
           node->template Serialize<SerializeFlags::kSerializeAppendBuffer |
                                    SerializeFlags::kSerializeEscapeEmoji>(wb);

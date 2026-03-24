@@ -28,10 +28,6 @@
 
 namespace sonic_json {
 
-struct JsonPathRawResult {
-  std::vector<StringView> raw;
-  SonicError error;
-};
 template <SerializeFlags serializeFlags>
 class JsonGenerator
     : public internal::SkipScanner2::JsonGeneratorInterface<serializeFlags> {
@@ -81,6 +77,27 @@ class JsonGenerator
       return false;
     }
 
+    return true;
+  }
+  bool copyCurrentStructureSingleResult(StringView raw) override {
+    dom_doc_.template Parse<ParseFlags::kParseAllowUnescapedControlChars |
+                            ParseFlags::kParseIntegerAsRaw>(raw);
+    if (dom_doc_.HasParseError()) {
+      return false;
+    }
+
+    auto n = &dom_doc_;
+    if (n->IsString()) {
+      wb_.PushStr(n->GetStringView());
+      return true;
+    }
+
+    auto err = n->template Serialize<SerializeFlags::kSerializeAppendBuffer |
+                                     SerializeFlags::kSerializeEscapeEmoji |
+                                     serializeFlags>(wb_);
+    if (sonic_unlikely(err != kErrorNone)) {
+      return false;
+    }
     return true;
   }
   bool copyCurrentStructureJsonTupleCodeGen(
@@ -154,9 +171,10 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathOnDemand(
         return local_ret;
       };
 
+  auto rootJsonGenerator = jsonGeneratorFactory(wb);
   const bool matched =
       scan.getJsonPath<internal::SkipScanner2::WriteStyle::RAW, serializeFlags>(
-          path, 1, jsonGeneratorFactory(wb).get(), jsonGeneratorFactory);
+          path, 1, rootJsonGenerator.get(), jsonGeneratorFactory);
   if (matched) {
     return std::make_tuple(std::string(wb.ToStringView()), kErrorNone);
   }

@@ -36,7 +36,7 @@ enum TypeFlag {
   kUint = ((uint8_t)(0 << 3)) | kNumber,    // xxx00_011, 3
   kSint = ((uint8_t)(1 << 3)) | kNumber,    // xxx01_011, 11
   kReal = ((uint8_t)(2 << 3)) | kNumber,    // xxx10_011, 19
-  kNumStr = ((uint8_t)(3 << 3)) | kNumber,  // xx100_011, 27
+  kNumStr = ((uint8_t)(3 << 3)) | kNumber,  // xxx11_011, 27
   // kStringCopy: sv.p is copied, but not need free, e.g. node's string buffer
   // is dom str_
   kStringCopy = kString,  // xxx00_100, 4

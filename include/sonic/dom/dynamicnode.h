@@ -129,13 +129,18 @@ class DNode : public GenericNode<DNode<Allocator>> {
       }
       case kRaw: {
         size_t len = rhs.Size();
-        // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
-        this->sv.len = rhs.getTypeAndLen() | kOwnedStringMask;
-        this->sv.p = (char*)(alloc.Malloc(len + 1));
-        sonic_assert(this->sv.p != nullptr);
-        std::memcpy(const_cast<char*>(this->sv.p), rhs.GetStringView().data(),
-                    len);
-        const_cast<char*>(this->sv.p)[len] = '\0';
+        char* p = static_cast<char*>(alloc.Malloc(len + 1));
+        if (p) {
+          // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
+          this->sv.len = rhs.getTypeAndLen() | kOwnedStringMask;
+          this->sv.p = p;
+          std::memcpy(const_cast<char*>(this->sv.p), rhs.GetStringView().data(),
+                      len);
+          const_cast<char*>(this->sv.p)[len] = '\0';
+        } else {
+          this->sv.p = "";
+          this->setLength(0, rhs.GetType());
+        }
         break;
       }
       default:

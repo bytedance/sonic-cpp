@@ -1079,7 +1079,11 @@ class GenericNode {
   std::string Dump() const {
     WriteBuffer wb;
     SonicError err = Serialize<serializeFlags>(wb);
-    return err == kErrorNone ? wb.ToString() : "";
+    if (err != kErrorNone) {
+      return "";
+    }
+    auto sv = wb.ToStringView();
+    return std::string(sv.data(), sv.size());
   }
 
  protected:

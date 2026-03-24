@@ -99,6 +99,8 @@ inline const char* ErrorMsg(SonicError error) noexcept {
       {kErrorNoneNoMatch, "JsonPath: no match."},
 
   };
+  static_assert(sizeof(kErrorMsg) / sizeof(kErrorMsg[0]) == kErrorNums,
+                "kErrorMsg must stay in sync with SonicError");
 
   const int idx = static_cast<int>(error);
   if (idx < 0 || idx >= static_cast<int>(kErrorNums)) {

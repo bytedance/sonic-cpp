@@ -205,7 +205,7 @@ class JsonPath : public std::vector<JsonPathNode> {
         if (p[i] == '\'' || p[i] == '"') {
           valid = parseQuotedName(p, i, node);
         } else if ((p[i] >= '0' && p[i] <= '9') || p[i] == '-') {
-          valid = parseBracktedIndex(p, i, node);
+          valid = parseBracketedIndex(p, i, node);
         } else {
           // Unsupported bracket expression (e.g. unquoted name).
           valid = false;
@@ -228,6 +228,8 @@ class JsonPath : public std::vector<JsonPathNode> {
   sonic_force_inline bool parseNumber(StringView path, size_t& index,
                                       uint64_t& sum) {
     size_t start = index;
+    static constexpr uint64_t kInt64Max =
+        static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
     // check leading zero
     if (index < path.size() && path[index] == '0') {
       index++;
@@ -235,16 +237,15 @@ class JsonPath : public std::vector<JsonPathNode> {
     }
 
     while (index < path.size() && path[index] >= '0' && path[index] <= '9') {
-      auto last = sum * 10 + (path[index] - '0');
-      // check overflow
-      if (last < sum) {
+      const uint64_t digit = static_cast<uint64_t>(path[index] - '0');
+      if (sum > (kInt64Max - digit) / 10) {
         return false;
       }
-      sum = last;
+      sum = sum * 10 + digit;
       index++;
     }
 
-    return (sum <= INT64_MAX) && index != start;
+    return index != start;
   }
 
   // case as .abc
@@ -264,8 +265,8 @@ class JsonPath : public std::vector<JsonPathNode> {
   }
 
   // case as [123] or [-123]
-  sonic_force_inline bool parseBracktedIndex(StringView path, size_t& index,
-                                             JsonPathNode& node) {
+  sonic_force_inline bool parseBracketedIndex(StringView path, size_t& index,
+                                              JsonPathNode& node) {
     uint64_t sum = 0;
     int sign = 1;
 
@@ -342,41 +343,13 @@ class JsonPath : public std::vector<JsonPathNode> {
     const size_t quote_pos = static_cast<size_t>(src - base);
     node = JsonPathNode(path.substr(start, len));
     // Expect closing quote then ']'.
-    if (start == quote_pos || quote_pos + 1 >= n ||
-        base[quote_pos + 1] != ']') {
+    if (quote_pos + 1 >= n || base[quote_pos + 1] != ']') {
       return false;
     }
 
     index = quote_pos + 2;
 
     return true;
-  }
-
-  // case as [abc]
-  sonic_force_inline bool parseBrackedUnquotedKey(StringView path,
-                                                  size_t& index,
-                                                  JsonPathNode& node) {
-    size_t start = index;
-    while (index < path.size() && path[index] != ']') {
-      index++;
-    }
-    if (start == index) {
-      return false;
-    }
-    node = JsonPathNode(path.substr(start, index - start));
-    index++;
-    return true;
-  }
-
-  sonic_force_inline bool parseWildcard(StringView path, size_t& index,
-                                        JsonPathNode& node) {
-    if (index + 1 < path.size() && path[index] == '*' &&
-        path[index + 1] == ']') {
-      node = JsonPathNode('*');
-      index += 2;
-      return true;
-    }
-    return false;
   }
 
  public:

@@ -623,6 +623,23 @@ TYPED_TEST(DocumentTest, SerializeNaN) {
   EXPECT_STREQ(wb.ToString(), "\"-NaN\"");
 }
 
+TYPED_TEST(DocumentTest, DumpPreservesEmbeddedNullInString) {
+  using NodeType = typename TypeParam::NodeType;
+  NodeType node;
+  std::string raw = "12";
+  raw.push_back('\0');
+  raw += "34";
+  node.SetStringNumber(StringView(raw.data(), raw.size()));
+
+  std::string dumped = node.Dump();
+  ASSERT_EQ(dumped.size(), raw.size());
+  EXPECT_EQ(dumped[0], '1');
+  EXPECT_EQ(dumped[1], '2');
+  EXPECT_EQ(dumped[2], '\0');
+  EXPECT_EQ(dumped[3], '3');
+  EXPECT_EQ(dumped[4], '4');
+}
+
 TYPED_TEST(DocumentTest, swap) {
   using Document = TypeParam;
   Document doc1;

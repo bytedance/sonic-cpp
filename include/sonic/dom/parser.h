@@ -641,7 +641,7 @@ class Parser {
       }
       unsigned num = s[i - 1] - '0';
       if (man < kUint64Max / 10 ||
-          (man == kUint64Max / 10 && num <= UINT_MAX % 10)) {
+          (man == kUint64Max / 10 && num <= kUint64Max % 10)) {
         man = man * 10 + num;
         if (sgn == -1) {
           goto double_string_fast;

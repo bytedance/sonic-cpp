@@ -362,4 +362,14 @@ TEST(ParserTest, ParseStringNumber_Uint64KeepsType) {
   EXPECT_EQ(input, doc.Dump()) << input;
 }
 
+TEST(ParserTest, ParseStringNumber_Uint64OverflowBecomesNumStr) {
+  Document doc;
+  std::string input = "18446744073709551616";  // ULLONG_MAX + 1
+  doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(), input.size());
+  EXPECT_FALSE(doc.HasParseError()) << input;
+  EXPECT_TRUE(doc.IsStringNumber()) << input;
+  EXPECT_EQ(input, doc.GetStringView()) << input;
+  EXPECT_EQ(input, doc.Dump()) << input;
+}
+
 }  // namespace

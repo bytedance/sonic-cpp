@@ -652,6 +652,7 @@ class SkipScanner2 {
    public:
     virtual bool writeRaw(StringView sv) = 0;
     virtual bool copyCurrentStructure(StringView sv) = 0;
+    virtual bool copyCurrentStructureSingleResult(StringView sv) = 0;
     virtual bool copyCurrentStructureJsonTupleCodeGen(
         StringView raw, size_t index,
         std::vector<std::optional<std::string>> &result,
@@ -908,7 +909,11 @@ class SkipScanner2 {
           jsonGenerator->writeRawValue(wb.ToStringView());
           jsonGenerator->writeEndArray();
         } else if (dirty == 1) {
-          jsonGenerator->writeRawValue(wb.ToStringView());
+          if (!jsonGenerator->copyCurrentStructureSingleResult(
+                  wb.ToStringView())) {
+            setError(kParseErrorUnexpect);
+            return false;
+          }
         }
 
         return dirty > 0;
