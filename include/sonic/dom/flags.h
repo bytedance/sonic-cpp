@@ -25,9 +25,9 @@ enum class ParseFlags : uint32_t {
   kParseAllowUnescapedControlChars = 1 << 1,
   // parse all integer as raw number
   kParseIntegerAsRaw = 1 << 2,
-  // Parse numbers as number strings (NumStr) when needed.
-  // When enabled, floating-point numbers are stored as NumStr; integers are
-  // still stored as int64/uint64 when in range, otherwise stored as NumStr.
+  // Parse numbers as number strings (NumStr) only when they overflow the
+  // native numeric representation. In-range floating-point numbers stay
+  // double; in-range integers stay int64/uint64.
   kParseOverflowNumAsNumStr = 1 << 3,
 };
 

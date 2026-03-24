@@ -219,11 +219,6 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
-    // check flags
-    if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
-      return parseNumberAsString(sax);
-    }
-
 // These helper macros are used only within this function.
 // Define/undefine them locally to avoid leaking into includers.
 #undef FLOATING_LONGEST_DIGITS
@@ -381,6 +376,10 @@ class Parser {
       if (sgn == -1) {
         if (man > ((uint64_t)1 << 63)) {
           // overflow signed integer
+          if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+            pos_ = start_idx + 1;
+            return parseNumberAsString(sax);
+          }
           // Assume compiler supports convert uint64 to double
           SET_DOUBLE_AND_RETURN(-(double)(man));
         } else {
@@ -396,15 +395,27 @@ class Parser {
           (man == kUint64Max / 10 && num <= UINT_MAX % 10)) {
         man = man * 10 + num;
         if (sgn == -1) {
+          if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+            pos_ = start_idx + 1;
+            return parseNumberAsString(sax);
+          }
           SET_DOUBLE_AND_RETURN(-(double)(man));
         } else {
           SET_UINT_AND_RETURN(man);
         }
       } else {
+        if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+          pos_ = start_idx + 1;
+          return parseNumberAsString(sax);
+        }
         trunc = 1;
         goto double_fast;
       }
     } else {
+      if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+        pos_ = start_idx + 1;
+        return parseNumberAsString(sax);
+      }
       trunc = 1;
       goto double_fast;
     }
@@ -499,6 +510,12 @@ class Parser {
       double d;
       SonicError error_code =
           parseFloatEiselLemire64(d, exp10, man, sgn, trunc, s);
+      if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+        if (error_code == kParseErrorInfinity) {
+          pos_ = start_idx + 1;
+          return parseNumberAsString(sax);
+        }
+      }
       if (!sax.Double(d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
 
       RETURN_SET_ERROR_CODE(error_code);

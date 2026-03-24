@@ -331,16 +331,72 @@ TEST(ParserTest, ParseInvalidNumber) {
 TEST(ParserTest, ParseStringNumber) {
   TestStringNumber("-9223372036854775809", "-9223372036854775809");
   TestStringNumber("18446744073709551616", "18446744073709551616");
-  TestStringNumber("-4.94065645841247E-324", "-4.94065645841247E-324");
-  TestStringNumber("4.94065645841247E-324", "4.94065645841247E-324");
-  TestStringNumber("1.79769313486231E308", "1.79769313486231E308");
-  TestStringNumber("-1.79769313486231E308", "-1.79769313486231E308");
+  TestStringNumber("1e309", "1e309");
+  TestStringNumber("-1e309", "-1e309");
 }
 
-TEST(ParserTest, ParseStringNumber_NormalFloat) {
-  TestStringNumber("1.0", "1.0");
-  TestStringNumber("0.1", "0.1");
-  TestStringNumber("1e2", "1e2");
+TEST(ParserTest, ParseOverflowNumAsNumStr_NormalFloatStaysDouble) {
+  {
+    Document doc;
+    std::string input = "1.5";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsDouble()) << input;
+    EXPECT_DOUBLE_EQ(1.5, doc.GetDouble()) << input;
+  }
+
+  {
+    Document doc;
+    std::string input = "1.0";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsDouble()) << input;
+    EXPECT_DOUBLE_EQ(1.0, doc.GetDouble()) << input;
+  }
+
+  {
+    Document doc;
+    std::string input = "0.1";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsDouble()) << input;
+    EXPECT_DOUBLE_EQ(0.1, doc.GetDouble()) << input;
+  }
+
+  {
+    Document doc;
+    std::string input = "1e2";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsDouble()) << input;
+    EXPECT_DOUBLE_EQ(100.0, doc.GetDouble()) << input;
+  }
+}
+
+TEST(ParserTest, ParseOverflowNumAsNumStr_InRangeIntegerKeepsType) {
+  {
+    Document doc;
+    std::string input = "42";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsInt64()) << input;
+    EXPECT_EQ(42, doc.GetInt64()) << input;
+  }
+
+  {
+    Document doc;
+    std::string input = "-42";
+    doc.Parse<ParseFlags::kParseOverflowNumAsNumStr>(input.data(),
+                                                     input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    ASSERT_TRUE(doc.IsInt64()) << input;
+    EXPECT_EQ(-42, doc.GetInt64()) << input;
+  }
 }
 
 TEST(ParserTest, ParseStringNumber_ZeroExponentStaysDouble) {

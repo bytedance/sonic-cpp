@@ -729,10 +729,10 @@ TEST(JsonPathDom, ConstAtJsonPathIsConstCorrect) {
   EXPECT_EQ(n->GetStringView(), "abc");
 }
 
-TEST(JsonPathDom, NullNodeFilteredToEmptyString) {
+TEST(JsonPathDom, NullNodeFilteredToNull) {
   auto got = GetByJsonPath(R"({"a":null})", "$.a");
   EXPECT_EQ(std::get<1>(got), kErrorNone);
-  EXPECT_EQ(std::get<0>(got), "");
+  EXPECT_EQ(std::get<0>(got), "null");
 }
 
 TEST(JsonPathDom, MultiNodesSerializeAndFilterNulls) {
@@ -773,7 +773,7 @@ TEST(JsonPathDump, SerializeCoversEmptySingleAndMulti) {
     ASSERT_EQ(result.error, kErrorNone);
     auto dumped = sonic_json::internal::Serialize(result);
     EXPECT_EQ(std::get<1>(dumped), kErrorNone);
-    EXPECT_EQ(std::get<0>(dumped), "");
+    EXPECT_EQ(std::get<0>(dumped), "null");
   }
 
   {

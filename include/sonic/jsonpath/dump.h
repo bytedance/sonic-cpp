@@ -21,7 +21,7 @@ sonic_force_inline std::tuple<std::string, SonicError> Serialize(
       local.nodes.end());
 
   if (local.nodes.empty()) {
-    return std::make_tuple("", kErrorNone);
+    return std::make_tuple("null", kErrorNone);
   }
 
   WriteBuffer wb;

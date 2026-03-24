@@ -21,7 +21,7 @@ sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathInternal(
       result.nodes.end());
 
   if (result.nodes.empty()) {
-    return std::make_tuple("", result.error);
+    return std::make_tuple("null", result.error);
   }
 
   WriteBuffer wb;
