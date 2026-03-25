@@ -292,6 +292,24 @@ TYPED_TEST(NodeTest, Equal) {
     EXPECT_FALSE(node1 == node2);
     EXPECT_FALSE(node2 == node1);
   }
+
+  {
+    sonic_json::Document doc1, doc2;
+    doc1.Parse<ParseFlags::kParseOverflowNumAsNumStr>("18446744073709551616");
+    doc2.Parse<ParseFlags::kParseOverflowNumAsNumStr>("18446744073709551617");
+    EXPECT_FALSE(doc1 == doc2);
+    EXPECT_FALSE(doc2 == doc1);
+    doc2.Parse<ParseFlags::kParseOverflowNumAsNumStr>("18446744073709551616");
+    EXPECT_TRUE(doc1 == doc2);
+    EXPECT_TRUE(doc2 == doc1);
+
+    sonic_json::Document doc3, doc4;
+    doc3.Parse<ParseFlags::kParseOverflowNumAsNumStr>(
+        "123456789012345678901234567890");
+    doc4.Parse<ParseFlags::kParseOverflowNumAsNumStr>(
+        "123456789012345678901234567891");
+    EXPECT_FALSE(doc3 == doc4);
+  }
 }
 
 TYPED_TEST(NodeTest, FindMember) {

@@ -226,6 +226,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
       case kStringCopy:
       case kStringFree:
       case kStringConst:
+      case kNumStr:
+      case kRaw:
         return this->GetStringView() == rhs.GetStringView();
 
       case kReal:

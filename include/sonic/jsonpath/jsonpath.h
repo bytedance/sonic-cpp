@@ -314,31 +314,26 @@ class JsonPath : public std::vector<JsonPathNode> {
     const char* end = base + n;
     size_t len = 0;
     // normalized path
-    if (quote == '\"') {
-      while (src < end && *src != quote) {
-        if (*src == '\\') {
+    while (src < end && *src != quote) {
+      if (*src == '\\') {
+        if (src[1] == '\'') {
+          *dst++ = '\'';
+          src += 2;
+        } else {
           if (internal::common::unescape_with_padding(
                   reinterpret_cast<const uint8_t**>(&src),
                   reinterpret_cast<uint8_t**>(&dst)) == 0) {
             return false;
           }
-        } else {
-          *dst++ = *src++;
         }
+      } else {
+        *dst++ = *src++;
       }
-      if (src >= end) {
-        return false;
-      }
-      len = static_cast<size_t>(dst - (base + start));
-    } else {
-      while (src < end && *src != quote) {
-        src++;
-      }
-      if (src >= end) {
-        return false;
-      }
-      len = static_cast<size_t>(src - (base + start));
     }
+    if (src >= end) {
+      return false;
+    }
+    len = static_cast<size_t>(dst - (base + start));
 
     const size_t quote_pos = static_cast<size_t>(src - base);
     node = JsonPathNode(path.substr(start, len));

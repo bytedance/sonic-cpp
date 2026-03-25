@@ -388,7 +388,7 @@ TEST(JsonPath, EscapedKeySelector) {
         "b@": 5
     })";
   TestOk(json, R"($["a\\"])", "1");
-  TestOk(json, R"($['a\'])", "1");
+  TestOk(json, R"($['a\\'])", "1");
   TestOk(json, R"($["b\""])", "2");
   TestOk(json, R"($["b\u0041"])", "3");
   TestOk(json, "$['b.9']", "4");
@@ -518,6 +518,9 @@ TEST(JsonPath, QuotedNameEscapes) {
   TestOk(R"({"a\"b":1})", R"($["a\"b"])", "1");
   TestOk(R"({"":1})", R"($[""])", "1");
   TestOk(R"({"":1})", R"($[''])", "1");
+
+  // Single-quoted name supports backslash escapes.
+  TestOk(R"({"a'b":1})", R"($['a\'b'])", "1");
 
   // Invalid escape sequence should fail parsing and be treated as unsupported.
   TestUnsupportedPath(R"({})", R"($["a\x"])");
@@ -697,6 +700,19 @@ TEST(JsonPath, JsonInfiniteLoop3) {
           json, path);
   EXPECT_EQ(std::get<1>(got), kParseErrorEof);
   EXPECT_EQ(std::get<0>(got), "");
+}
+
+TEST(JsonPath, NestedContainersDesynchronization) {
+  // Test for getJsonPath fallthrough handler consuming arrays/objects properly.
+  // We want to ensure that parsing doesn't desynchronize when a key path
+  // encounters a mismatched array and exits the skip block properly.
+  auto json = R"([[1], {"x": 2}])";
+  auto path = "$[*].x";
+  auto got =
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          json, path);
+  EXPECT_EQ(std::get<1>(got), kErrorNone);
+  EXPECT_EQ(std::get<0>(got), "2");
 }
 
 TEST(JsonPath, JsonTuple) {

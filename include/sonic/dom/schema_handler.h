@@ -243,6 +243,11 @@ class SchemaHandler {
   }
 
   sonic_force_inline bool NumStr(StringView s) {
+    if (cur_node_) {
+      cur_node_->setLength(s.size(), kNumStr);
+      cur_node_->sv.p = s.data();
+      return true;
+    }
     SONIC_ADD_NODE();
     new (&st_[np_ - 1]) NodeType();
     st_[np_ - 1].setLength(s.size(), kNumStr);

@@ -993,12 +993,14 @@ class SkipScanner2 {
           RETURN_FALSE_IF_PARSE_ERROR(skipOne());
           RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
         }
+        RETURN_FALSE_IF_PARSE_ERROR(consume('}'));
       } else if (c == '[') {
         RETURN_FALSE_IF_PARSE_ERROR(consume('['));
         while (peek() != ']') {
           RETURN_FALSE_IF_PARSE_ERROR(skipOne());
           RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
         }
+        RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
       }
     }
     return false;
@@ -1103,3 +1105,5 @@ class SkipScanner2 {
 };
 }  // namespace internal
 }  // namespace sonic_json
+
+#undef RETURN_FALSE_IF_PARSE_ERROR

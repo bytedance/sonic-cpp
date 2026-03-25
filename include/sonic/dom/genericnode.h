@@ -725,9 +725,8 @@ class GenericNode {
 
   /**
    * @brief get specific nodes by json path
-   * @param path json pointer
-   * @retval nullptr get node failed
-   * @retval others success
+   * @param jsonpath json path
+   * @return JsonPathResult containing matched nodes and error state
    */
   JsonPathResult<NodeType> AtJsonPath(const StringView jsonpath) {
     return AtJsonPathCommon(downCast(), jsonpath);
