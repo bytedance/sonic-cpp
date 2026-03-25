@@ -41,7 +41,8 @@ static void BM_SonicOnDemand(benchmark::State& state, const OnDemand& data) {
   sonic_json::GenericJsonPointer<std::string_view> path(data.path);
   lite.ParseOnDemand(data.json.data(), data.json.size(), path);
   bool existed = !lite.HasParseError();
-  bool ok = existed == data.existed && lite.GetUint64() == data.value;
+  bool ok = existed == data.existed &&
+            (!existed || (lite.IsUint64() && lite.GetUint64() == data.value));
   if (!ok) {
     state.SkipWithError("Verify failed");
     return;

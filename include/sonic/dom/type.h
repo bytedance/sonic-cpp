@@ -31,11 +31,12 @@ enum TypeFlag {
   kArray = 7,   // xxxxx111
 
   // SubType: 2 bits
-  kFalse = ((uint8_t)(0 << 3)) | kBool,   // xxx00_010, 2
-  kTrue = ((uint8_t)(1 << 3)) | kBool,    // xxx01_010, 10
-  kUint = ((uint8_t)(0 << 3)) | kNumber,  // xxx00_011, 3
-  kSint = ((uint8_t)(1 << 3)) | kNumber,  // xxx01_011, 11
-  kReal = ((uint8_t)(2 << 3)) | kNumber,  // xxx10_011, 19
+  kFalse = ((uint8_t)(0 << 3)) | kBool,     // xxx00_010, 2
+  kTrue = ((uint8_t)(1 << 3)) | kBool,      // xxx01_010, 10
+  kUint = ((uint8_t)(0 << 3)) | kNumber,    // xxx00_011, 3
+  kSint = ((uint8_t)(1 << 3)) | kNumber,    // xxx01_011, 11
+  kReal = ((uint8_t)(2 << 3)) | kNumber,    // xxx10_011, 19
+  kNumStr = ((uint8_t)(3 << 3)) | kNumber,  // xxx11_011, 27
   // kStringCopy: sv.p is copied, but not need free, e.g. node's string buffer
   // is dom str_
   kStringCopy = kString,  // xxx00_100, 4
@@ -58,6 +59,12 @@ enum TypeInfo {
   // SubType: 5 bits (including basic 3 bits)
   kSubTypeBits = 2,
   kSubTypeMask = 0x1F,
+
+  // Ownership bit inside the 8-bit type info.
+  // This bit is intentionally outside kSubTypeMask so that:
+  // - GetType() (masking by kSubTypeMask) keeps working unchanged
+  // - DNode can still know whether sv.p/raw.p needs Allocator::Free()
+  kOwnedStringMask = 1 << 5,
 
   // Others
   kInfoBits = 8,

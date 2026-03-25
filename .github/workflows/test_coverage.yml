@@ -1,13 +1,29 @@
 # yaml-language-server: $schema=https://json-schema.org/draft-07/schema#
 name: Test Coverage
 
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
+    branches: [ master ]
   pull_request:
 
 jobs:
   test-coverage:
+    name: bazel coverage
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     env:
       GCC_VERSION: 12
 
@@ -16,9 +32,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Read Bazel version
-        shell: bash
         run: |
           echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-${{ hashFiles('MODULE.bazel.lock', 'WORKSPACE.bzlmod', 'BUILD.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-
+            ${{ runner.os }}-bazel-
 
       - name: Setup bazel
         uses: jwlawson/actions-setup-bazel@v2
@@ -27,10 +53,11 @@ jobs:
 
       - name: Setup GCC
         run: |
-          sudo apt-get install -y gcc-12 g++-12
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-12 g++-12
       - name: Install lcov
         run: |
-          sudo apt install lcov
+          sudo apt-get install -y --no-install-recommends lcov
 
       - name: Coverage
         run: |

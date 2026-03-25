@@ -113,8 +113,38 @@ TEST(UpdateLazy, Basic) {
   };
 
   for (const auto &t : tests) {
-    auto ret = sonic_json::UpdateLazy(t.target, t.source);
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(t.target, t.source);
     EXPECT_STREQ(ret.c_str(), t.updated.c_str());
+  }
+}
+
+TEST(UpdateLazy, InvalidJson) {
+  // invalid source -> keep target (when target parses ok)
+  {
+    std::string target = R"({"a":1})";
+    std::string source = R"({"a":)";  // invalid json
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
+    EXPECT_STREQ(ret.c_str(), target.c_str());
+  }
+
+  // invalid target -> return source (when source parses ok)
+  {
+    std::string target = R"({"a":)";  // invalid json
+    std::string source = R"({"b":2})";
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
+    EXPECT_STREQ(ret.c_str(), source.c_str());
+  }
+
+  // both invalid -> return empty object
+  {
+    std::string target = R"({"a":)";
+    std::string source = R"({"b":)";
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
+    EXPECT_STREQ(ret.c_str(), "{}");
   }
 }
 

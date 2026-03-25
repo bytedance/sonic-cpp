@@ -30,32 +30,53 @@ static sonic_force_inline bool EqBytes4(const uint8_t *src, uint32_t target) {
   return val == target;
 }
 
+static sonic_force_inline bool IsValidSeparator(uint8_t c) {
+  //  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' ||
+  //         c == ']' || c == '}' || c == '\0';
+  constexpr uint64_t mask = (1ULL << 0) |   // '\0'
+                            (1ULL << 9) |   // '\t'
+                            (1ULL << 10) |  // '\n'
+                            (1ULL << 13) |  // '\r'
+                            (1ULL << 32) |  // ' '
+                            (1ULL << 44);   // ','
+
+  return c < 64 ? (mask >> c) & 1 : (c == 93 || c == 125);
+}
+
 sonic_force_inline bool SkipLiteral(const uint8_t *data, size_t &pos,
                                     size_t len, uint8_t token) {
+  // the binary of 'ull' in null
   static constexpr uint32_t kNullBin = 0x6c6c756e;
+  // the binary of 'rue' in true
   static constexpr uint32_t kTrueBin = 0x65757274;
-  static constexpr uint32_t kFalseBin =
-      0x65736c61;  // the binary of 'alse' in false
+  // the binary of 'alse' in false
+  static constexpr uint32_t kFalseBin = 0x65736c61;
   auto start = data + pos - 1;
   auto end = data + len;
   switch (token) {
     case 't':
-      if (start + 4 <= end && EqBytes4(start, kTrueBin)) {
+      if (start + 4 <= end && EqBytes4(start, kTrueBin) &&
+          (start + 4 == end || IsValidSeparator(start[4]))) {
         pos += 3;
         return true;
       }
       break;
     case 'n':
-      if (start + 4 <= end && EqBytes4(start, kNullBin)) {
+      if (start + 4 <= end && EqBytes4(start, kNullBin) &&
+          (start + 4 == end || IsValidSeparator(start[4]))) {
         pos += 3;
         return true;
       }
       break;
     case 'f':
-      if (start + 5 <= end && EqBytes4(start + 1, kFalseBin)) {
+      if (start + 5 <= end && EqBytes4(start + 1, kFalseBin) &&
+          (start + 5 == end || IsValidSeparator(start[5]))) {
         pos += 4;
         return true;
       }
+      break;
+    default:
+      return false;
   }
   return false;
 }

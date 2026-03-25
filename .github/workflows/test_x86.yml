@@ -1,9 +1,34 @@
-name: Test
-on: [push, pull_request]
+name: CI / Test (x86)
+
+permissions:
+  contents: read
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
+      - 'licenses/**'
+      - '**/*.md'
+      - 'Doxyfile'
+      - '.vscode/**'
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   test-llvm:
+    name: clang ${{ matrix.llvm_version }} / ${{ matrix.tool }} / ${{ matrix.arch }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -11,8 +36,8 @@ jobs:
         tool: ['cmake', 'bazel']
         arch: [westmere, haswell]
         exclude:
-            - tool: 'cmake'
-              arch: westmere
+          - tool: 'cmake'
+            arch: westmere
     env:
       CC: clang
       CXX: clang++
@@ -22,9 +47,20 @@ jobs:
 
       - name: Read Bazel version
         if: matrix.tool == 'bazel'
-        shell: bash
         run: |
           echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
+
+      - name: Cache Bazel
+        if: matrix.tool == 'bazel'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-${{ hashFiles('MODULE.bazel.lock', 'WORKSPACE.bzlmod', 'BUILD.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-
+            ${{ runner.os }}-bazel-
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
@@ -45,7 +81,7 @@ jobs:
 
       - name: Run ${{ matrix.arch }} Test Use Bazel
         if: matrix.tool == 'bazel'
-        run : |
+        run: |
           bash ./scripts/unittest.sh -c --arch=${{ matrix.arch }}
 
       - name: Run Test Use CMake
@@ -54,7 +90,9 @@ jobs:
           bash ./scripts/run_cmake.sh
 
   test-gcc:
+    name: gcc ${{ matrix.gcc_version }} / ${{ matrix.tool }} / ${{ matrix.arch }} / ${{ matrix.dispatch }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -80,13 +118,25 @@ jobs:
 
       - name: Read Bazel version
         if: matrix.tool == 'bazel'
-        shell: bash
         run: |
           echo "BAZEL_VERSION=$(cat .bazelversion)" >> "$GITHUB_ENV"
 
       - name: Install GCC
         run: |
-          sudo apt-get install -y gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
+
+      - name: Cache Bazel
+        if: matrix.tool == 'bazel'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-${{ hashFiles('MODULE.bazel.lock', 'WORKSPACE.bzlmod', 'BUILD.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-${{ env.BAZEL_VERSION }}-
+            ${{ runner.os }}-bazel-
 
       - name: Setup bazel
         if: matrix.tool == 'bazel'
@@ -102,7 +152,7 @@ jobs:
 
       - name: Run ${{ matrix.arch }} ${{ matrix.dispatch }} Test Use Bazel
         if: matrix.tool == 'bazel'
-        run : |
+        run: |
           bash ./scripts/unittest.sh -g --arch=${{ matrix.arch }} --dispatch=${{ matrix.dispatch }}
 
       - name: Run Test Use CMake

@@ -1,10 +1,44 @@
-name: clang-format Check
-on: [push, pull_request]
+name: CI / clang-format
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.clang-format'
+      - 'include/sonic/**'
+      - 'benchmark/**'
+      - 'tests/**'
+      - 'example/**'
+      - 'fuzz/**'
+      - '.github/workflows/clang-format-check.yml'
+  pull_request:
+    paths:
+      - '.clang-format'
+      - 'include/sonic/**'
+      - 'benchmark/**'
+      - 'tests/**'
+      - 'example/**'
+      - 'fuzz/**'
+      - '.github/workflows/clang-format-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   formatting-check:
-    name: Formatting Check
+    name: clang-format
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         path:
           - 'include/sonic'

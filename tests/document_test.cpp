@@ -597,6 +597,49 @@ TYPED_TEST(DocumentTest, SonicErrorInfinity) {
   EXPECT_TRUE(this->doc_.Dump().empty());
 }
 
+TYPED_TEST(DocumentTest, SerializeInfinity) {
+  Document dom;
+  dom.SetDouble(std::numeric_limits<double>::infinity());
+  WriteBuffer wb;
+  SonicError err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "\"Infinity\"");
+
+  dom.SetDouble(-std::numeric_limits<double>::infinity());
+  err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "\"-Infinity\"");
+}
+
+TYPED_TEST(DocumentTest, SerializeNaN) {
+  Document dom;
+  dom.SetDouble(std::numeric_limits<double>::quiet_NaN());
+  WriteBuffer wb;
+  SonicError err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
+  EXPECT_EQ(err, kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "\"NaN\"");
+  dom.SetDouble(-std::numeric_limits<double>::quiet_NaN());
+  err = dom.Serialize<SerializeFlags::kSerializeInfNan>(wb);
+  EXPECT_STREQ(wb.ToString(), "\"-NaN\"");
+}
+
+TYPED_TEST(DocumentTest, DumpPreservesEmbeddedNullInString) {
+  using NodeType = typename TypeParam::NodeType;
+  NodeType node;
+  std::string raw = "12";
+  raw.push_back('\0');
+  raw += "34";
+  node.SetStringNumber(StringView(raw.data(), raw.size()));
+
+  std::string dumped = node.Dump();
+  ASSERT_EQ(dumped.size(), raw.size());
+  EXPECT_EQ(dumped[0], '1');
+  EXPECT_EQ(dumped[1], '2');
+  EXPECT_EQ(dumped[2], '\0');
+  EXPECT_EQ(dumped[3], '3');
+  EXPECT_EQ(dumped[4], '4');
+}
+
 TYPED_TEST(DocumentTest, swap) {
   using Document = TypeParam;
   Document doc1;
@@ -737,10 +780,10 @@ TYPED_TEST(DocumentTest, NodeCopyControl) {
   EXPECT_TRUE(this->doc_["titles"].IsNull());
 
   // test swap
-  NodeType swaped;
-  EXPECT_TRUE(swaped.IsNull());
-  swaped.Swap(new_node);
-  EXPECT_FALSE(swaped.IsStringConst());
+  NodeType swapped;
+  EXPECT_TRUE(swapped.IsNull());
+  swapped.Swap(new_node);
+  EXPECT_FALSE(swapped.IsStringConst());
   EXPECT_TRUE(new_node.IsNull());
 }
 

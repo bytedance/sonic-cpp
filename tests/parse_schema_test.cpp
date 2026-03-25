@@ -164,4 +164,15 @@ TEST(ParseSchema, FailedBasic) {
   TestFailed(R"(null)", R"([null,])");
 }
 
+TEST(ParseSchema, ParseOverflowNumAsNumStr) {
+  std::string schema = R"({"val": 1})";
+  std::string json = R"({"val": 18446744073709551616})";
+  Document doc;
+  doc.Parse(schema);
+  doc.ParseSchema<ParseFlags::kParseOverflowNumAsNumStr>(json);
+  EXPECT_FALSE(doc.HasParseError());
+  EXPECT_TRUE(doc["val"].IsStringNumber());
+  EXPECT_EQ(doc["val"].GetStringView(), "18446744073709551616");
+}
+
 }  // namespace

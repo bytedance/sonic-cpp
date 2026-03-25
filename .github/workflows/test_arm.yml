@@ -1,4 +1,15 @@
-name: Test ARM
+name: CI / Test (ARM)
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -10,12 +21,13 @@ on:
 jobs:
   test_arm:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++
       - name: Build and test NEON
         run: |
           cmake -S . -B build-neon -G Ninja
@@ -34,6 +46,6 @@ jobs:
       - name: Build and test SVE2
         if: steps.sve_check.outputs.supported == 'true'
         run: |
-          cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON -DENABLE_ASAN=OFF
+          cmake -S . -B build-sve -G Ninja -DENABLE_SVE2_128=ON
           cmake --build build-sve
-          ./build-sve/tests/unittest
+          ASAN_OPTIONS=detect_stack_use_after_return=0 ./build-sve/tests/unittest
