@@ -34,13 +34,16 @@ class SAXHandler {
   using Allocator = typename NodeType::AllocatorType;
   using MemberType = typename NodeType::MemberNode;
 
+  bool oom_{false};
+
   SAXHandler() = default;
   SAXHandler(Allocator &alloc) : alloc_(&alloc) {}
 
   SAXHandler(const SAXHandler &) = delete;
   SAXHandler &operator=(const SAXHandler &rhs) = delete;
   SAXHandler(SAXHandler &&rhs)
-      : st_(rhs.st_),
+      : oom_(rhs.oom_),
+        st_(rhs.st_),
         np_(rhs.np_),
         cap_(rhs.cap_),
         parent_(rhs.parent_),
@@ -49,6 +52,7 @@ class SAXHandler {
     rhs.cap_ = 0;
     rhs.np_ = 0;
     rhs.alloc_ = 0;
+    rhs.oom_ = false;
   }
 
   SAXHandler &operator=(SAXHandler &&rhs) {
@@ -58,12 +62,14 @@ class SAXHandler {
     cap_ = rhs.cap_;
     parent_ = rhs.parent_;
     alloc_ = rhs.alloc_;
+    oom_ = rhs.oom_;
 
     rhs.st_ = nullptr;
     rhs.np_ = 0;
     rhs.cap_ = 0;
     rhs.parent_ = 0;
     rhs.alloc_ = 0;
+    rhs.oom_ = false;
     return *this;
   }
 
@@ -74,9 +80,10 @@ class SAXHandler {
     size_t cap = len / 2 + 2;
     if (cap < 16) cap = 16;
     if (!st_ || cap_ < cap) {
-      st_ = static_cast<NodeType *>(
+      NodeType *new_st = static_cast<NodeType *>(
           std::realloc((void *)(st_), sizeof(NodeType) * cap));
-      if (!st_) return false;
+      if (!new_st) return false;
+      st_ = new_st;
       cap_ = cap;
     }
     return true;
@@ -170,9 +177,17 @@ class SAXHandler {
     obj.setLength(pairs, kObject);
     if (pairs) {
       void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
-      obj.setChildren(mem);
-      internal::Xmemcpy<sizeof(MemberType)>(
-          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = &obj + 1;
+        for (size_t i = 0; i < size_t(pairs) * 2; i++) children[i].~NodeType();
+        obj.setLength(0, kObject);
+        obj.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        obj.setChildren(mem);
+        internal::Xmemcpy<sizeof(MemberType)>(
+            (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+      }
     } else {
       obj.setChildren(nullptr);
     }
@@ -186,9 +201,18 @@ class SAXHandler {
     size_t old = arr.o.next.ofs;
     arr.setLength(count, kArray);
     if (count) {
-      arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::Xmemcpy<sizeof(NodeType)>(
-          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
+      void *mem = arr.template containerMalloc<NodeType>(count, *alloc_);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = &arr + 1;
+        for (size_t i = 0; i < count; i++) children[i].~NodeType();
+        arr.setLength(0, kArray);
+        arr.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        arr.setChildren(mem);
+        internal::Xmemcpy<sizeof(NodeType)>(
+            (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
+      }
     } else {
       arr.setChildren(nullptr);
     }
@@ -214,14 +238,18 @@ class SAXHandler {
     if (sonic_likely(np_ < cap_)) {
       np_++;
       return true;
-    } else {
-      cap_ += cap_;
-      st_ = static_cast<NodeType *>(
-          std::realloc((void *)(st_), sizeof(NodeType) * cap_));
-      if (!st_) return false;
-      np_++;
-      return true;
     }
+    size_t new_cap = cap_ * 2;
+    NodeType *new_st = static_cast<NodeType *>(
+        std::realloc((void *)(st_), sizeof(NodeType) * new_cap));
+    if (!new_st) {
+      oom_ = true;
+      return false;
+    }
+    st_ = new_st;
+    cap_ = new_cap;
+    np_++;
+    return true;
   }
 
   NodeType *st_{nullptr};
@@ -262,10 +290,20 @@ class LazySAXHandler {
     NodeType &arr = *stack_.template Begin<NodeType>();
     arr.setLength(count, kArray);
     if (count) {
-      arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::Xmemcpy<sizeof(NodeType)>(
-          (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
-      stack_.Pop<NodeType>(count);
+      void *mem = arr.template containerMalloc<NodeType>(count, *alloc_);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = &arr + 1;
+        for (size_t i = 0; i < count; i++) children[i].~NodeType();
+        stack_.Pop<NodeType>(count);
+        arr.setLength(0, kArray);
+        arr.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        arr.setChildren(mem);
+        internal::Xmemcpy<sizeof(NodeType)>(
+            (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
+        stack_.Pop<NodeType>(count);
+      }
     } else {
       arr.setChildren(nullptr);
     }
@@ -277,10 +315,19 @@ class LazySAXHandler {
     obj.setLength(pairs, kObject);
     if (pairs) {
       void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
-      obj.setChildren(mem);
-      internal::Xmemcpy<sizeof(MemberType)>(
-          (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
-      stack_.Pop<MemberType>(pairs);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = &obj + 1;
+        for (size_t i = 0; i < size_t(pairs) * 2; i++) children[i].~NodeType();
+        stack_.Pop<MemberType>(pairs);
+        obj.setLength(0, kObject);
+        obj.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        obj.setChildren(mem);
+        internal::Xmemcpy<sizeof(MemberType)>(
+            (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+        stack_.Pop<MemberType>(pairs);
+      }
     } else {
       obj.setChildren(nullptr);
     }
@@ -307,6 +354,7 @@ class LazySAXHandler {
   // allocator for node stack and string buffers
   Allocator *alloc_{nullptr};
   internal::Stack stack_{};
+  bool oom_{false};
 };
 
 }  // namespace sonic_json

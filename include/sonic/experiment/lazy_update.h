@@ -35,6 +35,9 @@ static inline ParseResult ParseLazy(NodeType &node, StringView json,
   if (ret.Error()) {
     return ret;
   }
+  if (sonic_unlikely(sax.oom_)) {
+    return ParseResult(kErrorNoMem, json.size());
+  }
   NodeType *root = sax.stack_.template Begin<NodeType>();
   node = std::move(*root);
   return ret;
@@ -43,19 +46,18 @@ static inline ParseResult ParseLazy(NodeType &node, StringView json,
 template <typename NodeType, typename Allocator, ParseFlags parseFlags>
 static inline SonicError UpdateNodeLazy(NodeType &target, NodeType &source,
                                         Allocator &alloc) {
-  ParseResult ret;
   SonicError err = kErrorNone;
-  // check the raw type
-  if (target.IsRaw() && *target.GetRaw().data() == '{') {
-    ret = ParseLazy<NodeType, Allocator, parseFlags>(target, target.GetRaw(),
-                                                     alloc);
+  if (target.IsRaw() && !target.GetRaw().empty() &&
+      *target.GetRaw().data() == '{') {
+    ParseResult ret = ParseLazy<NodeType, Allocator, parseFlags>(
+        target, target.GetRaw(), alloc);
+    if (ret.Error()) return ret.Error();
   }
-  if (source.IsRaw() && *source.GetRaw().data() == '{') {
-    ret = ParseLazy<NodeType, Allocator, parseFlags>(source, source.GetRaw(),
-                                                     alloc);
-  }
-  if (ret.Error()) {
-    return ret.Error();
+  if (source.IsRaw() && !source.GetRaw().empty() &&
+      *source.GetRaw().data() == '{') {
+    ParseResult ret = ParseLazy<NodeType, Allocator, parseFlags>(
+        source, source.GetRaw(), alloc);
+    if (ret.Error()) return ret.Error();
   }
   // update the object type
   if (!target.IsObject() || !source.IsObject() || target.Empty()) {

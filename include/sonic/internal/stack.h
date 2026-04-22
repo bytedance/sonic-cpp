@@ -27,7 +27,7 @@ namespace internal {
 
 class Stack {
  public:
-  Stack(size_t cap = defaultCapcity()) : cap_(cap) {
+  Stack(size_t cap = defaultCapcity()) : cap_(0) {
     buf_ = nullptr;
     top_ = nullptr;
     Reserve(cap);
@@ -62,10 +62,10 @@ class Stack {
     size_t align_cap = SONIC_ALIGN(new_cap);
     size_t old_size = Size();
     char* tmp = static_cast<char*>(std::realloc(buf_, align_cap));
+    if (sonic_unlikely(tmp == nullptr)) return;
     top_ = tmp + old_size;
     buf_ = tmp;
-    sonic_assert(buf_ != NULL);
-    cap_ = buf_ ? new_cap : 0;
+    cap_ = new_cap;
   }
 
   /**
@@ -169,8 +169,8 @@ class Stack {
   sonic_force_inline char* Grow(size_t cnt) {
     if (sonic_unlikely(top_ + cnt >= buf_ + cap_)) {
       if (sonic_unlikely((top_ + cnt) > buf_ + 2 * cap_)) {
-        cap_ = top_ - buf_ + cnt;
-        Reserve(cap_ + cap_ / 2);
+        size_t needed = (top_ - buf_) + cnt;
+        Reserve(needed + needed / 2);
       } else {
         Reserve(cap_ * 2);
       }

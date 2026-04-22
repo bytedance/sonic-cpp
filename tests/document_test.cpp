@@ -577,8 +577,6 @@ TYPED_TEST(DocumentTest, SerializeOK) {
   }
 }
 
-TYPED_TEST(DocumentTest, SerializeSort) {}
-
 TYPED_TEST(DocumentTest, SonicErrorInvalidKey) {
   using DNode = typename TypeParam::NodeType;
   auto iter = this->doc_.MemberBegin();

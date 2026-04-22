@@ -34,6 +34,8 @@ class SchemaHandler {
   using Allocator = typename NodeType::AllocatorType;
   using MemberType = typename NodeType::MemberNode;
 
+  bool oom_{false};
+
   SchemaHandler() = default;
   SchemaHandler(NodeType *root, Allocator &alloc)
       : parent_node_(root), cur_node_(root), alloc_(&alloc) {}
@@ -41,7 +43,8 @@ class SchemaHandler {
   SchemaHandler(const SchemaHandler &) = delete;
   SchemaHandler &operator=(const SchemaHandler &rhs) = delete;
   SchemaHandler(SchemaHandler &&rhs)
-      : st_(rhs.st_),
+      : oom_(rhs.oom_),
+        st_(rhs.st_),
         parent_node_(rhs.parent_node_),
         cur_node_(rhs.cur_node_),
         np_(rhs.np_),
@@ -56,6 +59,7 @@ class SchemaHandler {
     rhs.np_ = 0;
     rhs.alloc_ = nullptr;
     rhs.found_node_count_ = 0;
+    rhs.oom_ = false;
     parent_st_ = std::move(rhs.parent_st_);
     found_count_st_ = std::move(rhs.found_count_st_);
   }
@@ -70,6 +74,7 @@ class SchemaHandler {
     parent_ = rhs.parent_;
     found_node_count_ = rhs.found_node_count_;
     alloc_ = rhs.alloc_;
+    oom_ = rhs.oom_;
 
     rhs.st_ = nullptr;
     rhs.parent_node_ = nullptr;
@@ -79,6 +84,7 @@ class SchemaHandler {
     rhs.parent_ = 0;
     rhs.alloc_ = nullptr;
     rhs.found_node_count_ = 0;
+    rhs.oom_ = false;
     parent_st_ = std::move(rhs.parent_st_);
     found_count_st_ = std::move(rhs.found_count_st_);
     return *this;
@@ -91,9 +97,10 @@ class SchemaHandler {
     size_t cap = len / 2 + 2;
     if (cap < 16) cap = 16;
     if (!st_ || cap_ < cap) {
-      st_ = static_cast<NodeType *>(
+      NodeType *new_st = static_cast<NodeType *>(
           std::realloc((void *)(st_), sizeof(NodeType) * cap));
-      if (!st_) return false;
+      if (!new_st) return false;
+      st_ = new_st;
       cap_ = cap;
     }
     return true;
@@ -287,9 +294,17 @@ class SchemaHandler {
     obj.setLength(pairs, kObject);
     if (pairs) {
       void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
-      obj.setChildren(mem);
-      internal::Xmemcpy<sizeof(MemberType)>(
-          (void *)obj.getObjChildrenFirstUnsafe(), obj_member_ptr, pairs);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = static_cast<NodeType *>(obj_member_ptr);
+        for (size_t i = 0; i < size_t(pairs) * 2; i++) children[i].~NodeType();
+        obj.setLength(0, kObject);
+        obj.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        obj.setChildren(mem);
+        internal::Xmemcpy<sizeof(MemberType)>(
+            (void *)obj.getObjChildrenFirstUnsafe(), obj_member_ptr, pairs);
+      }
     } else {
       obj.setChildren(nullptr);
     }
@@ -317,9 +332,18 @@ class SchemaHandler {
     NodeType &arr = *arr_ptr;
     arr.setLength(count, kArray);
     if (count) {
-      arr.setChildren(arr.template containerMalloc<NodeType>(count, *alloc_));
-      internal::Xmemcpy<sizeof(NodeType)>(
-          (void *)arr.getArrChildrenFirstUnsafe(), arr_element_ptr, count);
+      void *mem = arr.template containerMalloc<NodeType>(count, *alloc_);
+      if (sonic_unlikely(mem == nullptr)) {
+        NodeType *children = static_cast<NodeType *>(arr_element_ptr);
+        for (size_t i = 0; i < count; i++) children[i].~NodeType();
+        arr.setLength(0, kArray);
+        arr.setChildren(nullptr);
+        oom_ = true;
+      } else {
+        arr.setChildren(mem);
+        internal::Xmemcpy<sizeof(NodeType)>(
+            (void *)arr.getArrChildrenFirstUnsafe(), arr_element_ptr, count);
+      }
     } else {
       arr.setChildren(nullptr);
     }

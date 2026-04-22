@@ -140,12 +140,16 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline bool parseStrInPlace(SAX &sax) {
-    return sax.String(parseStringHelper());
+    StringView sv = parseStringHelper();
+    if (sonic_unlikely(err_ != kErrorNone)) return true;
+    return sax.String(sv);
   }
 
   template <typename SAX>
   sonic_force_inline bool parseKeyInPlace(SAX &sax) {
-    return sax.Key(parseStringHelper());
+    StringView sv = parseStringHelper();
+    if (sonic_unlikely(err_ != kErrorNone)) return true;
+    return sax.Key(sv);
   }
 
   sonic_force_inline bool carry_one(char c, uint64_t &sum) const {
@@ -185,7 +189,6 @@ class Parser {
       d /= internal::kPow10Tab[-exp10];
       return true;
     }
-    return false;
   }
 
   SonicError parseFloatEiselLemire64(double &dbl, int exp10, uint64_t man,
@@ -245,33 +248,33 @@ class Parser {
     }                                                \
   } while (0)
 
-#define SET_INT_AND_RETURN(int_val)                                       \
-  do {                                                                    \
-    if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                    \
+#define SET_INT_AND_RETURN(int_val)                                \
+  do {                                                             \
+    if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                             \
   } while (0)
 
-#define SET_UINT_AND_RETURN(int_val)                                       \
-  do {                                                                     \
-    if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                     \
+#define SET_UINT_AND_RETURN(int_val)                                \
+  do {                                                              \
+    if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                              \
   } while (0)
 
-#define SET_DOUBLE_AND_RETURN(dbl)                                       \
-  do {                                                                   \
-    if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                   \
+#define SET_DOUBLE_AND_RETURN(dbl)                                \
+  do {                                                            \
+    if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                            \
   } while (0)
 
-#define SET_U64_AS_DOUBLE_AND_RETURN(int_val)                             \
-  do {                                                                    \
-    union {                                                               \
-      double d;                                                           \
-      uint64_t u;                                                         \
-    } du;                                                                 \
-    du.u = int_val;                                                       \
-    if (!sax.Double(du.d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                    \
+#define SET_U64_AS_DOUBLE_AND_RETURN(int_val)                      \
+  do {                                                             \
+    union {                                                        \
+      double d;                                                    \
+      uint64_t u;                                                  \
+    } du;                                                          \
+    du.u = int_val;                                                \
+    if (!sax.Double(du.d)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                             \
   } while (0)
 
     static constexpr uint64_t kUint64Max = 0xFFFFFFFFFFFFFFFF;
@@ -326,7 +329,7 @@ class Parser {
       // Zero Integer
       if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
         if (!sax.Raw(s + start_idx, i - start_idx))
-          RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+          RETURN_SET_ERROR_CODE(kSaxTermination);
         RETURN_SET_ERROR_CODE(kErrorNone);
       }
       SET_UINT_AND_RETURN(0);
@@ -367,7 +370,7 @@ class Parser {
     // Integer
     if constexpr (parseFlags & ParseFlags::kParseIntegerAsRaw) {
       if (!sax.Raw(s + start_idx, i - start_idx))
-        RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+        RETURN_SET_ERROR_CODE(kSaxTermination);
       RETURN_SET_ERROR_CODE(kErrorNone);
     }
 
@@ -516,7 +519,7 @@ class Parser {
           return parseNumberAsString(sax);
         }
       }
-      if (!sax.Double(d)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+      if (!sax.Double(d)) RETURN_SET_ERROR_CODE(kSaxTermination);
 
       RETURN_SET_ERROR_CODE(error_code);
     }
@@ -556,22 +559,22 @@ class Parser {
     }                                                \
   } while (0)
 
-#define SET_INT_AND_RETURN(int_val)                                       \
-  do {                                                                    \
-    if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                    \
+#define SET_INT_AND_RETURN(int_val)                                \
+  do {                                                             \
+    if (!sax.Int(int_val)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                             \
   } while (0)
 
-#define SET_UINT_AND_RETURN(int_val)                                       \
-  do {                                                                     \
-    if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                     \
+#define SET_UINT_AND_RETURN(int_val)                                \
+  do {                                                              \
+    if (!sax.Uint(int_val)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                              \
   } while (0)
 
-#define SET_DOUBLE_AND_RETURN(dbl)                                       \
-  do {                                                                   \
-    if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kParseErrorInvalidChar); \
-    RETURN_SET_ERROR_CODE(kErrorNone);                                   \
+#define SET_DOUBLE_AND_RETURN(dbl)                                \
+  do {                                                            \
+    if (!sax.Double(dbl)) RETURN_SET_ERROR_CODE(kSaxTermination); \
+    RETURN_SET_ERROR_CODE(kErrorNone);                            \
   } while (0)
 
     size_t i = pos_ - 1;
@@ -689,7 +692,7 @@ class Parser {
   double_string_fast:
     // parse floating number as json string value
     if (!sax.NumStr(StringView(const_cast<char *>(s + start), i - start))) {
-      RETURN_SET_ERROR_CODE(kParseErrorInvalidChar);
+      RETURN_SET_ERROR_CODE(kSaxTermination);
     }
     RETURN_SET_ERROR_CODE(kErrorNone);
 
@@ -702,6 +705,7 @@ class Parser {
 
   template <typename SAX>
   void parsePrimitives(SAX &sax) {
+    bool ok = true;
     switch (json_buf_[pos_ - 1]) {
       case '0':
       case '1':
@@ -715,26 +719,31 @@ class Parser {
       case '9':
       case '-':
         parseNumber(sax);
-        break;
+        return;
       case '"':
-        parseStrInPlace(sax);
+        ok = parseStrInPlace(sax);
         // only need check length when parsing string primitives, because the
         // padding "x\"x" makes parsing other invalid JSON always failed
         if (pos_ > len_) {
           setParseError(kParseErrorInvalidChar);
+          return;
         }
         break;
       case 'f':
-        parseFalse(sax);
+        ok = parseFalse(sax);
         break;
       case 't':
-        parseTrue(sax);
+        ok = parseTrue(sax);
         break;
       case 'n':
-        parseNull(sax);
+        ok = parseNull(sax);
         break;
       default:
         setParseError(kParseErrorInvalidChar);
+        return;
+    }
+    if (sonic_unlikely(!ok) && err_ == kErrorNone) {
+      err_ = kSaxTermination;
     }
   }
 
@@ -753,6 +762,13 @@ class Parser {
       goto err_invalid_char;  \
     }                         \
   } while (0)
+#define sonic_sax_check(expr)                         \
+  do {                                                \
+    if (sonic_unlikely(!(expr))) {                    \
+      if (err_ == kErrorNone) err_ = kSaxTermination; \
+      return;                                         \
+    }                                                 \
+  } while (0)
 
     using namespace sonic_json::internal;
     // TODO (liuq19): vector is a temporary choice, will optimize in future.
@@ -764,21 +780,21 @@ class Parser {
     uint8_t c = scan.SkipSpace(json_buf_, pos_);
     switch (c) {
       case '[': {
-        sax.StartArray();
+        sonic_sax_check(sax.StartArray());
         depth.push_back(kArrMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == ']') {
-          sax.EndArray(0);
+          sonic_sax_check(sax.EndArray(0));
           goto scope_end;
         }
         goto arr_val;
       }
       case '{': {
-        sax.StartObject();
+        sonic_sax_check(sax.StartObject());
         depth.push_back(kObjMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == '}') {
-          sax.EndObject(0);
+          sonic_sax_check(sax.EndObject(0));
           goto scope_end;
         }
         goto obj_key;
@@ -807,30 +823,35 @@ class Parser {
         }
         if (c == '}') {
           pos_++;
-          sax.EndObject(depth.back());
+          sonic_sax_check(sax.EndObject(depth.back()));
           goto scope_end;
         }
         goto err_invalid_char;
       }
+    } else if (sonic_unlikely(!found)) {
+      // Without CheckKeyReturn, `false` from Key() is a handler rejection
+      // (e.g. OOM), not a skip signal.
+      if (err_ == kErrorNone) err_ = kSaxTermination;
+      return;
     }
     c = scan.SkipSpace(json_buf_, pos_);
     switch (c) {
       case '{': {
-        sax.StartObject();
+        sonic_sax_check(sax.StartObject());
         depth.push_back(kObjMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == '}') {
-          sax.EndObject(0);
+          sonic_sax_check(sax.EndObject(0));
           goto scope_end;
         }
         goto obj_key;
       }
       case '[': {
-        sax.StartArray();
+        sonic_sax_check(sax.StartArray());
         depth.push_back(kArrMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == ']') {
-          sax.EndArray(0);
+          sonic_sax_check(sax.EndArray(0));
           goto scope_end;
         }
         goto arr_val;
@@ -849,20 +870,35 @@ class Parser {
         parseNumber(sax);
         sonic_check_err();
         break;
-      case 't':
-        parseTrue(sax);
+      case 't': {
+        bool ok = parseTrue(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
-      case 'f':
-        parseFalse(sax);
+      }
+      case 'f': {
+        bool ok = parseFalse(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
-      case 'n':
-        parseNull(sax);
+      }
+      case 'n': {
+        bool ok = parseNull(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
+      }
       case '"':
-        parseStrInPlace(sax);
+        sonic_sax_check(parseStrInPlace(sax));
         sonic_check_err();
         break;
       default:
@@ -879,7 +915,7 @@ class Parser {
     if (sonic_unlikely(c != '}')) {
       goto err_invalid_char;
     }
-    sax.EndObject(depth.back());
+    sonic_sax_check(sax.EndObject(depth.back()));
 
   scope_end:
     sonic_check_err();
@@ -896,21 +932,21 @@ class Parser {
   arr_val:
     switch (c) {
       case '{': {
-        sax.StartObject();
+        sonic_sax_check(sax.StartObject());
         depth.push_back(kObjMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == '}') {
-          sax.EndObject(0);
+          sonic_sax_check(sax.EndObject(0));
           goto scope_end;
         }
         goto obj_key;
       }
       case '[': {
-        sax.StartArray();
+        sonic_sax_check(sax.StartArray());
         depth.push_back(kArrMask);
         c = scan.SkipSpace(json_buf_, pos_);
         if (c == ']') {
-          sax.EndArray(0);
+          sonic_sax_check(sax.EndArray(0));
           goto scope_end;
         }
         goto arr_val;
@@ -929,20 +965,35 @@ class Parser {
         parseNumber(sax);
         sonic_check_err();
         break;
-      case 't':
-        parseTrue(sax);
+      case 't': {
+        bool ok = parseTrue(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
-      case 'f':
-        parseFalse(sax);
+      }
+      case 'f': {
+        bool ok = parseFalse(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
-      case 'n':
-        parseNull(sax);
+      }
+      case 'n': {
+        bool ok = parseNull(sax);
         sonic_check_err();
+        if (sonic_unlikely(!ok)) {
+          err_ = kSaxTermination;
+          return;
+        }
         break;
+      }
       case '"':
-        parseStrInPlace(sax);
+        sonic_sax_check(parseStrInPlace(sax));
         sonic_check_err();
         break;
       default:
@@ -957,7 +1008,7 @@ class Parser {
       goto arr_val;
     }
     if (sonic_likely(c == ']')) {
-      sax.EndArray(depth.back() & (kArrMask - 1));
+      sonic_sax_check(sax.EndArray(depth.back() & (kArrMask - 1)));
       goto scope_end;
     }
     goto err_invalid_char;
@@ -965,8 +1016,10 @@ class Parser {
   doc_end:
     return;
   err_invalid_char:
-    err_ = kParseErrorInvalidChar;
+    if (err_ == kErrorNone) err_ = kParseErrorInvalidChar;
     return;
+#undef sonic_sax_check
+#undef sonic_check_err
   }
 
   // parseLazyImpl only mark the json positions, and not parse any more, even
@@ -987,22 +1040,29 @@ class Parser {
     size_t sn = 0;
     const uint8_t *src, *sdst;
 
+#define sonic_lazy_sax_check(expr)              \
+  do {                                          \
+    if (sonic_unlikely(!(expr))) {              \
+      return ParseResult(kSaxTermination, pos); \
+    }                                           \
+  } while (0)
+
     switch (c) {
       case '[': {
-        sax.StartArray();
+        sonic_lazy_sax_check(sax.StartArray());
         c = scan.SkipSpaceSafe(data, pos, len);
         if (c == ']') {
-          sax.EndArray(0);
+          sonic_lazy_sax_check(sax.EndArray(0));
           return kErrorNone;
         }
         pos--;
         goto arr_val;
       }
       case '{': {
-        sax.StartObject();
+        sonic_lazy_sax_check(sax.StartObject());
         c = scan.SkipSpaceSafe(data, pos, len);
         if (c == '}') {
-          sax.EndObject(0);
+          sonic_lazy_sax_check(sax.EndObject(0));
           return kErrorNone;
         }
         goto obj_key;
@@ -1012,7 +1072,8 @@ class Parser {
         pos--;
         start = scan.SkipOne(data, pos, len);
         if (start < 0) goto skip_error;
-        sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+        sonic_lazy_sax_check(
+            sax.Raw(reinterpret_cast<const char *>(data + start), pos - start));
         return kErrorNone;
       }
     }
@@ -1033,6 +1094,9 @@ class Parser {
     if (skips == 2) {
       // parse escaped strings
       uint8_t *dst = (uint8_t *)alloc.Malloc(sn + 32);
+      if (sonic_unlikely(dst == nullptr)) {
+        return ParseResult(kErrorNoMem, pos);
+      }
       sdst = dst;
       std::memcpy(dst, src, sn);
       sn = internal::parseStringInplace<parseFlags>(dst, err);
@@ -1046,7 +1110,8 @@ class Parser {
     }
     key = StringView(reinterpret_cast<const char *>(sdst), sn);
     if (!sax.Key(key.data(), key.size(), allocated)) {
-      goto err_invalid_char;
+      if (allocated) Allocator::Free((void *)(sdst));
+      return ParseResult(kSaxTermination, pos);
     }
     c = scan.SkipSpaceSafe(data, pos, len);
     if (sonic_unlikely(c != ':')) {
@@ -1054,7 +1119,8 @@ class Parser {
     }
     start = scan.SkipOne(data, pos, len);
     if (start < 0) goto skip_error;
-    sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+    sonic_lazy_sax_check(
+        sax.Raw(reinterpret_cast<const char *>(data + start), pos - start));
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
     if (c == ',') {
@@ -1064,13 +1130,14 @@ class Parser {
     if (sonic_unlikely(c != '}')) {
       goto err_invalid_char;
     }
-    sax.EndObject(cnt);
+    sonic_lazy_sax_check(sax.EndObject(cnt));
     return kErrorNone;
 
   arr_val:
     start = scan.SkipOne(data, pos, len);
     if (start < 0) goto skip_error;
-    sax.Raw(reinterpret_cast<const char *>(data + start), pos - start);
+    sonic_lazy_sax_check(
+        sax.Raw(reinterpret_cast<const char *>(data + start), pos - start));
     cnt++;
     c = scan.SkipSpaceSafe(data, pos, len);
     if (c == ',') {
@@ -1079,16 +1146,15 @@ class Parser {
     if (sonic_unlikely(c != ']')) {
       goto err_invalid_char;
     }
-    sax.EndArray(cnt);
+    sonic_lazy_sax_check(sax.EndArray(cnt));
     return kErrorNone;
 
   err_invalid_char:
     return ParseResult(kParseErrorInvalidChar, pos - 1);
   skip_error:
     return ParseResult(SonicError(-start), pos - 1);
+#undef sonic_lazy_sax_check
   }
-
-#undef sonic_check_err
 
  private:
   sonic_force_inline void reset() {

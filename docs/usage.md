@@ -45,6 +45,10 @@ Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree.
 Document also the root of JSON value tree. There is an allocator in Document,
 which you should use to allocate memory for Node and Document.
 
+> **Note:** Re-parsing a `Document` discards the previous tree. Any raw
+> pointers, iterators, or `DNode*` obtained from an earlier `Parse()` become
+> invalid and must be re-acquired after each parse.
+
 ### Query in object
 There are two ways to find members: `operator[]` or `FindMember`. We recommend
 using `FindMember`.
@@ -208,6 +212,23 @@ using MyDoc = sonic_json::GenericDocument<MyNode>;
 
 Sonic uses rapidjson's allocator, you can define your own allocator follow
 [rapidjson allocaotr](http://rapidjson.org/md_doc_internals.html#InternalAllocator)
+
+### Detecting OOM on Post-Parse Mutations
+
+DNode mutations like `PushBack`, `AddMember`, and `Reserve` do not return a
+status code. When you use `MemoryPoolAllocator`, you can check
+`HadOom()` / `ClearOom()` around these operations if you need to detect an
+allocation failure:
+
+```c++
+auto& alloc = doc.GetAllocator();
+alloc.ClearOom();
+doc.PushBack(v, alloc);
+if (alloc.HadOom()) { /* handle OOM */ }
+```
+
+The flag is sticky until cleared. This is a `MemoryPoolAllocator` feature, not
+part of the abstract allocator concept.
 
 ### JSON Pointer
 Sonic provides a JsonPointer class but doesn't support resolving the JSON pointer
