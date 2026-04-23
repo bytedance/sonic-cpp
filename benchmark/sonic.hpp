@@ -22,9 +22,7 @@
 template <typename NodeType>
 class SonicStringResult : public StringResult<SonicStringResult<NodeType>> {
  public:
-  std::string_view str_impl() const {
-    return const_cast<sonic_json::WriteBuffer &>(wb).ToString();
-  }
+  std::string_view str_impl() const { return wb.ToString(); }
   sonic_json::WriteBuffer wb;
 };
 

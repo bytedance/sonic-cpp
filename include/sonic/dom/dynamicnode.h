@@ -32,6 +32,9 @@
 
 namespace sonic_json {
 
+// OOM invariant: mutating operations (Reserve, AddMember, PushBack, ...)
+// leave the node unchanged on allocation failure rather than propagating an
+// error. Callers that need to detect OOM should use Allocator::HadOom().
 template <typename Allocator = SONIC_DEFAULT_ALLOCATOR>
 class DNode : public GenericNode<DNode<Allocator>> {
  public:
@@ -82,6 +85,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
         this->o.len = rhs.getTypeAndLen();  // Copy size and type.
         if (count > 0) {
           void* mem = containerMalloc<MemberNode>(count, alloc);
+          if (sonic_unlikely(mem == nullptr)) {
+            this->setLength(0, kObject);
+            setChildren(nullptr);
+            break;
+          }
           rhsNodeType* rn = rhs.getObjChildrenFirst();
           DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
           for (size_t i = 0; i < count * 2; i += 2) {
@@ -98,8 +106,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
         size_t a_size = rhs.Size();
         this->a.len = rhs.getTypeAndLen();  // Copy size and type.
         if (a_size > 0) {
-          rhsNodeType* rn = rhs.getArrChildrenFirst();
           void* mem = containerMalloc<DNode>(a_size, alloc);
+          if (sonic_unlikely(mem == nullptr)) {
+            this->setLength(0, kArray);
+            setChildren(nullptr);
+            break;
+          }
+          rhsNodeType* rn = rhs.getArrChildrenFirst();
           DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
           for (size_t i = 0; i < a_size; ++i) {
             new (ln + i) DNode(*(rn + i), alloc, copyString);
@@ -302,14 +315,17 @@ class DNode : public GenericNode<DNode<Allocator>> {
   bool CreateMap(Allocator& alloc) {
     sonic_assert(this->IsObject());
     sonic_assert(this->Capacity() >= this->Size());
-    // if (this->Size() == 0) return false;
+    // Empty object: reserve meta storage first so children() is non-null.
+    // If the reserve OOMs, children() stays null and we bail instead of
+    // dereferencing it via getMapUnsafe() / setMap.
     if (nullptr == children()) {
       this->memberReserveImpl(16, alloc);
+      if (nullptr == children()) return false;
     }
-    if (getMapUnsfe()) return true;
+    if (getMapUnsafe()) return true;
     map_type* map = static_cast<map_type*>(alloc.Malloc(sizeof(map_type)));
+    if (nullptr == map) return false;
     new (map) map_type(MAType(&alloc));
-    // SetMap(map);
     MemberNode* m = (MemberNode*)getObjChildrenFirstUnsafe();
     for (size_t i = 0; i < this->Size(); ++i) {
       map->emplace(std::make_pair((m + i)->name.GetStringView(), i));
@@ -514,8 +530,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   DNode& reserveImpl(size_t new_cap, Allocator& alloc) {
     if (new_cap > this->Capacity()) {
-      setChildren(containerRealloc<DNode>(children(), this->Capacity(), new_cap,
-                                          alloc));
+      void* mem =
+          containerRealloc<DNode>(children(), this->Capacity(), new_cap, alloc);
+      if (sonic_likely(mem != nullptr)) setChildren(mem);
     }
     return *this;
   }
@@ -611,10 +628,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (new_cap > this->Capacity()) {
       void* old_ptr = children();
       size_t old_cap = this->Capacity();
-      setChildren(
-          containerRealloc<MemberNode>(old_ptr, old_cap, new_cap, alloc));
-      if (old_cap == 0) {
-        setMap(nullptr);  // Set map as nullptr when first alloc memory.
+      void* mem =
+          containerRealloc<MemberNode>(old_ptr, old_cap, new_cap, alloc);
+      if (sonic_likely(mem != nullptr)) {
+        setChildren(mem);
+        if (old_cap == 0) {
+          setMap(nullptr);  // Set map as nullptr when first alloc memory.
+        }
       }
     }
     return *this;
@@ -650,10 +670,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
   sonic_force_inline void* containerMalloc(size_t cap, Allocator& alloc) {
     size_t alloc_size = cap * sizeof(T) + sizeof(MetaNode);
     void* mem = alloc.Malloc(alloc_size);
-    // init Metanode
-    MetaNode* meta = static_cast<MetaNode*>(mem);
-    new (meta) MetaNode(cap);
-
+    if (sonic_likely(mem != nullptr)) {
+      new (static_cast<MetaNode*>(mem)) MetaNode(cap);
+    }
     return mem;
   }
 
@@ -663,10 +682,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
     size_t old_size = old_cap * sizeof(T) + sizeof(MetaNode);
     size_t new_size = new_cap * sizeof(T) + sizeof(MetaNode);
     void* mem = alloc.Realloc(old_ptr, old_size, new_size);
-    // init Metanode
-    MetaNode* meta = static_cast<MetaNode*>(mem);
-    meta->SetMetaCap(new_cap);
-
+    if (sonic_likely(mem != nullptr)) {
+      static_cast<MetaNode*>(mem)->SetMetaCap(new_cap);
+    }
     return mem;
   }
 
@@ -740,7 +758,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return ((MetaNode*)(this->o.next.children))->map;
   }
 
-  sonic_force_inline map_type* getMapUnsfe() const {
+  sonic_force_inline map_type* getMapUnsafe() const {
     sonic_assert(this->IsObject());
     return ((MetaNode*)(this->o.next.children))->map;
   }
@@ -810,13 +828,17 @@ class DNode : public GenericNode<DNode<Allocator>> {
     size_t count = this->Size();
     if (count >= this->Capacity()) {
       if (this->Capacity() == 0) {
-        setChildren(containerMalloc<MemberNode>(k_default_obj_cap, alloc));
+        void* mem = containerMalloc<MemberNode>(k_default_obj_cap, alloc);
+        if (sonic_unlikely(mem == nullptr)) return this->MemberEnd();
+        setChildren(mem);
       } else {
         size_t cap = this->Capacity();
         cap += (cap + 1) / 2;  // grow by factor 1.5
         void* old_ptr = children();
-        setChildren(containerRealloc<MemberNode>(old_ptr, this->Capacity(), cap,
-                                                 alloc));
+        void* mem =
+            containerRealloc<MemberNode>(old_ptr, this->Capacity(), cap, alloc);
+        if (sonic_unlikely(mem == nullptr)) return this->MemberEnd();
+        setChildren(mem);
       }
     }
 
@@ -824,6 +846,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     DNode name;
     if (copyKey) {
       name.SetString(key, alloc);
+      if (sonic_unlikely(name.IsNull())) return this->MemberEnd();
     } else {
       name.SetString(key);
     }
@@ -845,11 +868,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (nullptr == children()) {
       goto not_find;
     }
-    if (getMapUnsfe()) {
-      auto it = getMapUnsfe()->find(MSType(key.data(), key.size()));
-      if (it != getMapUnsfe()->end()) {
+    if (getMapUnsafe()) {
+      auto it = getMapUnsafe()->find(MSType(key.data(), key.size()));
+      if (it != getMapUnsafe()->end()) {
         m = memberBeginUnsafe() + it->second;
-        getMapUnsfe()->erase(it);
+        getMapUnsafe()->erase(it);
         goto find;
       }
 
@@ -927,9 +950,9 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (this->Size() >= cap) {
       size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;
       void* old_ptr = this->a.next.children;
-      DNode* new_child =
-          (DNode*)containerRealloc<DNode>(old_ptr, cap, new_cap, alloc);
-      this->a.next.children = new_child;
+      void* new_ptr = containerRealloc<DNode>(old_ptr, cap, new_cap, alloc);
+      if (sonic_unlikely(new_ptr == nullptr)) return *this;
+      this->a.next.children = new_ptr;
     }
     // add value to the last pos
     DNode& last = *(this->End());

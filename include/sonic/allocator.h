@@ -190,6 +190,9 @@ class MemoryPoolAllocator {
         ownBaseAllocator;  //!< base allocator created by this object.
     size_t refcount;
     bool ownBuffer;
+    //!< Sticky OOM flag shared across refcounted copies.  Atomic because
+    //!< the per-instance SpinLock does not synchronize different copies.
+    std::atomic<bool> hadOom;
   };
 
   static const size_t SIZEOF_SHARED_DATA = SONIC_ALIGN(sizeof(SharedData));
@@ -226,6 +229,7 @@ class MemoryPoolAllocator {
                            : 0)) {
     sonic_assert(baseAllocator_ != 0);
     sonic_assert(shared_ != 0);
+    new (&shared_->hadOom) std::atomic<bool>(false);
     if (baseAllocator) {
       shared_->ownBaseAllocator = 0;
     } else {
@@ -258,12 +262,13 @@ class MemoryPoolAllocator {
         baseAllocator_(baseAllocator ? baseAllocator : new BaseAllocator()),
         shared_(static_cast<SharedData*>(AlignBuffer(buffer, size))) {
     sonic_assert(size >= SIZEOF_SHARED_DATA + SIZEOF_CHUNK_HEADER);
+    new (&shared_->hadOom) std::atomic<bool>(false);
     shared_->chunkHead = GetChunkHead(shared_);
     shared_->chunkHead->capacity =
         size - SIZEOF_SHARED_DATA - SIZEOF_CHUNK_HEADER;
     shared_->chunkHead->size = 0;
     shared_->chunkHead->next = 0;
-    shared_->ownBaseAllocator = 0;
+    shared_->ownBaseAllocator = baseAllocator ? 0 : baseAllocator_;
     shared_->ownBuffer = false;
     shared_->refcount = 1;
   }
@@ -312,6 +317,8 @@ class MemoryPoolAllocator {
     }
     Clear();
     BaseAllocator* a = shared_->ownBaseAllocator;
+    using AtomicBool = std::atomic<bool>;
+    shared_->hadOom.~AtomicBool();
     if (shared_->ownBuffer) {
       baseAllocator_->Free(shared_);
     }
@@ -371,7 +378,10 @@ class MemoryPoolAllocator {
     LOCK_GUARD;
     if (sonic_unlikely(shared_->chunkHead->size + size >
                        shared_->chunkHead->capacity)) {
-      if (!AddChunk(cp_.ChunkSize(size))) return NULL;
+      if (!AddChunk(cp_.ChunkSize(size))) {
+        shared_->hadOom.store(true, std::memory_order_release);
+        return NULL;
+      }
     }
 
     void* buffer = GetChunkBuffer(shared_) + shared_->chunkHead->size;
@@ -412,7 +422,20 @@ class MemoryPoolAllocator {
       if (originalSize) std::memcpy(newBuffer, originalPtr, originalSize);
       return newBuffer;
     }
+    // Mark OOM even on the Malloc-copy fallback so the flag is set
+    // regardless of which internal path actually failed.
+    shared_->hadOom.store(true, std::memory_order_release);
     return nullptr;
+  }
+
+  // Lets callers distinguish an OOM from a logical null (e.g. Malloc(0)).
+  bool HadOom() const {
+    sonic_assert(shared_->refcount > 0);
+    return shared_->hadOom.load(std::memory_order_acquire);
+  }
+  void ClearOom() {
+    sonic_assert(shared_->refcount > 0);
+    shared_->hadOom.store(false, std::memory_order_release);
   }
 
   //! Frees a memory block (concept Allocator)
@@ -486,7 +509,8 @@ class MapAllocator {
   MapAllocator(const MapAllocator& rhs) : alloc_(rhs.alloc_) {}
 
   pointer allocate(size_type n, const void* = nullptr) {
-    return (T*)alloc_->Malloc(n * sizeof(T));
+    if (alloc_ == nullptr || n == 0) return nullptr;
+    return static_cast<pointer>(alloc_->Malloc(n * sizeof(T)));
   }
 
   void deallocate(void* p, size_type) { alloc_->Free(p); }

@@ -18,6 +18,8 @@
 
 #include <gtest/gtest.h>
 
+#include "sonic/internal/stack.h"
+
 namespace {
 
 using namespace sonic_json;
@@ -78,6 +80,17 @@ TEST(WriteBuffer, ToString) {
     wb.Push<char>('c');
     EXPECT_STREQ(wb.ToString(), "c");
   }
+  // ToString()/ToStringView() must be callable on a const WriteBuffer&:
+  // they write the terminator into pre-reserved slack via a `mutable`
+  // stack, so the logical observable state does not change.  This
+  // preserves v1.x source compatibility for callers that hold a const
+  // reference (e.g. CRTP str_impl() methods).
+  static_assert(
+      std::is_invocable_v<decltype(&WriteBuffer::ToString), const WriteBuffer*>,
+      "ToString() must be callable on a const WriteBuffer");
+  static_assert(std::is_invocable_v<decltype(&WriteBuffer::ToStringView),
+                                    const WriteBuffer*>,
+                "ToStringView() must be callable on a const WriteBuffer");
   {
     const WriteBuffer cwb;
     EXPECT_STREQ(cwb.ToString(), "");
@@ -88,6 +101,36 @@ TEST(WriteBuffer, ToString) {
     const WriteBuffer cwb = std::move(wb);
     EXPECT_STREQ(cwb.ToString(), "c");
   }
+}
+
+// Reserve must not update cap_ when realloc fails: callers check
+// Size() < Capacity() to decide whether writes fit in the backing buffer.
+TEST(Stack, ReservePreservesCapOnOom) {
+  internal::Stack s(256);
+  ASSERT_EQ(256u, s.Capacity());
+  constexpr size_t kHuge = static_cast<size_t>(1) << 60;
+  s.Reserve(kHuge);
+  EXPECT_EQ(256u, s.Capacity());
+}
+
+// ToString's fast path must not reallocate when one slack byte already
+// covers the terminator: Grow(1) would otherwise fire at Size == Cap - 1
+// and invalidate any pointer a prior ToString()/Begin() handed out.
+TEST(WriteBuffer, ToStringIsIdempotentWhenCapacityHasSlack) {
+  WriteBuffer wb(16);
+  const size_t cap_before = wb.Capacity();
+  ASSERT_EQ(cap_before, 16u);
+  // Per-char pushes avoid Push(s, n)'s Grow(n+1), landing on Size == Cap - 1.
+  const char* text = "abcdefghijklmno";
+  for (size_t i = 0; i < 15; ++i) wb.Push<char>(text[i]);
+  ASSERT_EQ(wb.Size(), 15u);
+  ASSERT_EQ(wb.Capacity(), cap_before);
+
+  const char* p1 = wb.ToString();
+  EXPECT_STREQ(p1, "abcdefghijklmno");
+  EXPECT_EQ(wb.Capacity(), cap_before);
+  const char* p2 = wb.ToString();
+  EXPECT_EQ(p1, p2);
 }
 
 TEST(WriteBuffer, StringSize) {

@@ -148,4 +148,27 @@ TEST(UpdateLazy, InvalidJson) {
   }
 }
 
+TEST(UpdateLazy, NestedInvalidTargetPropagates) {
+  // Nested invalid target merged with nested valid source:
+  // the error from the target-side lazy parse must be propagated and
+  // the update must fail ("{}"); it must NOT be silently overwritten
+  // by the source's successful parse.
+  {
+    std::string target = R"({"a":{"foo":}})";  // nested {"foo":} is invalid
+    std::string source = R"({"a":{"bar":5}})";
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
+    EXPECT_STREQ(ret.c_str(), "{}")
+        << "invalid nested target must propagate as update failure";
+  }
+  {
+    std::string target = R"({"a":{"foo": @}})";  // invalid token inside nested
+    std::string source = R"({"a":{"bar":5}})";
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
+    EXPECT_STREQ(ret.c_str(), "{}")
+        << "invalid nested target must propagate as update failure";
+  }
+}
+
 }  // namespace

@@ -37,15 +37,18 @@ class WriteBuffer {
   }
 
   /**
-   * @brief Return the context in the buffer.
-   * @return a null-terminate string.
-   * @note a '\0' will be added in the ending, so, this function is not
-   * thread-safe.
+   * @brief Return the buffer contents as a null-terminated C string.
+   * @return pointer to the buffer, terminated with an appended '\0'.
+   * @note Not thread-safe.
    */
   sonic_force_inline const char* ToString() const {
+    if (sonic_likely(stack_.Size() < stack_.Capacity())) {
+      *(stack_.template End<char>()) = '\0';
+      return stack_.template Begin<char>();
+    }
     stack_.Grow(1);
     *(stack_.template End<char>()) = '\0';
-    return stack_.Begin<char>();
+    return stack_.template Begin<char>();
   }
 
   sonic_force_inline StringView ToStringView() const {

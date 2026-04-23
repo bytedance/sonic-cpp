@@ -17,12 +17,22 @@
 #pragma once
 
 #include <algorithm>
+#include <type_traits>
+#include <utility>
 
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/dom/parser.h"
 
 namespace sonic_json {
+
+namespace internal {
+template <typename A, typename = void>
+struct has_clear : std::false_type {};
+template <typename A>
+struct has_clear<A, std::void_t<decltype(std::declval<A&>().Clear())>>
+    : std::true_type {};
+}  // namespace internal
 
 template <ParseFlags parseFlags>
 class Parser;
@@ -195,8 +205,15 @@ class GenericDocument : public NodeType {
   }
 
   void destroyDom() {
-    if (!Allocator::kNeedFree) {
+    if constexpr (!Allocator::kNeedFree) {
       this->setType(kNull);
+      if (own_alloc_) {
+        if constexpr (internal::has_clear<Allocator>::value) {
+          alloc_->Clear();
+        }
+        str_ = nullptr;
+        schema_str_ = nullptr;
+      }
       return;
     }
     // NOTE: must free dynamic nodes at first
@@ -213,15 +230,19 @@ class GenericDocument : public NodeType {
   GenericDocument& parseImpl(const char* json, size_t len) {
     Parser<parseFlags> p;
     SAXHandler<NodeType> sax(*alloc_);
-    parse_result_ = allocateStringBuffer(json, len);
-    if (sonic_unlikely(HasParseError())) {
-      return *this;
-    }
     if (!sax.SetUp(StringView(json, len))) {
       parse_result_ = kErrorNoMem;
       return *this;
     }
+    parse_result_ = allocateStringBuffer(json, len);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
     parse_result_ = p.Parse(str_, len, sax);
+    if (sonic_unlikely(sax.oom_)) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
     if (sonic_unlikely(HasParseError())) {
       return *this;
     }
@@ -233,15 +254,22 @@ class GenericDocument : public NodeType {
   GenericDocument& parseSchemaImpl(const char* json, size_t len) {
     Parser<parseFlags> p;
     SchemaHandler<NodeType> sax(this, *alloc_);
-    parse_result_ = allocateSchemaStringBuffer(json, len);
-    if (sonic_unlikely(HasParseError())) {
-      return *this;
-    }
     if (!sax.SetUp(StringView(json, len))) {
       parse_result_ = kErrorNoMem;
       return *this;
     }
+    parse_result_ = allocateSchemaStringBuffer(json, len);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
     parse_result_ = p.Parse(schema_str_, len, sax);
+    if (sonic_unlikely(sax.oom_)) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
     return *this;
   }
 

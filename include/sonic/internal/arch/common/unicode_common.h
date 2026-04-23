@@ -242,6 +242,10 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
   // inside the multilingual plane check
   uint32_t code_point = hex_to_u32_nocheck(*src_ptr + 2);
   *src_ptr += 6;
+  // Reject lone low surrogates: they are not valid Unicode scalar values.
+  if (code_point >= 0xdc00 && code_point <= 0xdfff) {
+    return false;
+  }
   // check for low surrogate for characters outside the Basic
   // Multilingual Plane.
   if (code_point >= 0xd800 && code_point < 0xdc00) {
@@ -256,6 +260,11 @@ sonic_force_inline bool handle_unicode_codepoint(const uint8_t **src_ptr,
     // this check catches both the case of the first code point being invalid
     // or the second code point being invalid.
     if ((code_point | code_point_2) >> 16) {
+      return false;
+    }
+    // The second escape must be a low surrogate; otherwise the subtraction
+    // below would wrap and produce a garbage code point.
+    if (code_point_2 < 0xdc00 || code_point_2 > 0xdfff) {
       return false;
     }
 
