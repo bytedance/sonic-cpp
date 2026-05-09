@@ -164,9 +164,125 @@ TEST(JsonTuple, invalidValue) {
   auto result =
       JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
   EXPECT_EQ(result, expected);
+  auto result_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(json, paths, true);
+  EXPECT_EQ(std::get<0>(result_with_error), expected);
+  EXPECT_EQ(std::get<1>(result_with_error), kParseErrorInvalidChar);
+
   expected = {std::nullopt, std::nullopt};
   result = JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, false);
   EXPECT_EQ(result, expected);
+  result_with_error = JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+      json, paths, false);
+  EXPECT_EQ(std::get<0>(result_with_error), expected);
+  EXPECT_EQ(std::get<1>(result_with_error), kParseErrorInvalidChar);
+}
+
+TEST(JsonTuple, ReportsMalformedSuffixAfterAllRequestedKeys) {
+  std::string json = "{\"a\":1,\"b\":2, BAD}";
+  std::vector<std::string_view> paths{"a", "b"};
+  std::vector<std::optional<std::string>> legacy_expected = {"1", "2"};
+  std::vector<std::optional<std::string>> strict_expected = {std::nullopt,
+                                                             std::nullopt};
+
+  auto legacy_result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, true);
+  EXPECT_EQ(legacy_result, legacy_expected);
+  auto legacy_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(json, paths, true);
+  EXPECT_EQ(std::get<0>(legacy_with_error), legacy_expected);
+  EXPECT_EQ(std::get<1>(legacy_with_error), kParseErrorInvalidChar);
+
+  auto strict_result =
+      JsonTupleWithCodeGen<kSerializeJavaStyleFlag>(json, paths, false);
+  EXPECT_EQ(strict_result, strict_expected);
+  auto strict_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(json, paths,
+                                                             false);
+  EXPECT_EQ(std::get<0>(strict_with_error), strict_expected);
+  EXPECT_EQ(std::get<1>(strict_with_error), kParseErrorInvalidChar);
+}
+
+TEST(JsonTuple, ReportsTrailingGarbageAndMissingComma) {
+  std::vector<std::string_view> paths{"a", "b"};
+  std::vector<std::optional<std::string>> legacy_expected = {"1", std::nullopt};
+  auto trailing_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          "{\"a\":1} garbage", paths, true);
+  EXPECT_EQ(std::get<0>(trailing_with_error), legacy_expected);
+  EXPECT_EQ(std::get<1>(trailing_with_error), kParseErrorInvalidChar);
+
+  std::vector<std::optional<std::string>> strict_expected = {std::nullopt,
+                                                             std::nullopt};
+  auto trailing_strict = JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+      "{\"a\":1} garbage", paths, false);
+  EXPECT_EQ(std::get<0>(trailing_strict), strict_expected);
+  EXPECT_EQ(std::get<1>(trailing_strict), kParseErrorInvalidChar);
+
+  auto missing_comma_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          "{\"a\":1 \"b\":2}", paths, true);
+  EXPECT_EQ(std::get<0>(missing_comma_with_error), strict_expected);
+  EXPECT_EQ(std::get<1>(missing_comma_with_error), kParseErrorInvalidChar);
+}
+
+TEST(JsonTuple, ReportsTrailingCommaInSkippedMembers) {
+  std::vector<std::string_view> paths{"a"};
+  std::vector<std::optional<std::string>> legacy_expected = {"1"};
+  auto legacy_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":2,})", paths, true);
+  EXPECT_EQ(std::get<0>(legacy_with_error), legacy_expected);
+  EXPECT_EQ(std::get<1>(legacy_with_error), kParseErrorInvalidChar);
+
+  std::vector<std::optional<std::string>> strict_expected = {std::nullopt};
+  auto strict_with_error =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":2,})", paths, false);
+  EXPECT_EQ(std::get<0>(strict_with_error), strict_expected);
+  EXPECT_EQ(std::get<1>(strict_with_error), kParseErrorInvalidChar);
+
+  auto all_skipped_legacy =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(R"({"bad":2,})",
+                                                             paths, true);
+  EXPECT_EQ(std::get<0>(all_skipped_legacy), strict_expected);
+  EXPECT_EQ(std::get<1>(all_skipped_legacy), kParseErrorInvalidChar);
+
+  auto all_skipped_strict =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(R"({"bad":2,})",
+                                                             paths, false);
+  EXPECT_EQ(std::get<0>(all_skipped_strict), strict_expected);
+  EXPECT_EQ(std::get<1>(all_skipped_strict), kParseErrorInvalidChar);
+}
+
+TEST(JsonTuple, ReportsInvalidSkippedValuesAfterRequestedKeys) {
+  std::vector<std::string_view> paths{"a"};
+  std::vector<std::optional<std::string>> legacy_expected = {"1"};
+  std::vector<std::optional<std::string>> strict_expected = {std::nullopt};
+
+  auto invalid_escape_legacy =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":"\q"})", paths, true);
+  EXPECT_EQ(std::get<0>(invalid_escape_legacy), legacy_expected);
+  EXPECT_EQ(std::get<1>(invalid_escape_legacy), kParseErrorEscapedFormat);
+
+  auto invalid_escape_strict =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":"\q"})", paths, false);
+  EXPECT_EQ(std::get<0>(invalid_escape_strict), strict_expected);
+  EXPECT_EQ(std::get<1>(invalid_escape_strict), kParseErrorEscapedFormat);
+
+  auto invalid_number_legacy =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":1e309})", paths, true);
+  EXPECT_EQ(std::get<0>(invalid_number_legacy), legacy_expected);
+  EXPECT_EQ(std::get<1>(invalid_number_legacy), kParseErrorInfinity);
+
+  auto invalid_number_strict =
+      JsonTupleWithCodeGenWithError<kSerializeJavaStyleFlag>(
+          R"({"a":1,"bad":1e309})", paths, false);
+  EXPECT_EQ(std::get<0>(invalid_number_strict), strict_expected);
+  EXPECT_EQ(std::get<1>(invalid_number_strict), kParseErrorInfinity);
 }
 
 TEST(JsonTuple, NoMatchAllKeys) {

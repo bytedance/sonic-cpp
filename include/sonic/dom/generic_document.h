@@ -17,6 +17,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <type_traits>
 #include <utility>
 
@@ -31,6 +32,11 @@ template <typename A, typename = void>
 struct has_clear : std::false_type {};
 template <typename A>
 struct has_clear<A, std::void_t<decltype(std::declval<A&>().Clear())>>
+    : std::true_type {};
+template <typename A, typename = void>
+struct has_had_oom : std::false_type {};
+template <typename A>
+struct has_had_oom<A, std::void_t<decltype(std::declval<const A&>().HadOom())>>
     : std::true_type {};
 }  // namespace internal
 
@@ -75,6 +81,9 @@ class GenericDocument : public NodeType {
    * @brief Move assignment
    */
   GenericDocument& operator=(GenericDocument&& rhs) {
+    if (this == &rhs) {
+      return *this;
+    }
     // Step1: clear self memory
     // free the dynamic nodes in assignment
     NodeType::operator=(std::forward<NodeType>(rhs));
@@ -216,8 +225,9 @@ class GenericDocument : public NodeType {
       }
       return;
     }
-    // NOTE: must free dynamic nodes at first
-    reinterpret_cast<DNode<Allocator>*>(this)->~DNode();
+    // NOTE: must free dynamic nodes at first, but keep the base subobject alive
+    // because Parse() reuses this document after cleanup.
+    reinterpret_cast<DNode<Allocator>*>(this)->destroy();
     Allocator::Free(str_);
     Allocator::Free(schema_str_);
     // Avoid Double Free
@@ -240,7 +250,9 @@ class GenericDocument : public NodeType {
     }
     parse_result_ = p.Parse(str_, len, sax);
     if (sonic_unlikely(sax.oom_)) {
-      parse_result_ = kErrorNoMem;
+      if (parse_result_.Error() != kErrorNoMem) {
+        parse_result_ = ParseResult(kErrorNoMem, parse_result_.Offset());
+      }
       return *this;
     }
     if (sonic_unlikely(HasParseError())) {
@@ -252,24 +264,95 @@ class GenericDocument : public NodeType {
 
   template <ParseFlags parseFlags>
   GenericDocument& parseSchemaImpl(const char* json, size_t len) {
+    if (own_alloc_) {
+      return parseSchemaImplWithOwnAllocator<parseFlags>(json, len);
+    }
     Parser<parseFlags> p;
-    SchemaHandler<NodeType> sax(this, *alloc_);
+    NodeType shadow;
+    if (sonic_unlikely(!shadow.TryCopyFrom(*this, *alloc_))) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    char* new_schema_str = nullptr;
+    parse_result_ = allocateSchemaStringBuffer(json, len, new_schema_str);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
+    SchemaHandler<NodeType> sax(&shadow, *alloc_);
     if (!sax.SetUp(StringView(json, len))) {
+      Allocator::Free(new_schema_str);
       parse_result_ = kErrorNoMem;
       return *this;
     }
-    parse_result_ = allocateSchemaStringBuffer(json, len);
-    if (sonic_unlikely(HasParseError())) {
-      return *this;
-    }
-    parse_result_ = p.Parse(schema_str_, len, sax);
+    parse_result_ = p.Parse(new_schema_str, len, sax);
     if (sonic_unlikely(sax.oom_)) {
-      parse_result_ = kErrorNoMem;
+      if (parse_result_.Error() != kErrorNoMem) {
+        parse_result_ = ParseResult(kErrorNoMem, parse_result_.Offset());
+      }
+      Allocator::Free(new_schema_str);
       return *this;
     }
     if (sonic_unlikely(HasParseError())) {
+      Allocator::Free(new_schema_str);
       return *this;
     }
+    char* old_schema_str = schema_str_;
+    schema_str_ = new_schema_str;
+    NodeType::operator=(std::move(shadow));
+    Allocator::Free(old_schema_str);
+    return *this;
+  }
+
+  template <ParseFlags parseFlags>
+  GenericDocument& parseSchemaImplWithOwnAllocator(const char* json,
+                                                   size_t len) {
+    Parser<parseFlags> p;
+    Allocator temp_alloc;
+    if constexpr (internal::has_had_oom<Allocator>::value) {
+      if (sonic_unlikely(temp_alloc.HadOom())) {
+        parse_result_ = kErrorNoMem;
+        return *this;
+      }
+    }
+
+    NodeType shadow;
+    if (sonic_unlikely(!shadow.TryCopyFrom(*this, temp_alloc, true))) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+
+    char* new_schema_str = nullptr;
+    parse_result_ = allocateStringBufferWithAllocator(json, len, temp_alloc,
+                                                      new_schema_str);
+    if (sonic_unlikely(HasParseError())) {
+      return *this;
+    }
+
+    SchemaHandler<NodeType> sax(&shadow, temp_alloc);
+    if (!sax.SetUp(StringView(json, len))) {
+      Allocator::Free(new_schema_str);
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    parse_result_ = p.Parse(new_schema_str, len, sax);
+    if (sonic_unlikely(sax.oom_)) {
+      if (parse_result_.Error() != kErrorNoMem) {
+        parse_result_ = ParseResult(kErrorNoMem, parse_result_.Offset());
+      }
+      Allocator::Free(new_schema_str);
+      return *this;
+    }
+    if (sonic_unlikely(HasParseError())) {
+      Allocator::Free(new_schema_str);
+      return *this;
+    }
+
+    destroyDom();
+    *own_alloc_ = std::move(temp_alloc);
+    alloc_ = own_alloc_.get();
+    NodeType::operator=(std::move(shadow));
+    schema_str_ = new_schema_str;
+    str_ = nullptr;
     return *this;
   }
 
@@ -279,7 +362,8 @@ class GenericDocument : public NodeType {
       const GenericJsonPointer<JPStringType>& path) {
     // get the target json field
     StringView target;
-    parse_result_ = GetOnDemand(StringView(json, len), path, target);
+    parse_result_ =
+        GetOnDemand<parseFlags>(StringView(json, len), path, target);
     if (sonic_unlikely(HasParseError())) {
       return *this;
     }
@@ -288,6 +372,9 @@ class GenericDocument : public NodeType {
   }
 
   SonicError allocateStringBuffer(const char* json, size_t len) {
+    if (sonic_unlikely(len > std::numeric_limits<size_t>::max() - 64)) {
+      return kErrorNoMem;
+    }
     size_t pad_len = len + 64;
     str_ = (char*)(alloc_->Malloc(pad_len));
     if (str_ == nullptr) {
@@ -301,17 +388,27 @@ class GenericDocument : public NodeType {
     return kErrorNone;
   }
 
-  SonicError allocateSchemaStringBuffer(const char* json, size_t len) {
-    size_t pad_len = len + 64;
-    schema_str_ = (char*)(alloc_->Malloc(pad_len));
-    if (schema_str_ == nullptr) {
+  SonicError allocateSchemaStringBuffer(const char* json, size_t len,
+                                        char*& new_schema_str) {
+    return allocateStringBufferWithAllocator(json, len, *alloc_,
+                                             new_schema_str);
+  }
+
+  SonicError allocateStringBufferWithAllocator(const char* json, size_t len,
+                                               Allocator& alloc, char*& out) {
+    if (sonic_unlikely(len > std::numeric_limits<size_t>::max() - 64)) {
       return kErrorNoMem;
     }
-    std::memcpy(schema_str_, json, len);
+    size_t pad_len = len + 64;
+    out = (char*)(alloc.Malloc(pad_len));
+    if (out == nullptr) {
+      return kErrorNoMem;
+    }
+    std::memcpy(out, json, len);
     // Add ending mask to support parsing invalid json
-    schema_str_[len] = 'x';
-    schema_str_[len + 1] = '"';
-    schema_str_[len + 2] = 'x';
+    out[len] = 'x';
+    out[len + 1] = '"';
+    out[len + 2] = 'x';
     return kErrorNone;
   }
   template <ParseFlags parseFlags>

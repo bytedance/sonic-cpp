@@ -16,7 +16,12 @@
 
 #pragma once
 
-#include <map>
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <limits>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -32,9 +37,9 @@
 
 namespace sonic_json {
 
-// OOM invariant: mutating operations (Reserve, AddMember, PushBack, ...)
-// leave the node unchanged on allocation failure rather than propagating an
-// error. Callers that need to detect OOM should use Allocator::HadOom().
+// Legacy mutating operations (Reserve, AddMember, PushBack, ...) keep their
+// source-compatible return types and leave the node unchanged on allocation
+// failure. Prefer Try* APIs when callers need full-chain status propagation.
 template <typename Allocator = SONIC_DEFAULT_ALLOCATOR>
 class DNode : public GenericNode<DNode<Allocator>> {
  public:
@@ -50,6 +55,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
   friend class SAXHandler<DNode>;
   friend class LazySAXHandler<DNode>;
   friend class SchemaHandler<DNode>;
+  template <typename>
+  friend class GenericDocument;
 
   friend BaseNode;
   template <typename>
@@ -78,88 +85,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
   DNode(const DNode<SourceAllocator>& rhs, Allocator& alloc,
         bool copyString = false)
       : BaseNode() {
-    using rhsNodeType = DNode<SourceAllocator>;
-    switch (rhs.getBasicType()) {
-      case kObject: {
-        size_t count = rhs.Size();
-        this->o.len = rhs.getTypeAndLen();  // Copy size and type.
-        if (count > 0) {
-          void* mem = containerMalloc<MemberNode>(count, alloc);
-          if (sonic_unlikely(mem == nullptr)) {
-            this->setLength(0, kObject);
-            setChildren(nullptr);
-            break;
-          }
-          rhsNodeType* rn = rhs.getObjChildrenFirst();
-          DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
-          for (size_t i = 0; i < count * 2; i += 2) {
-            new (ln + i) DNode(*(rn + i), alloc, copyString);
-            new (ln + i + 1) DNode(*(rn + i + 1), alloc, copyString);
-          }
-          setChildren(mem);
-        } else {
-          setChildren(nullptr);
-        }
-        break;
-      }
-      case kArray: {
-        size_t a_size = rhs.Size();
-        this->a.len = rhs.getTypeAndLen();  // Copy size and type.
-        if (a_size > 0) {
-          void* mem = containerMalloc<DNode>(a_size, alloc);
-          if (sonic_unlikely(mem == nullptr)) {
-            this->setLength(0, kArray);
-            setChildren(nullptr);
-            break;
-          }
-          rhsNodeType* rn = rhs.getArrChildrenFirst();
-          DNode* ln = (DNode*)((char*)mem + sizeof(MetaNode));
-          for (size_t i = 0; i < a_size; ++i) {
-            new (ln + i) DNode(*(rn + i), alloc, copyString);
-          }
-          setChildren(mem);
-          setCapacity(a_size);
-        } else {
-          setChildren(nullptr);
-        }
-        break;
-      }
-      case kString: {
-        this->sv.len = rhs.getTypeAndLen();  // Copy size and type.
-        if (rhs.GetType() != kStringConst || copyString) {
-          this->StringCopy(rhs.GetStringView().data(), rhs.Size(), alloc);
-        } else {
-          this->sv.p = rhs.GetStringView().data();
-        }
-        break;
-      }
-      case kNumber: {
-        if (rhs.GetType() != kNumStr) {
-          std::memcpy(&(this->data), &rhs, sizeof(this->data));
-          break;
-        }
-        [[fallthrough]];
-      }
-      case kRaw: {
-        size_t len = rhs.Size();
-        char* p = static_cast<char*>(alloc.Malloc(len + 1));
-        if (p) {
-          // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
-          this->sv.len = rhs.getTypeAndLen() | kOwnedStringMask;
-          this->sv.p = p;
-          std::memcpy(const_cast<char*>(this->sv.p), rhs.GetStringView().data(),
-                      len);
-          const_cast<char*>(this->sv.p)[len] = '\0';
-        } else {
-          this->sv.p = "";
-          this->setLength(0, rhs.GetType());
-        }
-        break;
-      }
-      default:
-        std::memcpy(&(this->data), &rhs, sizeof(this->data));
-        break;
-    }
+    (void)initCopyFrom(rhs, alloc, copyString);
   }
 
   /**
@@ -325,10 +251,12 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (getMapUnsafe()) return true;
     map_type* map = static_cast<map_type*>(alloc.Malloc(sizeof(map_type)));
     if (nullptr == map) return false;
-    new (map) map_type(MAType(&alloc));
+    new (map) map_type(&alloc);
     MemberNode* m = (MemberNode*)getObjChildrenFirstUnsafe();
-    for (size_t i = 0; i < this->Size(); ++i) {
-      map->emplace(std::make_pair((m + i)->name.GetStringView(), i));
+    if (!map->BuildFromMembers(m, this->Size())) {
+      map->~map_type();
+      alloc.Free(map);
+      return false;
     }
     setMap(map);
     return true;
@@ -372,9 +300,24 @@ class DNode : public GenericNode<DNode<Allocator>> {
   template <typename SourceAllocator>
   DNode& CopyFrom(const DNode<SourceAllocator>& rhs, Allocator& alloc,
                   bool copyString = false) {
-    this->destroy();
-    new (this) DNode(rhs, alloc, copyString);
+    (void)TryCopyFrom(rhs, alloc, copyString);
     return *this;
+  }
+
+  template <typename SourceAllocator>
+  bool TryCopyFrom(const DNode<SourceAllocator>& rhs, Allocator& alloc,
+                   bool copyString = false) {
+    if (sonic_unlikely(reinterpret_cast<const void*>(this) ==
+                       reinterpret_cast<const void*>(&rhs))) {
+      return true;
+    }
+    DNode temp;
+    if (sonic_unlikely(!temp.initCopyFrom(rhs, alloc, copyString))) {
+      return false;
+    }
+    this->destroy();
+    rawAssign(temp);
+    return true;
   }
 
   /**
@@ -383,8 +326,141 @@ class DNode : public GenericNode<DNode<Allocator>> {
    */
 
  private:
+  static void destroyMembers(MemberNode* members, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+      members[i].~MemberNode();
+    }
+  }
+
+  static void destroyElements(DNode* elements, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+      elements[i].~DNode();
+    }
+  }
+
+  template <typename SourceAllocator>
+  bool initCopyFrom(const DNode<SourceAllocator>& rhs, Allocator& alloc,
+                    bool copyString) {
+    switch (rhs.getBasicType()) {
+      case kObject: {
+        size_t count = rhs.Size();
+        this->o.len = rhs.getTypeAndLen();
+        if (count == 0) {
+          setChildren(nullptr);
+          return true;
+        }
+        void* mem = containerMalloc<MemberNode>(count, alloc);
+        if (sonic_unlikely(mem == nullptr)) {
+          this->setLength(0, kObject);
+          setChildren(nullptr);
+          return false;
+        }
+        MemberNode* members = reinterpret_cast<MemberNode*>(
+            static_cast<char*>(mem) + sizeof(MetaNode));
+        auto rhs_member = rhs.MemberBegin();
+        size_t constructed = 0;
+        for (size_t i = 0; i < count; ++i, ++rhs_member) {
+          DNode copied_name;
+          if (sonic_unlikely(!copied_name.initCopyFrom(rhs_member->name, alloc,
+                                                       copyString))) {
+            destroyMembers(members, constructed);
+            Allocator::Free(mem);
+            this->setLength(0, kObject);
+            setChildren(nullptr);
+            return false;
+          }
+          DNode copied_value;
+          if (sonic_unlikely(!copied_value.initCopyFrom(rhs_member->value,
+                                                        alloc, copyString))) {
+            destroyMembers(members, constructed);
+            Allocator::Free(mem);
+            this->setLength(0, kObject);
+            setChildren(nullptr);
+            return false;
+          }
+          new (&members[i])
+              MemberNode(std::move(copied_name), std::move(copied_value));
+          ++constructed;
+        }
+        setChildren(mem);
+        return true;
+      }
+      case kArray: {
+        size_t count = rhs.Size();
+        this->a.len = rhs.getTypeAndLen();
+        if (count == 0) {
+          setChildren(nullptr);
+          return true;
+        }
+        void* mem = containerMalloc<DNode>(count, alloc);
+        if (sonic_unlikely(mem == nullptr)) {
+          this->setLength(0, kArray);
+          setChildren(nullptr);
+          return false;
+        }
+        DNode* elements = reinterpret_cast<DNode*>(static_cast<char*>(mem) +
+                                                   sizeof(MetaNode));
+        auto rhs_it = rhs.Begin();
+        size_t constructed = 0;
+        for (size_t i = 0; i < count; ++i, ++rhs_it) {
+          new (&elements[i]) DNode();
+          if (sonic_unlikely(
+                  !elements[i].initCopyFrom(*rhs_it, alloc, copyString))) {
+            elements[i].~DNode();
+            destroyElements(elements, constructed);
+            Allocator::Free(mem);
+            this->setLength(0, kArray);
+            setChildren(nullptr);
+            return false;
+          }
+          ++constructed;
+        }
+        setChildren(mem);
+        setCapacity(count);
+        return true;
+      }
+      case kString: {
+        this->sv.len = rhs.getTypeAndLen();
+        if (rhs.GetType() != kStringConst || copyString) {
+          return this->StringCopy(rhs.GetStringView().data(), rhs.Size(),
+                                  alloc);
+        }
+        this->sv.p = rhs.GetStringView().data();
+        return true;
+      }
+      case kNumber: {
+        if (rhs.GetType() != kNumStr) {
+          std::memcpy(&(this->data), &rhs, sizeof(this->data));
+          return true;
+        }
+        [[fallthrough]];
+      }
+      case kRaw: {
+        size_t len = rhs.Size();
+        if (sonic_unlikely(len == std::numeric_limits<size_t>::max())) {
+          this->sv.p = "";
+          this->setLength(0, rhs.GetType());
+          return false;
+        }
+        char* p = static_cast<char*>(alloc.Malloc(len + 1));
+        if (sonic_unlikely(p == nullptr)) {
+          this->sv.p = "";
+          this->setLength(0, rhs.GetType());
+          return false;
+        }
+        this->sv.len = rhs.getTypeAndLen() | kOwnedStringMask;
+        this->sv.p = p;
+        std::memcpy(p, rhs.GetStringView().data(), len);
+        p[len] = '\0';
+        return true;
+      }
+      default:
+        std::memcpy(&(this->data), &rhs, sizeof(this->data));
+        return true;
+    }
+  }
+
   using MSType = StringView;
-  using MAType = MapAllocator<std::pair<const MSType, size_t>, Allocator>;
 #if defined(SONIC_STATIC_DISPATCH)
   struct Less {
     bool operator()(MSType s1, MSType s2) const {
@@ -394,10 +470,189 @@ class DNode : public GenericNode<DNode<Allocator>> {
       return cmp < 0 || (cmp == 0 && n1 < n2);
     }
   };
-  using map_type = std::multimap<MSType, size_t, Less, MAType>;
 #else
-  using map_type = std::multimap<MSType, size_t, std::less<MSType>, MAType>;
+  using Less = std::less<MSType>;
 #endif
+
+  struct map_type {
+    struct Entry {
+      MSType key;
+      size_t index;
+    };
+
+    explicit map_type(Allocator* alloc) : alloc_{alloc} {}
+    ~map_type() { Allocator::Free(entries_); }
+
+    bool Reserve(size_t new_cap) {
+      if (new_cap <= cap_) return true;
+      if (sonic_unlikely(new_cap >
+                         std::numeric_limits<size_t>::max() / sizeof(Entry))) {
+        MarkOom(alloc_);
+        return false;
+      }
+      void* mem = alloc_->Realloc(entries_, cap_ * sizeof(Entry),
+                                  new_cap * sizeof(Entry));
+      if (sonic_unlikely(mem == nullptr)) return false;
+      entries_ = static_cast<Entry*>(mem);
+      cap_ = new_cap;
+      return true;
+    }
+
+    bool Insert(MSType key, size_t index) {
+      if (sonic_unlikely(!ReserveForInsert())) return false;
+      InsertNoGrow(key, index);
+      return true;
+    }
+
+    bool ReserveForInsert() {
+      if (size_ < cap_) return true;
+      if (cap_ == 0) return Reserve(16);
+      size_t inc = cap_ / 2 + (cap_ & 1);
+      if (sonic_unlikely(cap_ > std::numeric_limits<size_t>::max() - inc)) {
+        MarkOom(alloc_);
+        return false;
+      }
+      return Reserve(cap_ + inc);
+    }
+
+    void InsertAfterReserve(MSType key, size_t index) {
+      sonic_assert(size_ < cap_);
+      InsertNoGrow(key, index);
+    }
+
+    bool BuildFromMembers(MemberNode* members, size_t count) {
+      if (sonic_unlikely(!Reserve(count))) return false;
+      size_ = 0;
+      if (count == 0) return true;
+      for (size_t i = 0; i < count; ++i) {
+        entries_[i] = Entry{(members + i)->name.GetStringView(), i};
+      }
+      size_ = count;
+      std::sort(entries_, entries_ + size_,
+                [this](const Entry& lhs, const Entry& rhs) {
+                  if (KeyLess(lhs.key, rhs.key)) return true;
+                  if (KeyLess(rhs.key, lhs.key)) return false;
+                  return lhs.index < rhs.index;
+                });
+      return true;
+    }
+
+    Entry* Find(MSType key) const {
+      size_t pos = LowerBound(key);
+      if (pos < size_ && KeyEqual(entries_[pos].key, key)) {
+        return entries_ + pos;
+      }
+      return nullptr;
+    }
+
+    void Erase(Entry* entry) {
+      size_t pos = static_cast<size_t>(entry - entries_);
+      sonic_assert(pos < size_);
+      if (pos + 1 < size_) {
+        std::memmove(entries_ + pos, entries_ + pos + 1,
+                     (size_ - pos - 1) * sizeof(Entry));
+      }
+      --size_;
+    }
+
+    bool ReplaceIndex(size_t old_index, MSType key, size_t new_index) {
+      Entry* entry = FindByIndex(old_index);
+      if (sonic_unlikely(entry == nullptr)) return false;
+      Erase(entry);
+      sonic_assert(size_ < cap_);
+      InsertNoGrow(key, new_index);
+      return true;
+    }
+
+   private:
+    bool KeyLess(MSType lhs, MSType rhs) const { return Less{}(lhs, rhs); }
+    bool KeyEqual(MSType lhs, MSType rhs) const {
+      return !KeyLess(lhs, rhs) && !KeyLess(rhs, lhs);
+    }
+
+    size_t LowerBound(MSType key) const {
+      size_t first = 0;
+      size_t count = size_;
+      while (count > 0) {
+        size_t step = count / 2;
+        size_t mid = first + step;
+        if (KeyLess(entries_[mid].key, key)) {
+          first = mid + 1;
+          count -= step + 1;
+        } else {
+          count = step;
+        }
+      }
+      return first;
+    }
+
+    size_t UpperBound(MSType key) const {
+      size_t first = 0;
+      size_t count = size_;
+      while (count > 0) {
+        size_t step = count / 2;
+        size_t mid = first + step;
+        if (!KeyLess(key, entries_[mid].key)) {
+          first = mid + 1;
+          count -= step + 1;
+        } else {
+          count = step;
+        }
+      }
+      return first;
+    }
+
+    Entry* FindByIndex(size_t index) const {
+      for (size_t i = 0; i < size_; ++i) {
+        if (entries_[i].index == index) return entries_ + i;
+      }
+      return nullptr;
+    }
+
+    void InsertNoGrow(MSType key, size_t index) {
+      size_t pos = LowerBound(Entry{key, index});
+      if (pos < size_) {
+        std::memmove(entries_ + pos + 1, entries_ + pos,
+                     (size_ - pos) * sizeof(Entry));
+      }
+      entries_[pos] = Entry{key, index};
+      ++size_;
+    }
+
+    bool EntryLess(const Entry& lhs, const Entry& rhs) const {
+      if (KeyLess(lhs.key, rhs.key)) return true;
+      if (KeyLess(rhs.key, lhs.key)) return false;
+      return lhs.index < rhs.index;
+    }
+
+    size_t LowerBound(const Entry& entry) const {
+      size_t first = 0;
+      size_t count = size_;
+      while (count > 0) {
+        size_t step = count / 2;
+        size_t mid = first + step;
+        if (EntryLess(entries_[mid], entry)) {
+          first = mid + 1;
+          count -= step + 1;
+        } else {
+          count = step;
+        }
+      }
+      return first;
+    }
+
+    template <typename A>
+    static auto MarkOom(A* alloc, int = 0)
+        -> decltype(alloc->MarkOom(), void()) {
+      if (alloc) alloc->MarkOom();
+    }
+    static void MarkOom(...) {}
+
+    Allocator* alloc_{nullptr};
+    Entry* entries_{nullptr};
+    size_t size_{0};
+    size_t cap_{0};
+  };
 
   struct MetaNode {
     size_t cap;
@@ -417,70 +672,90 @@ class DNode : public GenericNode<DNode<Allocator>> {
   // Set APIs
   DNode& setNullImpl() {
     this->destroy();
-    new (this) BaseNode(kNull);
+    this->setType(kNull);
     return *this;
   }
 
   DNode& setBoolImpl(bool b) {
     this->destroy();
-    new (this) BaseNode(b);
+    this->setType(b ? kTrue : kFalse);
     return *this;
   }
 
   DNode& setObjectImpl() {
     this->destroy();
-    new (this) BaseNode(kObject);
+    this->setType(kObject);
     setChildren(nullptr);
     return *this;
   }
 
   DNode& setArrayImpl() {
     this->destroy();
-    new (this) BaseNode(kArray);
+    this->setType(kArray);
     setChildren(nullptr);
     return *this;
   }
 
   DNode& setIntImpl(int i) {
     this->destroy();
-    new (this) BaseNode(i);
+    this->setType(i >= 0 ? kUint : kSint);
+    this->n.i64 = i;
     return *this;
   }
 
   DNode& setUintImpl(unsigned int i) {
     this->destroy();
-    new (this) BaseNode(i);
+    this->setType(kUint);
+    this->n.u64 = i;
     return *this;
   }
 
   DNode& setInt64Impl(int64_t i) {
     this->destroy();
-    new (this) BaseNode(i);
+    this->setType(i >= 0 ? kUint : kSint);
+    this->n.i64 = i;
     return *this;
   }
 
   DNode& setUint64Impl(uint64_t i) {
     this->destroy();
-    new (this) BaseNode(i);
+    this->setType(kUint);
+    this->n.u64 = i;
     return *this;
   }
 
   DNode& setDoubleImpl(double d) {
     this->destroy();
-    new (this) BaseNode(d);
+    this->setType(kReal);
+    this->n.f64 = d;
     return *this;
   }
 
   DNode& setStringImpl(const char* s, size_t len) {
     this->destroy();
-    new (this) BaseNode(s, len);
+    if (sonic_likely(this->setLengthChecked(len, kStringConst))) {
+      this->sv.p = s;
+    } else {
+      this->sv.p = "";
+    }
     return *this;
   }
 
   DNode& setStringImpl(const char* s, size_t len, Allocator& alloc) {
-    this->destroy();
-    new (this) BaseNode(s, len, alloc);
+    (void)trySetStringImpl(s, len, alloc);
     return *this;
+  }
+
+  bool trySetStringImpl(const char* s, size_t len, Allocator& alloc) {
+    if (sonic_unlikely(len > BaseNode::kMaxStoredLength)) return false;
+    char* p = static_cast<char*>(alloc.Malloc(len + 1));
+    if (sonic_unlikely(p == nullptr)) return false;
+    std::memcpy(p, s, len);
+    p[len] = '\0';
+    this->destroy();
+    this->sv.p = p;
+    this->setLength(len, kStringFree);
+    return true;
   }
 
   DNode& setRawImpl(StringView s) { return setRawLikeImpl(s, kRaw); }
@@ -497,29 +772,37 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return setRawLikeImpl(s, kNumStr, alloc);
   }
 
+  bool trySetStringNumberImpl(StringView s, Allocator& alloc) {
+    return trySetRawLikeImpl(s, kNumStr, alloc);
+  }
+
   DNode& setRawLikeImpl(StringView s, TypeFlag typ) {
     this->destroy();
     this->raw.p = s.data();
-    this->setLength(s.size(), typ);
+    if (sonic_unlikely(!this->setLengthChecked(s.size(), typ))) {
+      this->raw.p = "";
+    }
     return *this;
   }
 
   DNode& setRawLikeImpl(StringView s, TypeFlag typ, Allocator& alloc) {
-    this->destroy();
+    (void)trySetRawLikeImpl(s, typ, alloc);
+    return *this;
+  }
+
+  bool trySetRawLikeImpl(StringView s, TypeFlag typ, Allocator& alloc) {
+    if (sonic_unlikely(s.size() > BaseNode::kMaxStoredLength)) return false;
     size_t len = s.size();
     char* p = static_cast<char*>(alloc.Malloc(len + 1));
-    if (p) {
-      std::memcpy(p, s.data(), len);
-      p[len] = '\0';
-      this->raw.p = p;
-      // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
-      this->setLength(len, static_cast<TypeFlag>(static_cast<uint64_t>(typ) |
-                                                 kOwnedStringMask));
-    } else {
-      this->raw.p = "";
-      this->setLength(0, typ);
-    }
-    return *this;
+    if (sonic_unlikely(p == nullptr)) return false;
+    std::memcpy(p, s.data(), len);
+    p[len] = '\0';
+    this->destroy();
+    this->raw.p = p;
+    // Mark buffer as owned so destroy() will free it for kNeedFree alloc.
+    this->setLength(len, static_cast<TypeFlag>(static_cast<uint64_t>(typ) |
+                                               kOwnedStringMask));
+    return true;
   }
 
   DNode& popBackImpl() {
@@ -530,8 +813,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   DNode& reserveImpl(size_t new_cap, Allocator& alloc) {
     if (new_cap > this->Capacity()) {
-      void* mem =
-          containerRealloc<DNode>(children(), this->Capacity(), new_cap, alloc);
+      void* mem = containerRealloc<DNode>(children(), this->Capacity(), new_cap,
+                                          this->Size(), alloc);
       if (sonic_likely(mem != nullptr)) setChildren(mem);
     }
     return *this;
@@ -576,15 +859,18 @@ class DNode : public GenericNode<DNode<Allocator>> {
       if (!self->IsObject() && !self->IsArray()) {
         return true;
       }
-      using CurPtr = std::conditional_t<
-          std::is_const<std::remove_pointer_t<ResPtr>>::value, const DNode*,
-          DNode*>;
-      CurPtr n = reinterpret_cast<CurPtr>(self->getChildrenFirstUnsafe()) +
-                 (self->IsObject() ? 1 : 0);
-      size_t step = self->IsObject() ? 2 : 1;
-      for (size_t i = 0; i < self->Size(); ++i) {
-        CurPtr cur = (n + i * step);
-        atJsonPathImplCommon<ResPtr>(cur, path, index + 1, res);
+      if (self->IsObject()) {
+        auto it = self->MemberBegin();
+        for (size_t i = 0; i < self->Size(); ++i, ++it) {
+          auto* cur = reinterpret_cast<ResPtr>(&it->value);
+          atJsonPathImplCommon<ResPtr>(cur, path, index + 1, res);
+        }
+      } else {
+        auto it = self->Begin();
+        for (size_t i = 0; i < self->Size(); ++i, ++it) {
+          auto* cur = reinterpret_cast<ResPtr>(&*it);
+          atJsonPathImplCommon<ResPtr>(cur, path, index + 1, res);
+        }
       }
       return true;
     }
@@ -628,8 +914,8 @@ class DNode : public GenericNode<DNode<Allocator>> {
     if (new_cap > this->Capacity()) {
       void* old_ptr = children();
       size_t old_cap = this->Capacity();
-      void* mem =
-          containerRealloc<MemberNode>(old_ptr, old_cap, new_cap, alloc);
+      void* mem = containerRealloc<MemberNode>(old_ptr, old_cap, new_cap,
+                                               this->Size(), alloc);
       if (sonic_likely(mem != nullptr)) {
         setChildren(mem);
         if (old_cap == 0) {
@@ -668,6 +954,12 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   template <typename T>
   sonic_force_inline void* containerMalloc(size_t cap, Allocator& alloc) {
+    if (sonic_unlikely(cap >
+                       (std::numeric_limits<size_t>::max() - sizeof(MetaNode)) /
+                           sizeof(T))) {
+      markAllocatorOom(alloc);
+      return nullptr;
+    }
     size_t alloc_size = cap * sizeof(T) + sizeof(MetaNode);
     void* mem = alloc.Malloc(alloc_size);
     if (sonic_likely(mem != nullptr)) {
@@ -678,14 +970,50 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
   template <typename T>
   sonic_force_inline void* containerRealloc(void* old_ptr, size_t old_cap,
-                                            size_t new_cap, Allocator& alloc) {
-    size_t old_size = old_cap * sizeof(T) + sizeof(MetaNode);
+                                            size_t new_cap, size_t count,
+                                            Allocator& alloc) {
+    if (sonic_unlikely(
+            old_cap > (std::numeric_limits<size_t>::max() - sizeof(MetaNode)) /
+                          sizeof(T) ||
+            new_cap > (std::numeric_limits<size_t>::max() - sizeof(MetaNode)) /
+                          sizeof(T))) {
+      markAllocatorOom(alloc);
+      return nullptr;
+    }
     size_t new_size = new_cap * sizeof(T) + sizeof(MetaNode);
-    void* mem = alloc.Realloc(old_ptr, old_size, new_size);
-    if (sonic_likely(mem != nullptr)) {
-      static_cast<MetaNode*>(mem)->SetMetaCap(new_cap);
+    void* mem = alloc.Malloc(new_size);
+    if (sonic_unlikely(mem == nullptr)) return nullptr;
+    auto* new_meta = static_cast<MetaNode*>(mem);
+    new (new_meta) MetaNode(new_cap);
+    if (old_ptr != nullptr) {
+      auto* old_meta = static_cast<MetaNode*>(old_ptr);
+      new_meta->map = old_meta->map;
+      old_meta->map = nullptr;
+      relocateContainer<T>(
+          reinterpret_cast<T*>(reinterpret_cast<char*>(mem) + sizeof(MetaNode)),
+          reinterpret_cast<T*>(reinterpret_cast<char*>(old_ptr) +
+                               sizeof(MetaNode)),
+          count);
+      old_meta->~MetaNode();
+      Allocator::Free(old_ptr);
     }
     return mem;
+  }
+
+  template <typename T>
+  static void relocateContainer(T* dst, T* src, size_t count) {
+    if constexpr (std::is_same<T, MemberNode>::value) {
+      for (size_t i = 0; i < count; ++i) {
+        new (&dst[i]) MemberNode(std::move(src[i].mutableName()),
+                                 std::move(src[i].value));
+        src[i].~MemberNode();
+      }
+    } else {
+      for (size_t i = 0; i < count; ++i) {
+        new (&dst[i]) DNode(std::move(src[i]));
+        src[i].~DNode();
+      }
+    }
   }
 
   sonic_force_inline void* children() const {
@@ -718,19 +1046,33 @@ class DNode : public GenericNode<DNode<Allocator>> {
                     sizeof(MetaNode) / sizeof(char));
   }
 
-  sonic_force_inline DNode* getObjChildrenFirst() const {
+  sonic_force_inline bool pointsIntoChildren(const DNode* p) const {
+    if (sonic_unlikely(!this->IsContainer() || children() == nullptr)) {
+      return false;
+    }
+    const uintptr_t addr = reinterpret_cast<uintptr_t>(p);
+    const uintptr_t first = reinterpret_cast<uintptr_t>(
+        this->IsObject() ? static_cast<void*>(getObjChildrenFirstUnsafe())
+                         : static_cast<void*>(getArrChildrenFirstUnsafe()));
+    const size_t bytes = this->IsObject() ? this->Size() * sizeof(MemberNode)
+                                          : this->Size() * sizeof(DNode);
+    const uintptr_t last = first + bytes;
+    return addr >= first && addr < last;
+  }
+
+  sonic_force_inline MemberNode* getObjChildrenFirst() const {
     sonic_assert(this->IsObject());
     if (nullptr == children()) {
       return nullptr;
     }
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return reinterpret_cast<MemberNode*>(
+        reinterpret_cast<char*>(this->a.next.children) + sizeof(MetaNode));
   }
 
-  sonic_force_inline DNode* getObjChildrenFirstUnsafe() const {
+  sonic_force_inline MemberNode* getObjChildrenFirstUnsafe() const {
     sonic_assert(this->IsObject());
-    return (DNode*)((char*)this->a.next.children +
-                    sizeof(MetaNode) / sizeof(char));
+    return reinterpret_cast<MemberNode*>(
+        reinterpret_cast<char*>(this->a.next.children) + sizeof(MetaNode));
   }
 
   sonic_force_inline void setChildren(void* new_child) {
@@ -745,6 +1087,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
     // first node is meta node
     ((MetaNode*)(this->o.next.children))->cap = new_cap;
   }
+
+  template <typename A>
+  static auto markAllocatorOom(A& alloc, int = 0)
+      -> decltype(alloc.MarkOom(), void()) {
+    alloc.MarkOom();
+  }
+  static void markAllocatorOom(...) {}
 
   sonic_force_inline void setMap(map_type* new_map) {
     sonic_assert(this->IsObject());
@@ -763,15 +1112,23 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return ((MetaNode*)(this->o.next.children))->map;
   }
 
-  sonic_force_inline MemberIterator findFromMap(StringView key) const {
-    auto it = getMap()->find(MSType(key.data(), key.size()));
-    if (it != getMap()->end()) {
-      return memberBeginUnsafe() + it->second;
+  sonic_force_inline MemberIterator findFromMap(StringView key) {
+    auto* it = getMap()->Find(MSType(key.data(), key.size()));
+    if (it != nullptr) {
+      return memberBeginUnsafe() + it->index;
     }
     return memberEndUnsafe();
   }
 
-  sonic_force_inline MemberIterator findMemberImpl(StringView key) const {
+  sonic_force_inline ConstMemberIterator findFromMap(StringView key) const {
+    auto* it = getMap()->Find(MSType(key.data(), key.size()));
+    if (it != nullptr) {
+      return cmemberBeginImpl() + it->index;
+    }
+    return cmemberEndImpl();
+  }
+
+  sonic_force_inline MemberIterator findMemberImpl(StringView key) {
     if (nullptr != getMap()) {
       return findFromMap(key);
     }
@@ -781,11 +1138,24 @@ class DNode : public GenericNode<DNode<Allocator>> {
         break;
       }
     }
-    return const_cast<MemberIterator>(it);
+    return it;
+  }
+
+  sonic_force_inline ConstMemberIterator findMemberImpl(StringView key) const {
+    if (nullptr != getMap()) {
+      return findFromMap(key);
+    }
+    auto it = this->MemberBegin();
+    for (auto e = this->MemberEnd(); it != e; ++it) {
+      if (it->name.GetStringView() == key) {
+        break;
+      }
+    }
+    return it;
   }
 
   sonic_force_inline MemberIterator findMemberImpl(const char* key,
-                                                   size_t len) const {
+                                                   size_t len) {
     /**************************************************
      * Only calling internal memcmp when static dispatch.
      * Dynamic dispatch will have indirect call.
@@ -802,19 +1172,48 @@ class DNode : public GenericNode<DNode<Allocator>> {
         break;
       }
     }
-    return const_cast<MemberIterator>(it);
+    return it;
 #else
     return findMemberImpl(StringView(key, len));
 #endif
   }
 
-  sonic_force_inline DNode& findValueImpl(StringView key) const noexcept {
+  sonic_force_inline ConstMemberIterator findMemberImpl(const char* key,
+                                                        size_t len) const {
+#if defined(SONIC_STATIC_DISPATCH)
+    if (nullptr != getMap()) {
+      return findFromMap(StringView(key, len));
+    }
+    auto it = this->MemberBegin();
+    for (auto e = this->MemberEnd(); it != e; ++it) {
+      auto name_sv = it->name.GetStringView();
+      if (name_sv.size() == len &&
+          internal::InlinedMemcmpEq(name_sv.data(), key, len)) {
+        break;
+      }
+    }
+    return it;
+#else
+    return findMemberImpl(StringView(key, len));
+#endif
+  }
+
+  sonic_force_inline DNode& findValueImpl(StringView key) noexcept {
     auto m = findMemberImpl(key);
     if (m != this->MemberEnd()) {
       return m->value;
     }
-    static DNode tmp{};
+    static thread_local DNode tmp{};
     tmp.SetNull();
+    return tmp;
+  }
+
+  sonic_force_inline const DNode& findValueImpl(StringView key) const noexcept {
+    auto m = findMemberImpl(key);
+    if (m != this->MemberEnd()) {
+      return m->value;
+    }
+    static const DNode tmp{};
     return tmp;
   }
 
@@ -826,53 +1225,79 @@ class DNode : public GenericNode<DNode<Allocator>> {
                                bool copyKey) {
     constexpr size_t k_default_obj_cap = 16;
     size_t count = this->Size();
+    DNode name;
+    if (copyKey) {
+      if (sonic_unlikely(!name.StringCopy(key.data(), key.size(), alloc))) {
+        return this->MemberEnd();
+      }
+    } else {
+      name.SetString(key);
+      if (sonic_unlikely(name.IsNull())) {
+        return this->MemberEnd();
+      }
+    }
+    map_type* map = getMap();
+    if (map && sonic_unlikely(!map->ReserveForInsert())) {
+      return this->MemberEnd();
+    }
+
+    DNode moved_value;
+    DNode* value_to_add = &value;
+    bool moved_alias = false;
+    const bool need_grow = count >= this->Capacity();
+    if (need_grow && pointsIntoChildren(&value)) {
+      moved_alias = true;
+      moved_value.rawAssign(value);
+      value_to_add = &moved_value;
+    }
     if (count >= this->Capacity()) {
       if (this->Capacity() == 0) {
         void* mem = containerMalloc<MemberNode>(k_default_obj_cap, alloc);
-        if (sonic_unlikely(mem == nullptr)) return this->MemberEnd();
+        if (sonic_unlikely(mem == nullptr)) {
+          if (moved_alias) value.rawAssign(moved_value);
+          return this->MemberEnd();
+        }
         setChildren(mem);
       } else {
         size_t cap = this->Capacity();
-        cap += (cap + 1) / 2;  // grow by factor 1.5
+        size_t inc = cap / 2 + (cap & 1);
+        if (sonic_unlikely(cap > std::numeric_limits<size_t>::max() - inc)) {
+          markAllocatorOom(alloc);
+          if (moved_alias) value.rawAssign(moved_value);
+          return this->MemberEnd();
+        }
+        cap += inc;  // grow by factor 1.5
         void* old_ptr = children();
-        void* mem =
-            containerRealloc<MemberNode>(old_ptr, this->Capacity(), cap, alloc);
-        if (sonic_unlikely(mem == nullptr)) return this->MemberEnd();
+        void* mem = containerRealloc<MemberNode>(old_ptr, this->Capacity(), cap,
+                                                 count, alloc);
+        if (sonic_unlikely(mem == nullptr)) {
+          if (moved_alias) value.rawAssign(moved_value);
+          return this->MemberEnd();
+        }
         setChildren(mem);
       }
     }
-
-    // add member to the last pos
-    DNode name;
-    if (copyKey) {
-      name.SetString(key, alloc);
-      if (sonic_unlikely(name.IsNull())) return this->MemberEnd();
-    } else {
-      name.SetString(key);
-    }
-    DNode* last = this->getObjChildrenFirst() + count * 2;
-    last->rawAssign(name);         // MemberEnd()->name
-    (last + 1)->rawAssign(value);  // MemberEnd()->value
+    if (map) map->InsertAfterReserve(name.GetStringView(), count);
+    MemberNode* last = memberBeginUnsafe() + count;
+    DNode member_name;
+    member_name.rawAssign(name);
+    DNode member_value;
+    member_value.rawAssign(*value_to_add);
+    new (last) MemberNode(std::move(member_name), std::move(member_value));
     this->addLength(1);
-
-    // maintain map
-    if (nullptr != getMap()) {
-      // If key exists, it will be still keeped in vector but replaced in map.
-      getMap()->emplace(std::make_pair(last->GetStringView(), count));
-    }
-    return (MemberIterator)last;
+    return last;
   }
 
   sonic_force_inline bool removeMemberImpl(StringView key) {
     MemberIterator m;
+    typename map_type::Entry* map_entry = nullptr;
     if (nullptr == children()) {
       goto not_find;
     }
     if (getMapUnsafe()) {
-      auto it = getMapUnsafe()->find(MSType(key.data(), key.size()));
-      if (it != getMapUnsafe()->end()) {
-        m = memberBeginUnsafe() + it->second;
-        getMapUnsafe()->erase(it);
+      map_entry = getMapUnsafe()->Find(MSType(key.data(), key.size()));
+      if (map_entry != nullptr) {
+        m = memberBeginUnsafe() + map_entry->index;
         goto find;
       }
 
@@ -886,30 +1311,23 @@ class DNode : public GenericNode<DNode<Allocator>> {
     }
   find : {
     MemberIterator m_tail = memberBeginUnsafe() + (this->Size() - 1);
-    // TODO: destroy() then memcpy.
     if (m != m_tail) {
-      DNode* m_name = (DNode*)(&(m->name));
-      DNode* tail_name = (DNode*)(&(m_tail->name));
-      *m_name = std::move(*tail_name);
-      m->value = std::move(m_tail->value);
       // maintain map
       map_type* map = getMap();
       if (map) {
-        size_t pos = m - memberBeginUnsafe();
-        // erase tail
-        auto range =
-            map->equal_range(m->name.GetStringView());  // already moved.
-        for (auto i = range.first; i != range.second; ++i) {
-          if (i->second == this->Size() - 1) {
-            map->erase(i);
-            break;  // only one erase.
-          }
-        }
-        map->emplace(std::make_pair(m->name.GetStringView(), pos));
+        map->Erase(map_entry);
       }
+      m->~MemberNode();
+      new (m) MemberNode(std::move(m_tail->mutableName()),
+                         std::move(m_tail->value));
+      if (map && !map->ReplaceIndex(this->Size() - 1, m->name.GetStringView(),
+                                    size_t(m - memberBeginUnsafe()))) {
+        DestroyMap();
+      }
+      m_tail->~MemberNode();
     } else {
-      m->name.~DNode();
-      m->value.~DNode();
+      if (map_entry != nullptr) getMapUnsafe()->Erase(map_entry);
+      m->~MemberNode();
     }
 
     this->subLength(1);
@@ -923,6 +1341,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     // Destroy map before removing members.
     DestroyMap();
     size_t size = this->Size();
+    if (first == last) return first;
     MemberIterator end = this->MemberEnd();
     if (size_t(last - first) >= size) {
       destroy();
@@ -931,12 +1350,13 @@ class DNode : public GenericNode<DNode<Allocator>> {
       return this->MemberEnd();
     }
     for (MemberIterator it = first; it != last; ++it) {
-      it->name.~DNode();
-      it->value.~DNode();
+      it->~MemberNode();
     }
-    if (first != last || last != end) {
-      std::memmove(static_cast<void*>(&(*first)), static_cast<void*>(&(*last)),
-                   sizeof(MemberNode) * (end - last));
+    MemberIterator dst = first;
+    for (MemberIterator src = last; src != end; ++src, ++dst) {
+      new (dst)
+          MemberNode(std::move(src->mutableName()), std::move(src->value));
+      src->~MemberNode();
     }
     this->subLength(last - first);
     return first;
@@ -947,21 +1367,42 @@ class DNode : public GenericNode<DNode<Allocator>> {
     sonic_assert(this->IsArray());
     // reserve capacity
     size_t cap = this->Capacity();
+    DNode moved_value;
+    DNode* value_to_add = &value;
+    if (this->Size() >= cap && pointsIntoChildren(&value)) {
+      moved_value.rawAssign(value);
+      value_to_add = &moved_value;
+    }
     if (this->Size() >= cap) {
-      size_t new_cap = cap ? cap + (cap + 1) / 2 : k_default_array_cap;
+      size_t new_cap = k_default_array_cap;
+      if (cap) {
+        size_t inc = cap / 2 + (cap & 1);
+        if (sonic_unlikely(cap > std::numeric_limits<size_t>::max() - inc)) {
+          markAllocatorOom(alloc);
+          if (value_to_add == &moved_value) value.rawAssign(moved_value);
+          return *this;
+        }
+        new_cap = cap + inc;
+      }
       void* old_ptr = this->a.next.children;
-      void* new_ptr = containerRealloc<DNode>(old_ptr, cap, new_cap, alloc);
-      if (sonic_unlikely(new_ptr == nullptr)) return *this;
+      void* new_ptr =
+          containerRealloc<DNode>(old_ptr, cap, new_cap, this->Size(), alloc);
+      if (sonic_unlikely(new_ptr == nullptr)) {
+        if (value_to_add == &moved_value) value.rawAssign(moved_value);
+        return *this;
+      }
       this->a.next.children = new_ptr;
     }
     // add value to the last pos
-    DNode& last = *(this->End());
-    last.rawAssign(value);
+    DNode* last = this->End();
+    new (last) DNode();
+    last->rawAssign(*value_to_add);
     this->addLength(1);
     return *this;
   }
 
   ValueIterator eraseImpl(ValueIterator start, ValueIterator end) {
+    if (start == end) return start;
     sonic_assert(this->IsArray());
     sonic_assert(start <= end);
     sonic_assert(start >= this->Begin());
@@ -969,8 +1410,12 @@ class DNode : public GenericNode<DNode<Allocator>> {
 
     ValueIterator pos = this->Begin() + (start - this->Begin());
     for (ValueIterator it = pos; it != end; ++it) it->~DNode();
-    std::memmove(static_cast<void*>(pos), end,
-                 (this->End() - end) * sizeof(DNode));
+    ValueIterator dst = pos;
+    ValueIterator old_end = this->End();
+    for (ValueIterator src = end; src != old_end; ++src, ++dst) {
+      new (dst) DNode(std::move(*src));
+      src->~DNode();
+    }
     this->subLength(end - start);
     return start;
   }
@@ -1005,11 +1450,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
     switch (this->GetType()) {
       case kObject: {
         if (children()) {
-          DNode* node = getObjChildrenFirstUnsafe();
-          DNode* e = node + this->Size() * 2;
-          for (; node < e; node += 2) {
-            node->destroy();
-            (node + 1)->destroy();
+          MemberNode* member =
+              reinterpret_cast<MemberNode*>(getObjChildrenFirstUnsafe());
+          MemberNode* e = member + this->Size();
+          for (; member < e; ++member) {
+            member->~MemberNode();
           }
           static_cast<MetaNode*>(children())->~MetaNode();
         }
@@ -1017,8 +1462,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
         break;
       }
       case kArray: {
-        for (auto it = this->Begin(), e = this->End(); it != e; ++it) {
-          it->destroy();
+        if (children()) {
+          for (auto it = this->Begin(), e = this->End(); it != e; ++it) {
+            it->~DNode();
+          }
+          static_cast<MetaNode*>(children())->~MetaNode();
         }
         Allocator::Free(children());
         break;

@@ -31,6 +31,27 @@ namespace {
 
 using namespace sonic_json;
 
+template <SerializeFlags serializeFlags>
+class FailingCommaGenerator
+    : public internal::SkipScanner2::JsonGeneratorInterface<serializeFlags> {
+ public:
+  bool writeRaw(StringView) override { return true; }
+  bool copyCurrentStructure(StringView) override { return true; }
+  bool copyCurrentStructureSingleResult(StringView) override { return true; }
+  bool copyCurrentStructureJsonTupleCodeGen(
+      StringView, size_t, std::vector<std::optional<std::string>>&,
+      internal::SkipScanner2::JsonValueType) override {
+    return true;
+  }
+  bool writeRawValue(StringView) override { return true; }
+  bool writeStartArray() override { return true; }
+  bool writeEndArray() override { return true; }
+  bool writeComma() override { return false; }
+  bool isEmpty() override { return false; }
+  bool isBeginArray() override { return false; }
+  SonicError getError() const override { return kErrorNoMem; }
+};
+
 #define TestOk(json, path, expect)                                         \
   do {                                                                     \
     auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, path); \
@@ -89,6 +110,25 @@ void ValidBatchOK(const std::string json,
     ASSERT_EQ(std::get<1>(results[i]), std::get<1>(result))
         << "json: " << json << ", path: " << paths[i];
   }
+}
+
+TEST(JsonPath, GeneratorWriteFailurePropagatesNoMem) {
+  StringView json("1", 1);
+  internal::SkipScanner2 scan;
+  scan.data_ = reinterpret_cast<const uint8_t*>(json.data());
+  scan.len_ = json.size();
+  internal::JsonPath path;
+  ASSERT_TRUE(path.Parse("$"));
+  FailingCommaGenerator<kSerializeJavaStyleFlag> generator;
+  auto factory = [&](WriteBuffer&)
+      -> std::shared_ptr<internal::SkipScanner2::JsonGeneratorInterface<
+          kSerializeJavaStyleFlag>> { return nullptr; };
+
+  const bool matched =
+      scan.getJsonPath<internal::SkipScanner2::WriteStyle::RAW,
+                       kSerializeJavaStyleFlag>(path, 1, &generator, factory);
+  EXPECT_FALSE(matched);
+  EXPECT_EQ(kErrorNoMem, scan.error_);
 }
 
 TEST(JsonPath, RootIdentifier) {
@@ -216,6 +256,7 @@ TEST(JsonPathWildcard, Basic) {
   // ignore when not found
   TestOk(R"([{"a":123}, {}])", "$[*].a", "123");
   TestOk(R"([[123, 456], []])", "$[*][1]", "456");
+  TestOk(R"([[123,456],{"a":1},[0,99]])", "$[*][1]", "[456,99]");
 
   // ignore when encounter the mismatched type
   TestOk(R"([{"a":123}, null])", "$[*].a", "123");
@@ -426,10 +467,11 @@ TEST(JsonPath, KeyIntoStringValue) {
 TEST(JsonPath, BeforeNan) {
   auto json =
       R"( {"name":"xiaoxiao", "gender": false, "height": Nan, "passed": true} )";
-  TestOk(json, "$.name", "xiaoxiao");
-  TestOk(json, "$.gender", "false");
-  TestOk(json, "$.height", "");
-  TestOk(json, "$.passed", "");
+  for (const auto* path : {"$.name", "$.gender", "$.height", "$.passed"}) {
+    auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, path);
+    EXPECT_EQ(std::get<0>(got), "");
+    EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
+  }
 }
 
 TEST(JsonPath, BackslashZero) {
@@ -444,13 +486,19 @@ TEST(JsonPath, BackslashZero) {
 TEST(JsonPath, sparkFeature) {
   auto json =
       R"(  {"price":"129.99","suggested_price":"106.39","sku_name":"Shoe Model 4    825 Mint Green [High Quality Basketball Shoe )";
-  TestOk(json, "$.price", "129.99");
+  auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, "$.price");
+  EXPECT_EQ(std::get<0>(got), "");
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
 
   json = R"(
 {"key":"fakekey","labels":"ProductMgmt","labelsIterator":"ProductMgmt","labelsSize":1,"name":"Link","setExtra":false,"setKey":true,"setLabels":true,"setName":true,"setType":false,"setValues":true,"type":0,"values":"2mPs6","valuesIterator":"2mPs6","valuesSize":1
 )";
-  TestOk(json, "$.key", "fakekey");
-  TestOk(json, "$.labels", "ProductMgmt");
+  got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, "$.key");
+  EXPECT_EQ(std::get<0>(got), "");
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
+  got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(json, "$.labels");
+  EXPECT_EQ(std::get<0>(got), "");
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
 }
 
 TEST(JsonPath, illegalJson) {
@@ -688,7 +736,7 @@ TEST(JsonPath, JsonInfiniteLoop2) {
   auto got =
       GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
           json, "$.motor_content_boost");
-  EXPECT_EQ(std::get<1>(got), kParseErrorEof);
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
   EXPECT_EQ(std::get<0>(got), "");
 }
 
@@ -698,7 +746,7 @@ TEST(JsonPath, JsonInfiniteLoop3) {
   auto got =
       GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
           json, path);
-  EXPECT_EQ(std::get<1>(got), kParseErrorEof);
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
   EXPECT_EQ(std::get<0>(got), "");
 }
 
@@ -720,7 +768,15 @@ TEST(JsonPath, JsonTuple) {
   auto got =
       GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
           json, "$.b");
-  EXPECT_EQ(std::get<1>(got), kParseErrorUnexpect);
+  EXPECT_EQ(std::get<1>(got), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(got), "");
+}
+
+TEST(JsonPathOnDemand, RejectsInvalidSkippedStringBeforeMatchedPath) {
+  auto got =
+      GetByJsonPathOnDemand<SerializeFlags::kSerializeUnicodeEscapeUppercase>(
+          R"({"a":1,"bad":"\q"})", "$.a");
+  EXPECT_EQ(std::get<1>(got), kParseErrorEscapedFormat);
   EXPECT_EQ(std::get<0>(got), "");
 }
 
@@ -757,6 +813,24 @@ TEST(JsonPathDom, MultiNodesSerializeAndFilterNulls) {
   EXPECT_EQ(std::get<0>(got), R"(["x",1])");
 }
 
+TEST(JsonPathDom, ParseFlagsMatchOnDemandCompatibilityMode) {
+  std::string control_json = std::string(R"({"a":")") + char(1) + R"("})";
+  auto dom_control = GetByJsonPath(control_json, "$.a");
+  auto ondemand_control =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(control_json, "$.a");
+  EXPECT_EQ(std::get<1>(dom_control), kErrorNone);
+  EXPECT_EQ(std::get<1>(ondemand_control), kErrorNone);
+  EXPECT_EQ(std::get<0>(dom_control), std::get<0>(ondemand_control));
+
+  std::string integer_json = R"({"a":5555555555555555555555555555})";
+  auto dom_integer = GetByJsonPath(integer_json, "$.a");
+  auto ondemand_integer =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(integer_json, "$.a");
+  EXPECT_EQ(std::get<1>(dom_integer), kErrorNone);
+  EXPECT_EQ(std::get<1>(ondemand_integer), kErrorNone);
+  EXPECT_EQ(std::get<0>(dom_integer), std::get<0>(ondemand_integer));
+}
+
 TEST(JsonPathDom, NotFoundAndUnsupportedPath) {
   auto not_found = GetByJsonPath(R"({"a":1})", "$.b");
   EXPECT_EQ(std::get<1>(not_found), kNotFoundByJsonPath);
@@ -777,6 +851,65 @@ TEST(JsonPathDom, NegativeIndexSupportedButOnDemandUnsupported) {
   // OnDemand mode does not support negative indexes.
   EXPECT_NE(std::get<1>(ondemand_got), kErrorNone);
   EXPECT_EQ(std::get<0>(ondemand_got), "");
+}
+
+TEST(JsonPathOnDemand, RejectsTrailingAndMalformedRootAfterMatchOrNoMatch) {
+  auto matched_trailing = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":1} garbage)", "$.a");
+  EXPECT_EQ(std::get<1>(matched_trailing), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(matched_trailing), "");
+
+  auto root_trailing =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>("1]", "$");
+  EXPECT_EQ(std::get<1>(root_trailing), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(root_trailing), "");
+
+  auto invalid_sibling = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"x":{]},"a":2})", "$.a");
+  EXPECT_EQ(std::get<1>(invalid_sibling), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(invalid_sibling), "");
+
+  auto no_match_trailing = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":1} garbage)", "$.missing");
+  EXPECT_EQ(std::get<1>(no_match_trailing), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(no_match_trailing), "");
+}
+
+TEST(JsonPathOnDemand, RejectsTrailingCommaInSkippedContainers) {
+  auto array_match =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(R"([1,])", "$[0]");
+  EXPECT_EQ(std::get<1>(array_match), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(array_match), "");
+
+  auto array_wildcard =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(R"([1,])", "$[*]");
+  EXPECT_EQ(std::get<1>(array_wildcard), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(array_wildcard), "");
+
+  auto nested_array = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":[1,],"b":2})", "$.a[0]");
+  EXPECT_EQ(std::get<1>(nested_array), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(nested_array), "");
+
+  auto object_simple_match =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(R"({"a":1,})", "$.a");
+  EXPECT_EQ(std::get<1>(object_simple_match), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(object_simple_match), "");
+
+  auto object_match = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":1,"b":2,})", "$.a");
+  EXPECT_EQ(std::get<1>(object_match), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(object_match), "");
+
+  auto object_no_match = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":1,})", "$.missing");
+  EXPECT_EQ(std::get<1>(object_no_match), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(object_no_match), "");
+
+  auto nested_object = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":{"b":1,},"c":2})", "$.a.b");
+  EXPECT_EQ(std::get<1>(nested_object), kParseErrorInvalidChar);
+  EXPECT_EQ(std::get<0>(nested_object), "");
 }
 
 TEST(JsonPathDump, SerializeCoversEmptySingleAndMulti) {

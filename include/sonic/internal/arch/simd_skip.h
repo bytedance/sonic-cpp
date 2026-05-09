@@ -16,19 +16,26 @@
 
 #pragma once
 
+#include <cerrno>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <functional>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "simd_dispatch.h"
 #include "sonic/dom/flags.h"
 #include "sonic/error.h"
+#include "sonic/internal/arch/simd_quote.h"
+#include "sonic/internal/stack.h"
 #include "sonic/jsonpath/jsonpath.h"
+#include "sonic/writebuffer.h"
 
 #include INCLUDE_ARCH_FILE(skip.h)
-
-#include <sonic/dom/parser.h>
 
 namespace sonic_json {
 namespace internal {
@@ -49,90 +56,187 @@ SONIC_USING_ARCH_FUNC(skip_space_safe);
     }                                  \
   } while (0)
 
-static bool SkipArray(const uint8_t *data, size_t &pos, size_t len) {
-  return SkipContainer(data, pos, len, '[', ']');
+static bool IsDigit(uint8_t c) { return c >= '0' && c <= '9'; }
+
+static bool IsNonZeroDigit(uint8_t c) { return c >= '1' && c <= '9'; }
+
+static bool IsAllowedDelimiter(uint8_t c, const char* delimiters) {
+  for (const char* p = delimiters; *p != '\0'; ++p) {
+    if (c == static_cast<uint8_t>(*p)) return true;
+  }
+  return false;
 }
 
-static bool SkipObject(const uint8_t *data, size_t &pos, size_t len) {
-  return SkipContainer(data, pos, len, '{', '}');
+static bool SkipTrailingValueSpace(const uint8_t* data, size_t& pos, size_t len,
+                                   const char* delimiters = ",]}") {
+  while (pos < len && IsSpace(data[pos])) {
+    ++pos;
+  }
+  return pos == len || IsAllowedDelimiter(data[pos], delimiters);
 }
 
-static uint8_t SkipNumber(const uint8_t *data, size_t &pos, size_t len) {
-  return GetNextToken(data, pos, len, "]},");
+template <ParseFlags parseFlags>
+static bool ValidateSkippedNumber(const uint8_t* data, size_t start, size_t end,
+                                  Stack& scratch, SonicError& err) {
+  if constexpr (parseFlags & ParseFlags::kParseOverflowNumAsNumStr) {
+    return true;
+  }
+  const bool floating =
+      std::memchr(data + start, '.', end - start) != nullptr ||
+      std::memchr(data + start, 'e', end - start) != nullptr ||
+      std::memchr(data + start, 'E', end - start) != nullptr;
+  if (!floating) {
+    return true;
+  }
+  size_t n = end - start;
+  if (sonic_unlikely(n > std::numeric_limits<size_t>::max() - 1)) {
+    err = kErrorNoMem;
+    return false;
+  }
+  scratch.Clear();
+  char* buf = scratch.PushSize<char>(n + 1);
+  if (sonic_unlikely(buf == nullptr)) {
+    err = kErrorNoMem;
+    return false;
+  }
+  std::memcpy(buf, data + start, n);
+  buf[n] = '\0';
+  errno = 0;
+  char* endptr = nullptr;
+  double value = std::strtod(buf, &endptr);
+  (void)value;
+  if (endptr != buf + n) {
+    err = kParseErrorInvalidChar;
+    return false;
+  }
+  if (!std::isfinite(value)) {
+    err = kParseErrorInfinity;
+    return false;
+  }
+  return true;
+}
+
+template <ParseFlags parseFlags>
+static bool SkipNumberStrict(const uint8_t* data, size_t& pos, size_t len,
+                             const char* delimiters, Stack& scratch,
+                             SonicError& err) {
+  size_t i = pos - 1;
+  size_t start = i;
+  if (data[i] == '-') {
+    ++i;
+    if (i >= len) return false;
+  }
+
+  if (data[i] == '0') {
+    ++i;
+    if (i < len && IsDigit(data[i])) return false;
+  } else if (IsNonZeroDigit(data[i])) {
+    do {
+      ++i;
+    } while (i < len && IsDigit(data[i]));
+  } else {
+    return false;
+  }
+
+  if (i < len && data[i] == '.') {
+    ++i;
+    if (i >= len || !IsDigit(data[i])) return false;
+    do {
+      ++i;
+    } while (i < len && IsDigit(data[i]));
+  }
+
+  if (i < len && (data[i] == 'e' || data[i] == 'E')) {
+    ++i;
+    if (i < len && (data[i] == '+' || data[i] == '-')) ++i;
+    if (i >= len || !IsDigit(data[i])) return false;
+    do {
+      ++i;
+    } while (i < len && IsDigit(data[i]));
+  }
+
+  pos = i;
+  if (!ValidateSkippedNumber<parseFlags>(data, start, pos, scratch, err)) {
+    return false;
+  }
+  return SkipTrailingValueSpace(data, pos, len, delimiters);
 }
 
 // SkipScanner is used to skip space and json values in json text.
 class SkipScanner {
  public:
-  sonic_force_inline uint8_t SkipSpace(const uint8_t *data, size_t &pos) {
+  sonic_force_inline uint8_t SkipSpace(const uint8_t* data, size_t& pos) {
     return skip_space(data, pos, nonspace_bits_end_, nonspace_bits_);
   }
 
-  sonic_force_inline uint8_t SkipSpaceSafe(const uint8_t *data, size_t &pos,
+  sonic_force_inline uint8_t SkipSpaceSafe(const uint8_t* data, size_t& pos,
                                            size_t len) {
     return skip_space_safe(data, pos, len, nonspace_bits_end_, nonspace_bits_);
   }
 
-  sonic_force_inline SonicError GetArrayElem(const uint8_t *data, size_t &pos,
-                                             size_t len, int index) {
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline SonicError GetArrayElem(const uint8_t* data, size_t& pos,
+                                             size_t len, uint64_t index) {
+    char c = SkipSpaceSafe(data, pos, len);
+    if (c == ']') {
+      return kParseErrorArrIndexOutOfRange;
+    }
+    pos--;
     while (index > 0 && pos < len) {
       index--;
-      char c = SkipSpaceSafe(data, pos, len);
-      switch (c) {
-        case '{': {
-          if (!SkipObject(data, pos, len)) {
-            return kParseErrorInvalidChar;
-          }
-          break;
-        }
-        case '[': {
-          if (!SkipArray(data, pos, len)) {
-            return kParseErrorInvalidChar;
-          }
-          break;
-        }
-        case '"': {
-          if (!SkipString(data, pos, len)) {
-            return kParseErrorInvalidChar;
-          }
-          break;
-        }
+      long start = SkipOneOnDemand<parseFlags>(data, pos, len, ",]");
+      if (start < 0) {
+        return SonicError(-start);
       }
-      // skip space and primitives
-      // TODO (liuq): fast path for compat json.
-      if (GetNextToken(data, pos, len, ",]") != ',') {
+      c = SkipSpaceSafe(data, pos, len);
+      if (c == ']') {
+        pos--;
         return kParseErrorArrIndexOutOfRange;
       }
-      pos++;
+      if (c != ',') return kParseErrorInvalidChar;
     }
     return index == 0 ? kErrorNone : kParseErrorInvalidChar;
   }
 
   // SkipOne skip one raw json value and return the start of value, return the
   // negative if errors.
-  sonic_force_inline long SkipOne(const uint8_t *data, size_t &pos,
-                                  size_t len) {
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  inline long SkipOne(const uint8_t* data, size_t& pos, size_t len,
+                      const char* delimiters = ",]}") {
+    if (sonic_unlikely(pos >= len)) return -kParseErrorInvalidChar;
     uint8_t c = SkipSpaceSafe(data, pos, len);
     size_t start = pos - 1;
-    long err = -kParseErrorInvalidChar;
+    SonicError err = kParseErrorInvalidChar;
 
     switch (c) {
       case '"': {
-        if (!SkipString(data, pos, len)) return err;
+        if (!SkipStringStrict<parseFlags>(data, pos, len, scratch_, err)) {
+          return -err;
+        }
         break;
       }
       case '{': {
-        if (!SkipObject(data, pos, len)) return err;
+        if (sonic_unlikely(depth_ >= kMaxSkipDepth))
+          return -kParseErrorInvalidChar;
+        ++depth_;
+        bool ok = SkipObjectStrict<parseFlags>(data, pos, len, err);
+        --depth_;
+        if (!ok) return -err;
         break;
       }
       case '[': {
-        if (!SkipArray(data, pos, len)) return err;
+        if (sonic_unlikely(depth_ >= kMaxSkipDepth))
+          return -kParseErrorInvalidChar;
+        ++depth_;
+        bool ok = SkipArrayStrict<parseFlags>(data, pos, len, err);
+        --depth_;
+        if (!ok) return -err;
         break;
       }
       case 't':
       case 'n':
       case 'f': {
-        if (!SkipLiteral(data, pos, len, c)) return err;
+        if (!SkipLiteral(data, pos, len, c)) return -err;
         break;
       }
       case '0':
@@ -146,18 +250,91 @@ class SkipScanner {
       case '8':
       case '9':
       case '-': {
-        SkipNumber(data, pos, len);
-        break;
+        if (!SkipNumberStrict<parseFlags>(data, pos, len, delimiters, scratch_,
+                                          err)) {
+          return -err;
+        }
+        return start;
       }
       default:
-        return err;
+        return -err;
     }
+    if (!SkipTrailingValueSpace(data, pos, len, delimiters)) return -err;
     return start;
   }
 
-  sonic_force_inline bool matchKey(const uint8_t *data, size_t &pos, size_t len,
-                                   StringView key, std::vector<uint8_t> &kbuf,
-                                   SonicError &err) {
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  inline long SkipOneOnDemand(const uint8_t* data, size_t& pos, size_t len,
+                              const char* delimiters = ",]}") {
+    if constexpr (parseFlags & ParseFlags::kParseValidateOnDemandFull) {
+      return SkipOne<parseFlags>(data, pos, len, delimiters);
+    } else {
+      return SkipOneFast<parseFlags>(data, pos, len, delimiters);
+    }
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline ParseResult ValidateJson(StringView json) {
+    size_t pos = 0;
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(json.data());
+    long start = SkipOne<parseFlags>(data, pos, json.size(), "");
+    if (start < 0) return ParseResult(SonicError(-start), pos);
+    if (pos != json.size()) return ParseResult(kParseErrorInvalidChar, pos);
+    return ParseResult(kErrorNone, pos);
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline bool SkipStringStrict(const uint8_t* data, size_t& pos,
+                                           size_t len, Stack& scratch,
+                                           SonicError& err) {
+    auto start = data + pos;
+    auto status = SkipString(data, pos, len);
+    if (!status) {
+      err = SonicError::kParseErrorInvalidChar;
+      return false;
+    }
+    auto slen = data + pos - 1 - start;
+    if (status == 1) {
+      if constexpr (!(parseFlags &
+                      ParseFlags::kParseAllowUnescapedControlChars)) {
+        for (const uint8_t* p = start; p < data + pos - 1; ++p) {
+          if (*p < 0x20) {
+            err = kParseErrorUnEscaped;
+            pos = p - data;
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    scratch.Clear();
+    size_t scratch_len = static_cast<size_t>(slen);
+    if (sonic_unlikely(scratch_len > std::numeric_limits<size_t>::max() - 32)) {
+      err = kErrorNoMem;
+      return false;
+    }
+    uint8_t* nsrc =
+        reinterpret_cast<uint8_t*>(scratch.PushSize<char>(scratch_len + 32));
+    if (sonic_unlikely(nsrc == nullptr)) {
+      err = kErrorNoMem;
+      return false;
+    }
+    uint8_t* nsrc_begin = nsrc;
+    std::memcpy(nsrc, start, slen + 1);
+    SonicError parse_err = kErrorNone;
+    (void)parseStringInplace<parseFlags>(nsrc, parse_err);
+    if (parse_err) {
+      err = parse_err;
+      pos = (start - data) + (nsrc - nsrc_begin);
+      return false;
+    }
+    return true;
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline bool matchKey(const uint8_t* data, size_t& pos, size_t len,
+                                   StringView key, Stack& kbuf,
+                                   SonicError& err) {
     auto start = data + pos;
     auto status = SkipString(data, pos, len);
     // has errors
@@ -170,27 +347,50 @@ class SkipScanner {
     // has escaped char
     if (status == 2) {
       // parse escaped key
-      kbuf.resize(slen + 32);
-      uint8_t *nsrc = &kbuf[0];
+      kbuf.Clear();
+      size_t scratch_len = static_cast<size_t>(slen);
+      if (sonic_unlikely(scratch_len >
+                         std::numeric_limits<size_t>::max() - 32)) {
+        err = kErrorNoMem;
+        return false;
+      }
+      uint8_t* nsrc =
+          reinterpret_cast<uint8_t*>(kbuf.PushSize<char>(scratch_len + 32));
+      if (sonic_unlikely(nsrc == nullptr)) {
+        err = kErrorNoMem;
+        return false;
+      }
+      uint8_t* nsrc_begin = nsrc;
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace<ParseFlags::kParseDefault>(nsrc, err);
-      if (err) {
-        pos = (start - data) + (nsrc - &kbuf[0]);
+      SonicError parse_err = kErrorNone;
+      slen = parseStringInplace<parseFlags>(nsrc, parse_err);
+      if (parse_err) {
+        err = parse_err;
+        pos = (start - data) + (nsrc - nsrc_begin);
         return false;
       }
-      start = &kbuf[0];
+      start = nsrc_begin;
+    } else if constexpr (!(parseFlags &
+                           ParseFlags::kParseAllowUnescapedControlChars)) {
+      for (const uint8_t* p = start; p < data + pos - 1; ++p) {
+        if (*p < 0x20) {
+          err = kParseErrorUnEscaped;
+          pos = p - data;
+          return false;
+        }
+      }
     }
-
     // compare the key
     return slen == static_cast<long>(key.size()) &&
            std::memcmp(start, key.data(), slen) == 0;
   }
-  sonic_force_inline int matchKeys(const uint8_t *data, size_t &pos, size_t len,
-                                   const std::vector<StringView> &keys,
-                                   std::vector<uint8_t> &kbuf,
-                                   SonicError &err) {
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline int matchKeys(const uint8_t* data, size_t& pos, size_t len,
+                                   const std::vector<StringView>& keys,
+                                   Stack& kbuf, SonicError& err) {
     auto start = data + pos;
     auto status = SkipString(data, pos, len);
     // has errors
@@ -203,21 +403,44 @@ class SkipScanner {
     // has escaped char
     if (status == 2) {
       // parse escaped key
-      kbuf.resize(slen + 32);
-      uint8_t *nsrc = &kbuf[0];
+      kbuf.Clear();
+      size_t scratch_len = static_cast<size_t>(slen);
+      if (sonic_unlikely(scratch_len >
+                         std::numeric_limits<size_t>::max() - 32)) {
+        err = kErrorNoMem;
+        return -1;
+      }
+      uint8_t* nsrc =
+          reinterpret_cast<uint8_t*>(kbuf.PushSize<char>(scratch_len + 32));
+      if (sonic_unlikely(nsrc == nullptr)) {
+        err = kErrorNoMem;
+        return -1;
+      }
+      uint8_t* nsrc_begin = nsrc;
 
       // parseStringInplace need `"` as the end
       std::memcpy(nsrc, start, slen + 1);
-      slen = parseStringInplace<ParseFlags::kParseDefault>(nsrc, err);
-      if (err) {
-        pos = (start - data) + (nsrc - &kbuf[0]);
+      SonicError parse_err = kErrorNone;
+      slen = parseStringInplace<parseFlags>(nsrc, parse_err);
+      if (parse_err) {
+        err = parse_err;
+        pos = (start - data) + (nsrc - nsrc_begin);
         return -1;
       }
-      start = &kbuf[0];
+      start = nsrc_begin;
+    } else if constexpr (!(parseFlags &
+                           ParseFlags::kParseAllowUnescapedControlChars)) {
+      for (const uint8_t* p = start; p < data + pos - 1; ++p) {
+        if (*p < 0x20) {
+          err = kParseErrorUnEscaped;
+          pos = p - data;
+          return -1;
+        }
+      }
     }
 
     for (size_t i = 0; i < keys.size(); i++) {
-      const auto &key = keys[i];
+      const auto& key = keys[i];
       if (slen == static_cast<long>(key.size()) &&
           std::memcmp(start, key.data(), slen) == 0) {
         return i;
@@ -229,43 +452,67 @@ class SkipScanner {
 
   // GetOnDemand get the target json field through the path, and update the
   // position.
-  template <typename JPStringType>
-  long GetOnDemand(StringView json, size_t &pos,
-                   const GenericJsonPointer<JPStringType> &path) {
+  template <ParseFlags parseFlags, typename JPStringType>
+  long GetOnDemand(StringView json, size_t& pos,
+                   const GenericJsonPointer<JPStringType>& path) {
     using namespace sonic_json::internal;
     size_t i = 0;
     uint8_t c;
     StringView key;
     // TODO: use stack smallvector here.
-    std::vector<uint8_t> kbuf(32);  // key buffer for parsed keys
-    const uint8_t *data = reinterpret_cast<const uint8_t *>(json.data());
+    Stack kbuf(32);  // key buffer for parsed keys
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(json.data());
     size_t len = json.size();
     SonicError err = kErrorNone;
     bool matched = false;
+    Stack path_context(path.size());  // closing token for matched path parents
+    if (sonic_unlikely(path_context.HadOom())) return -kErrorNoMem;
 
   query:
     if (i++ != path.size()) {
       c = SkipSpaceSafe(data, pos, len);
       if (path[i - 1].IsStr()) {
         if (c != '{') goto err_mismatch_type;
-        c = GetNextToken(data, pos, len, "\"}");
-        if (c != '"') goto err_unknown_key;
+        c = SkipSpaceSafe(data, pos, len);
+        if (c == '}') {
+          pos--;
+          goto err_unknown_key;
+        }
+        if (c != '"') return -kParseErrorInvalidChar;
+        pos--;
         key = StringView(path[i - 1].GetStr());
         goto obj_key;
       } else {
         if (c != '[') goto err_mismatch_type;
-        err = GetArrayElem(data, pos, len, path[i - 1].GetNum());
+        if (sonic_unlikely(!path[i - 1].IsValidNum())) {
+          return -kParseErrorArrIndexOutOfRange;
+        }
+        err = GetArrayElem<parseFlags>(data, pos, len, path[i - 1].GetNum());
         if (err) return -err;
+        if (sonic_unlikely(!path_context.Push<char>(']'))) {
+          return -kErrorNoMem;
+        }
         goto query;
       }
     }
-    return SkipOne(data, pos, len);
+    {
+      long start = SkipOneOnDemand<parseFlags>(data, pos, len,
+                                               valueDelimiters(path_context));
+      if (start < 0) return start;
+      size_t err_pos = pos;
+      err = validateMatchedPathSuffix(data, pos, len, path_context, err_pos);
+      if (err) {
+        pos = err_pos;
+        return -err;
+      }
+      return start;
+    }
 
   obj_key:
     // advance quote
     pos++;
 
-    matched = matchKey(data, pos, len, key, kbuf, err);
+    matched = matchKey<parseFlags>(data, pos, len, key, kbuf, err);
     if (err != kErrorNone) {
       return -err;
     }
@@ -277,34 +524,21 @@ class SkipScanner {
 
     // match key and skip parsing unneeded fields
     if (matched) {
+      if (sonic_unlikely(!path_context.Push<char>('}'))) {
+        return -kErrorNoMem;
+      }
       goto query;
     } else {
+      long start = SkipOneOnDemand<parseFlags>(data, pos, len, ",}");
+      if (start < 0) return start;
       c = SkipSpaceSafe(data, pos, len);
-      switch (c) {
-        case '{': {
-          if (!SkipObject(data, pos, len)) {
-            goto err_invalid_char;
-          }
-          break;
-        }
-        case '[': {
-          if (!SkipArray(data, pos, len)) {
-            goto err_invalid_char;
-          }
-          break;
-        }
-        case '"': {
-          if (!SkipString(data, pos, len)) {
-            goto err_invalid_char;
-          }
-          break;
-        }
-      }
-      // skip space and , find next " or }
-      c = GetNextToken(data, pos, len, "\"}");
-      if (c != '"') {
+      if (c == '}') {
         goto err_unknown_key;
       }
+      if (c != ',') goto err_invalid_char;
+      c = SkipSpaceSafe(data, pos, len);
+      if (c != '"') goto err_invalid_char;
+      pos--;
       goto obj_key;
     }
 
@@ -319,24 +553,205 @@ class SkipScanner {
   }
 
  private:
+  // Default OnDemand keeps short-circuit semantics: validate scalar values and
+  // value boundaries, but use SIMD container skipping instead of recursively
+  // validating every unvisited subtree. Full validation routes through SkipOne.
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  inline long SkipOneFast(const uint8_t* data, size_t& pos, size_t len,
+                          const char* delimiters) {
+    if (sonic_unlikely(pos >= len)) return -kParseErrorInvalidChar;
+    uint8_t c = SkipSpaceSafe(data, pos, len);
+    size_t start = pos - 1;
+    SonicError err = kParseErrorInvalidChar;
+
+    switch (c) {
+      case '"': {
+        if (!SkipStringStrict<parseFlags>(data, pos, len, scratch_, err)) {
+          return -err;
+        }
+        break;
+      }
+      case '{': {
+        if (sonic_unlikely(StartsWithMismatchedClose(data, pos, len, ']'))) {
+          return -err;
+        }
+        if (!SkipContainer(data, pos, len, '{', '}')) return -err;
+        break;
+      }
+      case '[': {
+        if (sonic_unlikely(StartsWithMismatchedClose(data, pos, len, '}'))) {
+          return -err;
+        }
+        if (!SkipContainer(data, pos, len, '[', ']')) return -err;
+        break;
+      }
+      case 't':
+      case 'n':
+      case 'f': {
+        if (!SkipLiteral(data, pos, len, c)) return -err;
+        break;
+      }
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case '-': {
+        if (!SkipNumberStrict<parseFlags>(data, pos, len, delimiters, scratch_,
+                                          err)) {
+          return -err;
+        }
+        return start;
+      }
+      default:
+        return -err;
+    }
+    if (!SkipTrailingValueSpace(data, pos, len, delimiters)) return -err;
+    return start;
+  }
+
+  static sonic_force_inline bool isPotentialJsonValueStart(uint8_t c) {
+    switch (c) {
+      case '"':
+      case '{':
+      case '[':
+      case 't':
+      case 'f':
+      case 'n':
+      case '-':
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // SkipContainer tracks only the requested bracket type. Reject the obvious
+  // opposite-close case before entering that fast path.
+  sonic_force_inline bool StartsWithMismatchedClose(const uint8_t* data,
+                                                    size_t pos, size_t len,
+                                                    uint8_t close) {
+    uint8_t c = SkipSpaceSafe(data, pos, len);
+    return c == close;
+  }
+
+  static sonic_force_inline const char* valueDelimiters(
+      const Stack& path_context) {
+    if (path_context.Empty()) return "";
+    return *path_context.Top<char>() == '}' ? ",}" : ",]";
+  }
+
+  sonic_force_inline SonicError
+  validateMatchedPathSuffix(const uint8_t* data, size_t value_end, size_t len,
+                            const Stack& path_context, size_t& err_pos) {
+    size_t cursor = value_end;
+    for (const char* frame = path_context.End<char>();
+         frame != path_context.Begin<char>();) {
+      const char closing = *--frame;
+      uint8_t c = SkipSpaceSafe(data, cursor, len);
+      if (c == static_cast<uint8_t>(closing)) {
+        continue;
+      }
+      if (c == ',') {
+        c = SkipSpaceSafe(data, cursor, len);
+        if ((closing == '}' && c == '"') ||
+            (closing == ']' && isPotentialJsonValueStart(c))) {
+          return kErrorNone;
+        }
+      }
+      err_pos = cursor == 0 ? 0 : cursor - 1;
+      return kParseErrorInvalidChar;
+    }
+    return kErrorNone;
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline bool SkipObjectStrict(const uint8_t* data, size_t& pos,
+                                           size_t len, SonicError& err) {
+    uint8_t c = SkipSpaceSafe(data, pos, len);
+    if (c == '}') return true;
+    while (true) {
+      if (c != '"') return false;
+      if (!SkipStringStrict<parseFlags>(data, pos, len, scratch_, err)) {
+        return false;
+      }
+      c = SkipSpaceSafe(data, pos, len);
+      if (c != ':') return false;
+      long start = SkipOne<parseFlags>(data, pos, len, ",}");
+      if (start < 0) {
+        err = SonicError(-start);
+        return false;
+      }
+      c = SkipSpaceSafe(data, pos, len);
+      if (c == '}') return true;
+      if (c != ',') return false;
+      c = SkipSpaceSafe(data, pos, len);
+      if (c == '}') return false;
+    }
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault>
+  sonic_force_inline bool SkipArrayStrict(const uint8_t* data, size_t& pos,
+                                          size_t len, SonicError& err) {
+    uint8_t c = SkipSpaceSafe(data, pos, len);
+    if (c == ']') return true;
+    pos--;
+    while (true) {
+      long start = SkipOne<parseFlags>(data, pos, len, ",]");
+      if (start < 0) {
+        err = SonicError(-start);
+        return false;
+      }
+      c = SkipSpaceSafe(data, pos, len);
+      if (c == ']') return true;
+      if (c != ',') return false;
+      c = SkipSpaceSafe(data, pos, len);
+      if (c == ']') return false;
+      pos--;
+    }
+  }
+
   size_t nonspace_bits_end_{0};
   uint64_t nonspace_bits_{0};
+  Stack scratch_{32};
+  size_t depth_{0};
+  static constexpr size_t kMaxSkipDepth = 1024;
 };
 
 class SkipScanner2 {
  public:
+  static constexpr ParseFlags kJsonPathParseFlags =
+      ParseFlags::kParseAllowUnescapedControlChars |
+      ParseFlags::kParseIntegerAsRaw;
+
+  template <ParseFlags parseFlags = kJsonPathParseFlags>
   sonic_force_inline StringView getOne() {
-    long start = scanner_.SkipOne(data_, pos_, len_);
+    long start = scanner_.template SkipOne<parseFlags>(data_, pos_, len_);
     if (start < 0) {
       setError(SonicError(-start));
       return "";
     }
-    return StringView(reinterpret_cast<const char *>(data_) + start,
+    return StringView(reinterpret_cast<const char*>(data_) + start,
                       pos_ - start);
   }
 
+  template <ParseFlags parseFlags = kJsonPathParseFlags>
   sonic_force_inline SonicError skipOne() {
-    long start = scanner_.SkipOne(data_, pos_, len_);
+    long start = scanner_.template SkipOne<parseFlags>(data_, pos_, len_);
     if (start < 0) {
       setError(SonicError(-start));
       return error_;
@@ -367,6 +782,17 @@ class SkipScanner2 {
     return error_ != SonicError::kErrorNone;
   }
 
+  sonic_force_inline bool consumeOnlyTrailingSpaces() {
+    while (pos_ < len_ && IsSpace(data_[pos_])) {
+      ++pos_;
+    }
+    if (pos_ != len_) {
+      setError(kParseErrorInvalidChar);
+      return false;
+    }
+    return true;
+  }
+
   sonic_force_inline void setIsFieldName() { this->isFieldName = true; }
   sonic_force_inline bool getAndClearIsFieldName() {
     auto ret = this->isFieldName;
@@ -379,14 +805,32 @@ class SkipScanner2 {
 
   //
 
-  sonic_force_inline void skipIfPresent(const uint8_t c) {
-    if (sonic_unlikely(pos_ == len_)) {
-      setError(SonicError::kParseErrorEof);
-      return;
+  sonic_force_inline bool consumeValueSeparatorOrEnd(uint8_t end,
+                                                     bool& has_next) {
+    uint8_t c = peek();
+    if (sonic_unlikely(hasError())) {
+      return false;
     }
-    if (peek() == c) {
-      advance();
+    if (c == end) {
+      has_next = false;
+      return true;
     }
+    if (c != ',') {
+      setError(SonicError::kParseErrorInvalidChar);
+      return false;
+    }
+
+    advance();
+    c = peek();
+    if (sonic_unlikely(hasError())) {
+      return false;
+    }
+    if (c == end) {
+      setError(SonicError::kParseErrorInvalidChar);
+      return false;
+    }
+    has_next = true;
+    return true;
   }
 
   sonic_force_inline bool consume(uint8_t c) {
@@ -413,17 +857,19 @@ class SkipScanner2 {
   // Precondition: calling advance takes input the " of the first fieldname
   // post condition: if found peek() returns first char of the found value
   // if not found, peek() returns }
+  template <ParseFlags parseFlags = kJsonPathParseFlags>
   sonic_force_inline bool advanceKey(StringView key) {
-    auto c = advance();
     bool matched = false;
-    while (c != '}') {
+    while (peek() != '}') {
+      auto c = advance();
       if (c != '"') {
         setError(SonicError::kParseErrorInvalidChar);
         return false;
       }
 
       // match the key
-      matched = scanner_.matchKey(data_, pos_, len_, key, kbuf_, error_);
+      matched = scanner_.template matchKey<parseFlags>(data_, pos_, len_, key,
+                                                       kbuf_, error_);
       if (error_ != SonicError::kErrorNone) {
         return false;
       }
@@ -437,24 +883,15 @@ class SkipScanner2 {
         break;
       }
 
-      RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+      RETURN_FALSE_IF_PARSE_ERROR(skipOne<parseFlags>());
 
-      // get the next key
-      c = advance();
-      if (c == ',') {
-        c = advance();
-      } else if (c != '}') {
-        setError(SonicError::kParseErrorInvalidChar);
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd('}', has_next)) {
+        return false;
       }
-    }
-
-    // When no key matches, the loop above would consume all members *and* the
-    // closing '}'. However, getJsonPath() (including the Java/Spark-compatible
-    // template variant with `serializeFlags = kSerializeJavaStyleFlag`) expects
-    // '}' to be left unconsumed and handled by the caller that processes the
-    // object.
-    if (!matched && c == '}') {
-      pos_--;
+      if (!has_next) {
+        break;
+      }
     }
     return matched;
   }
@@ -462,17 +899,19 @@ class SkipScanner2 {
   // Precondition: calling advance takes input the " of the first fieldname
   // post condition: if found peek() returns first char of the found value
   // if not found, peek() returns }
-  sonic_force_inline int advanceKeys(const std::vector<StringView> &keys) {
-    auto c = advance();
+  template <ParseFlags parseFlags = kJsonPathParseFlags>
+  sonic_force_inline int advanceKeys(const std::vector<StringView>& keys) {
     int matched = -1;
-    while (c != '}') {
+    while (peek() != '}') {
+      auto c = advance();
       if (c != '"') {
         setError(SonicError::kParseErrorInvalidChar);
         return -1;
       }
 
       // match the key
-      matched = scanner_.matchKeys(data_, pos_, len_, keys, kbuf_, error_);
+      matched = scanner_.template matchKeys<parseFlags>(data_, pos_, len_, keys,
+                                                        kbuf_, error_);
       if (error_ != SonicError::kErrorNone) {
         return -1;
       }
@@ -486,41 +925,33 @@ class SkipScanner2 {
         break;
       }
 
-      RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+      RETURN_FALSE_IF_PARSE_ERROR(skipOne<parseFlags>());
 
-      // get the next key
-      c = advance();
-      if (c == ',') {
-        c = advance();
-      } else if (c != '}') {
-        setError(SonicError::kParseErrorInvalidChar);
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd('}', has_next)) {
+        return -1;
       }
-    }
-
-    // When no key matches, the loop above would consume all members *and* the
-    // closing '}'. However, getJsonPath() (including the Java/Spark-compatible
-    // template variant with `serializeFlags = kSerializeJavaStyleFlag`) expects
-    // '}' to be left unconsumed and handled by the caller that processes the
-    // object.
-    if (matched == -1 && c == '}') {
-      pos_--;
+      if (!has_next) {
+        break;
+      }
     }
     return matched;
   }
 
-  sonic_force_inline SonicError traverseObject(const JsonPath &path,
+  sonic_force_inline SonicError traverseObject(const JsonPath& path,
                                                size_t index,
-                                               std::vector<StringView> &res) {
-    auto c = advance();
-    while (c != '}') {
+                                               std::vector<StringView>& res) {
+    while (peek() != '}') {
+      auto c = advance();
       if (c != '"') {
         setError(SonicError::kParseErrorInvalidChar);
         return error_;
       }
 
       // skip the key
-      if (!SkipString(data_, pos_, len_)) {
-        setError(SonicError::kParseErrorInvalidChar);
+      if (!scanner_.template SkipStringStrict<kJsonPathParseFlags>(
+              data_, pos_, len_, kbuf_, error_)) {
+        if (!hasError()) setError(SonicError::kParseErrorInvalidChar);
         return error_;
       }
 
@@ -533,100 +964,86 @@ class SkipScanner2 {
         return error_;
       }
 
-      // get the next key
-      c = advance();
-      if (c == ',') {
-        c = advance();
-      } else if (c != '}') {
-        setError(SonicError::kParseErrorInvalidChar);
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd('}', has_next)) {
         return error_;
       }
+      if (!has_next) break;
     }
     return kErrorNone;
   }
 
-  sonic_force_inline SonicError traverseArray(const JsonPath &path,
+  sonic_force_inline SonicError traverseArray(const JsonPath& path,
                                               size_t index,
-                                              std::vector<StringView> &res) {
-    auto c = advance();
-    pos_--;
-    while (c != ']') {
+                                              std::vector<StringView>& res) {
+    while (peek() != ']') {
       // recursively parse the value
       if (getJsonPath(path, index + 1, res, true) != SonicError::kErrorNone) {
         return error_;
       }
 
-      // get the next elem
-      c = advance();
-      if (c == ',') {
-        continue;
-      } else if (c != ']') {
-        setError(SonicError::kParseErrorInvalidChar);
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd(']', has_next)) {
         return error_;
       }
+      if (!has_next) break;
     }
     return kErrorNone;
   }
 
   sonic_force_inline bool advanceIndex(size_t index) /* found */ {
-    auto c = advance();
-    if (c == ']') {
+    if (peek() == ']') {
       return false;
     }
 
-    pos_--;  // backwared for skip the first elem
-    while (c != ']' && index > 0) {
-      if (skipOne() != SonicError::kErrorNone) {
+    while (index > 0) {
+      if (skipOne<kJsonPathParseFlags>() != SonicError::kErrorNone) {
         return false;
       }
 
-      // get the next key
-      c = advance();
-      if (c == ',') {
-        index--;
-      } else if (c != ']') {
-        setError(SonicError::kParseErrorInvalidChar);
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd(']', has_next)) {
         return false;
       }
+      if (!has_next) return false;
+      --index;
     }
 
-    return (index == 0);
+    return true;
   }
 
   sonic_force_inline SonicError skipArrayRemain() {
-    auto c = advance();
-    while (c != ']') {
-      if (c != ',') {
-        setError(SonicError::kParseErrorInvalidChar);
+    bool has_next = false;
+    if (!consumeValueSeparatorOrEnd(']', has_next)) {
+      return error_;
+    }
+    while (has_next) {
+      if (skipOne<kJsonPathParseFlags>() != SonicError::kErrorNone) {
         return error_;
       }
-
-      if (skipOne() != SonicError::kErrorNone) {
+      if (!consumeValueSeparatorOrEnd(']', has_next)) {
         return error_;
       }
-
-      c = advance();
     }
     return kErrorNone;
   }
 
   sonic_force_inline SonicError skipObjectRemain() {
-    auto c = advance();
-    while (c != '}') {
-      if (c != ',') {
-        setError(SonicError::kParseErrorInvalidChar);
-        return error_;
-      }
-
-      c = advance();
+    bool has_next = false;
+    if (!consumeValueSeparatorOrEnd('}', has_next)) {
+      return error_;
+    }
+    while (has_next) {
+      auto c = advance();
       if (c != '"') {
         setError(SonicError::kParseErrorInvalidChar);
         return error_;
       }
 
       // skip the key
-      if (!SkipString(data_, pos_, len_)) {
-        setError(SonicError::kParseErrorInvalidChar);
+      if (!scanner_.template SkipStringStrict<kJsonPathParseFlags>(
+              data_, pos_, len_, kbuf_, error_)) {
+        if (!hasError()) setError(SonicError::kParseErrorInvalidChar);
         return error_;
       }
 
@@ -634,12 +1051,13 @@ class SkipScanner2 {
         return error_;
       }
 
-      if (skipOne() != SonicError::kErrorNone) {
+      if (skipOne<kJsonPathParseFlags>() != SonicError::kErrorNone) {
         return error_;
       }
 
-      // get the next key
-      c = advance();
+      if (!consumeValueSeparatorOrEnd('}', has_next)) {
+        return error_;
+      }
     }
     return kErrorNone;
   }
@@ -655,7 +1073,7 @@ class SkipScanner2 {
     virtual bool copyCurrentStructureSingleResult(StringView sv) = 0;
     virtual bool copyCurrentStructureJsonTupleCodeGen(
         StringView raw, size_t index,
-        std::vector<std::optional<std::string>> &result,
+        std::vector<std::optional<std::string>>& result,
         JsonValueType type) = 0;
     virtual bool writeRawValue(StringView sv) = 0;
     virtual bool writeStartArray() = 0;
@@ -663,19 +1081,28 @@ class SkipScanner2 {
     virtual bool writeComma() = 0;
     virtual bool isEmpty() = 0;
     virtual bool isBeginArray() = 0;
+    virtual SonicError getError() const { return kParseErrorUnexpect; }
     virtual ~JsonGeneratorInterface() {}
   };
   template <SerializeFlags serializeFlags>
   using JsonGeneratorFactory =
       std::function<std::shared_ptr<JsonGeneratorInterface<serializeFlags>>(
-          WriteBuffer &)>;
+          WriteBuffer&)>;
+
+  template <SerializeFlags serializeFlags>
+  inline bool setJsonGeneratorError(
+      JsonGeneratorInterface<serializeFlags>* jsonGenerator) {
+    SonicError err = jsonGenerator->getError();
+    setError(err == kErrorNone ? kParseErrorUnexpect : err);
+    return false;
+  }
 
   template <WriteStyle style,
             SerializeFlags serializeFlags = kSerializeJavaStyleFlag>
   inline bool getJsonPathArrayIndex(
-      const JsonPath &path, size_t index,
-      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
-      const JsonGeneratorFactory<serializeFlags> &jsonGeneratorFactory,
+      const JsonPath& path, size_t index,
+      JsonGeneratorInterface<serializeFlags>* jsonGenerator,
+      const JsonGeneratorFactory<serializeFlags>& jsonGeneratorFactory,
       const int64_t idx) {
     RETURN_FALSE_IF_PARSE_ERROR(consume('['));
     int64_t cur_idx = 0;
@@ -684,18 +1111,30 @@ class SkipScanner2 {
       if (cur_idx == idx) {
         dirty = getJsonPath<style, serializeFlags>(
             path, index + 1, jsonGenerator, jsonGeneratorFactory);
-        while (peek() != ']') {
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
-          if (peek() == ']') {
-            break;
+        if (error_ != kErrorNone) {
+          return false;
+        }
+        bool has_next = false;
+        if (!consumeValueSeparatorOrEnd(']', has_next)) {
+          return false;
+        }
+        while (has_next) {
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
+          if (!consumeValueSeparatorOrEnd(']', has_next)) {
+            return false;
           }
-          RETURN_FALSE_IF_PARSE_ERROR(skipOne());
         }
         break;
       } else {
-        RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+        RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
       }
-      RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd(']', has_next)) {
+        return false;
+      }
+      if (!has_next) {
+        break;
+      }
       cur_idx++;
     }
     RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
@@ -703,24 +1142,31 @@ class SkipScanner2 {
   }
   template <SerializeFlags serializeFlags>
   inline bool jsonTupleWithCodeGenImpl(
-      const std::vector<StringView> &keys,
-      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
-      std::vector<std::optional<std::string>> &result) {
+      const std::vector<StringView>& keys,
+      JsonGeneratorInterface<serializeFlags>* jsonGenerator,
+      std::vector<std::optional<std::string>>& result) {
     RETURN_FALSE_IF_PARSE_ERROR(consume('{'));
 
-    int todo = keys.size();
+    std::vector<uint8_t> seen(keys.size(), 0);
 
-    while (peek() != '}' && todo > 0) {
-      int keyMatchIndex = advanceKeys(keys);
+    while (peek() != '}') {
+      int keyMatchIndex = advanceKeys<kJsonPathParseFlags>(keys);
+      if (error_ != kErrorNone) {
+        return false;
+      }
       if (keyMatchIndex != -1) {
-        todo--;
-        JsonValueType type =
-            peek() == '"' ? JsonValueType::STRING : JsonValueType::OTHER;
-        if (peek() == 'n') {
+        size_t key_index = static_cast<size_t>(keyMatchIndex);
+        if (seen[key_index]) {
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
+        } else if (peek() == 'n') {
           // do not do anything for null
-          RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+          seen[key_index] = 1;
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
         } else {
-          const auto sv = getOne();
+          seen[key_index] = 1;
+          JsonValueType type =
+              peek() == '"' ? JsonValueType::STRING : JsonValueType::OTHER;
+          const auto sv = getOne<kJsonPathParseFlags>();
           if (error_ != kErrorNone) {
             return false;
           }
@@ -728,22 +1174,31 @@ class SkipScanner2 {
               jsonGenerator->copyCurrentStructureJsonTupleCodeGen(
                   sv, keyMatchIndex, result, type);
           if (!copy_success) {
-            error_ = kParseErrorUnexpect;
-            return false;
+            return setJsonGeneratorError(jsonGenerator);
           }
         }
       }
-      RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+      bool has_next = false;
+      if (!consumeValueSeparatorOrEnd('}', has_next)) {
+        return false;
+      }
+      if (!has_next) {
+        break;
+      }
     }
 
+    RETURN_FALSE_IF_PARSE_ERROR(consume('}'));
     return true;
   }
   template <SerializeFlags serializeFlags>
   inline std::vector<std::optional<std::string>> jsonTupleWithCodeGen(
-      const std::vector<StringView> &keys,
-      JsonGeneratorInterface<serializeFlags> *jsonGenerator, bool legacy) {
+      const std::vector<StringView>& keys,
+      JsonGeneratorInterface<serializeFlags>* jsonGenerator, bool legacy) {
     std::vector<std::optional<std::string>> result(keys.size(), std::nullopt);
-    const auto success = jsonTupleWithCodeGenImpl(keys, jsonGenerator, result);
+    bool success = jsonTupleWithCodeGenImpl(keys, jsonGenerator, result);
+    if (success) {
+      success = consumeOnlyTrailingSpaces();
+    }
 
     if (!success && !legacy) {
       std::vector<std::optional<std::string>> all_nulls(keys.size(),
@@ -756,9 +1211,9 @@ class SkipScanner2 {
   template <WriteStyle style,
             SerializeFlags serializeFlags = kSerializeJavaStyleFlag>
   inline bool getJsonPath(
-      const JsonPath &path, size_t index,
-      JsonGeneratorInterface<serializeFlags> *jsonGenerator,
-      const JsonGeneratorFactory<serializeFlags> &jsonGeneratorFactory) {
+      const JsonPath& path, size_t index,
+      JsonGeneratorInterface<serializeFlags>* jsonGenerator,
+      const JsonGeneratorFactory<serializeFlags>& jsonGeneratorFactory) {
     const bool path_is_nil = index >= path.size();
     const auto c = peek();
     const bool is_field_name = getAndClearIsFieldName();
@@ -766,29 +1221,29 @@ class SkipScanner2 {
     const bool field_name = c == '"' && is_field_name;
 
     if (is_field_name && !value_string && !field_name) {
-      setError(kParseErrorUnexpect);
+      setError(kParseErrorInvalidChar);
       return false;
     }
-    // superhack to guarantee advancement
-    if (c == 'n' && !path_is_nil) {
-      // null cannot evaluate
-      RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+    // Primitive values cannot satisfy a non-root path, but they still need to
+    // be consumed so callers can distinguish "no match" from malformed suffix.
+    if (!path_is_nil && (c == 'n' || c == 't' || c == 'f' || c == '-' ||
+                         (c >= '0' && c <= '9'))) {
+      RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
       return false;
     }
     if (value_string && !path_is_nil) {
-      RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+      RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
       return false;
     }
 
     if (value_string && path_is_nil) {
       if constexpr (style == RAW) {
-        const auto sv = getOne();
+        const auto sv = getOne<kJsonPathParseFlags>();
         if (error_ != kErrorNone) {
           return false;
         }
         if (!jsonGenerator->writeRaw(sv)) {
-          setError(kParseErrorUnexpect);
-          return false;
+          return setJsonGeneratorError(jsonGenerator);
         }
         return true;
       }
@@ -802,7 +1257,16 @@ class SkipScanner2 {
         while (peek() != ']') {
           dirty |= getJsonPath<FLATTEN, serializeFlags>(
               path, index + 1, jsonGenerator, jsonGeneratorFactory);
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+          if (error_ != kErrorNone) {
+            return false;
+          }
+          bool has_next = false;
+          if (!consumeValueSeparatorOrEnd(']', has_next)) {
+            return false;
+          }
+          if (!has_next) {
+            break;
+          }
         }
         RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
         return dirty;
@@ -811,17 +1275,18 @@ class SkipScanner2 {
 
     if (path_is_nil) {
       if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
-        jsonGenerator->writeComma();
+        if (!jsonGenerator->writeComma()) {
+          return setJsonGeneratorError(jsonGenerator);
+        }
       }
 
-      const auto sv = getOne();
+      const auto sv = getOne<kJsonPathParseFlags>();
       if (error_ != kErrorNone) {
         return false;
       }
       const auto copy_success = jsonGenerator->copyCurrentStructure(sv);
       if (!copy_success) {
-        error_ = kParseErrorUnexpect;
-        return false;
+        return setJsonGeneratorError(jsonGenerator);
       }
 
       return true;
@@ -834,18 +1299,38 @@ class SkipScanner2 {
         if (dirty) {
           // Skip children
           while (peek() != '}') {
-            RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+            uint8_t key = advance();
+            if (key != '"' ||
+                !scanner_.template SkipStringStrict<kJsonPathParseFlags>(
+                    data_, pos_, len_, kbuf_, error_)) {
+              if (!hasError()) setError(SonicError::kParseErrorInvalidChar);
+              return false;
+            }
             RETURN_FALSE_IF_PARSE_ERROR(consume(':'));
-            RETURN_FALSE_IF_PARSE_ERROR(skipOne());
-            RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+            RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
+            bool has_next = false;
+            if (!consumeValueSeparatorOrEnd('}', has_next)) {
+              return false;
+            }
+            if (!has_next) {
+              break;
+            }
           }
         } else {
           // The next "string_value" is a key
           setIsFieldName();
           dirty = getJsonPath<style, serializeFlags>(path, index, jsonGenerator,
                                                      jsonGeneratorFactory);
-
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+          if (error_ != kErrorNone) {
+            return false;
+          }
+          bool has_next = false;
+          if (!consumeValueSeparatorOrEnd('}', has_next)) {
+            return false;
+          }
+          if (!has_next) {
+            break;
+          }
         }
       }
       RETURN_FALSE_IF_PARSE_ERROR(consume('}'));
@@ -857,16 +1342,31 @@ class SkipScanner2 {
       RETURN_FALSE_IF_PARSE_ERROR(consume('['));
       bool dirty = false;
       if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
-        jsonGenerator->writeComma();
+        if (!jsonGenerator->writeComma()) {
+          return setJsonGeneratorError(jsonGenerator);
+        }
       }
-      jsonGenerator->writeStartArray();
+      if (!jsonGenerator->writeStartArray()) {
+        return setJsonGeneratorError(jsonGenerator);
+      }
       while (peek() != ']') {
         const auto index_plus_two = index + 2;
         dirty |= getJsonPath<FLATTEN, serializeFlags>(
             path, index_plus_two, jsonGenerator, jsonGeneratorFactory);
-        RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+        if (error_ != kErrorNone) {
+          return false;
+        }
+        bool has_next = false;
+        if (!consumeValueSeparatorOrEnd(']', has_next)) {
+          return false;
+        }
+        if (!has_next) {
+          break;
+        }
       }
-      jsonGenerator->writeEndArray();
+      if (!jsonGenerator->writeEndArray()) {
+        return setJsonGeneratorError(jsonGenerator);
+      }
       RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
       return dirty;
     }
@@ -890,29 +1390,45 @@ class SkipScanner2 {
             // getJsonPath() must consume at least one value on success/failure.
             // If not, skip the current JSON value to avoid infinite loop and
             // prevent desync by blindly advancing one byte.
-            RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+            RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
           }
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+          if (error_ != kErrorNone) {
+            return false;
+          }
+          bool has_next = false;
+          if (!consumeValueSeparatorOrEnd(']', has_next)) {
+            return false;
+          }
+          if (!has_next) {
+            break;
+          }
         }
         if (sonic_unlikely(pos_ == len_)) {
-          setError(SonicError::kParseErrorEof);
+          setError(SonicError::kParseErrorInvalidChar);
           return false;
         }
         RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
         if (dirty > 1) {
           if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
-            jsonGenerator->writeComma();
+            if (!jsonGenerator->writeComma()) {
+              return setJsonGeneratorError(jsonGenerator);
+            }
           }
-          jsonGenerator->writeStartArray();
+          if (!jsonGenerator->writeStartArray()) {
+            return setJsonGeneratorError(jsonGenerator);
+          }
           // should always use explicit `Size`, because there maybe '\0' in the
           // wb
-          jsonGenerator->writeRawValue(wb.ToStringView());
-          jsonGenerator->writeEndArray();
+          if (!jsonGenerator->writeRawValue(wb.ToStringView())) {
+            return setJsonGeneratorError(jsonGenerator);
+          }
+          if (!jsonGenerator->writeEndArray()) {
+            return setJsonGeneratorError(jsonGenerator);
+          }
         } else if (dirty == 1) {
           if (!jsonGenerator->copyCurrentStructureSingleResult(
                   wb.ToStringView())) {
-            setError(kParseErrorUnexpect);
-            return false;
+            return setJsonGeneratorError(jsonGenerator);
           }
         }
 
@@ -923,19 +1439,34 @@ class SkipScanner2 {
     if (c == '[' && path[index].is_wildcard()) {
       bool dirty = false;
       if (!jsonGenerator->isBeginArray() && !jsonGenerator->isEmpty()) {
-        jsonGenerator->writeComma();
+        if (!jsonGenerator->writeComma()) {
+          return setJsonGeneratorError(jsonGenerator);
+        }
       }
-      jsonGenerator->writeStartArray();
+      if (!jsonGenerator->writeStartArray()) {
+        return setJsonGeneratorError(jsonGenerator);
+      }
       RETURN_FALSE_IF_PARSE_ERROR(consume('['));
       while (peek() != ']') {
         const auto index_plus_one = index + 1;
 
         dirty |= getJsonPath<QUOTE, serializeFlags>(
             path, index_plus_one, jsonGenerator, jsonGeneratorFactory);
-        RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+        if (error_ != kErrorNone) {
+          return false;
+        }
+        bool has_next = false;
+        if (!consumeValueSeparatorOrEnd(']', has_next)) {
+          return false;
+        }
+        if (!has_next) {
+          break;
+        }
       }
       RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
-      jsonGenerator->writeEndArray();
+      if (!jsonGenerator->writeEndArray()) {
+        return setJsonGeneratorError(jsonGenerator);
+      }
       return dirty;
     }
 
@@ -953,7 +1484,7 @@ class SkipScanner2 {
     }
 
     if (field_name && path[index].is_key()) {
-      const bool found = advanceKey(path[index].key());
+      const bool found = advanceKey<kJsonPathParseFlags>(path[index].key());
       if (error_ != kErrorNone) {
         return false;
       }
@@ -965,7 +1496,7 @@ class SkipScanner2 {
               path, index + 1, jsonGenerator, jsonGeneratorFactory);
         } else {
           // skip null
-          RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
           return false;
         }
       }
@@ -973,7 +1504,7 @@ class SkipScanner2 {
     }
 
     if (field_name && path[index].is_wildcard()) {
-      RETURN_FALSE_IF_PARSE_ERROR(skipOne());
+      RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
       RETURN_FALSE_IF_PARSE_ERROR(consume(':'));
       return getJsonPath<style, serializeFlags>(path, index + 1, jsonGenerator,
                                                 jsonGeneratorFactory);
@@ -983,22 +1514,34 @@ class SkipScanner2 {
       if (c == '{') {
         RETURN_FALSE_IF_PARSE_ERROR(consume('{'));
         while (peek() != '}') {
-          // SkipString returns a status (0/1/2) but doesn't set error_.
-          // Don't use RETURN_FALSE_IF_PARSE_ERROR here.
-          if (!SkipString(data_, pos_, len_)) {
-            setError(SonicError::kParseErrorInvalidChar);
+          RETURN_FALSE_IF_PARSE_ERROR(consume('"'));
+          if (!scanner_.template SkipStringStrict<kJsonPathParseFlags>(
+                  data_, pos_, len_, kbuf_, error_)) {
+            if (!hasError()) setError(SonicError::kParseErrorInvalidChar);
             return false;
           }
           RETURN_FALSE_IF_PARSE_ERROR(consume(':'));
-          RETURN_FALSE_IF_PARSE_ERROR(skipOne());
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
+          bool has_next = false;
+          if (!consumeValueSeparatorOrEnd('}', has_next)) {
+            return false;
+          }
+          if (!has_next) {
+            break;
+          }
         }
         RETURN_FALSE_IF_PARSE_ERROR(consume('}'));
       } else if (c == '[') {
         RETURN_FALSE_IF_PARSE_ERROR(consume('['));
         while (peek() != ']') {
-          RETURN_FALSE_IF_PARSE_ERROR(skipOne());
-          RETURN_FALSE_IF_PARSE_ERROR(skipIfPresent(','));
+          RETURN_FALSE_IF_PARSE_ERROR(skipOne<kJsonPathParseFlags>());
+          bool has_next = false;
+          if (!consumeValueSeparatorOrEnd(']', has_next)) {
+            return false;
+          }
+          if (!has_next) {
+            break;
+          }
         }
         RETURN_FALSE_IF_PARSE_ERROR(consume(']'));
       }
@@ -1007,11 +1550,11 @@ class SkipScanner2 {
   }
   // SkipOne skip one raw json value and return the start of value, return the
   // negative if errors.
-  inline SonicError getJsonPath(const JsonPath &path, size_t index,
-                                std::vector<StringView> &res,
+  inline SonicError getJsonPath(const JsonPath& path, size_t index,
+                                std::vector<StringView>& res,
                                 bool complete = false) {
     if (index >= path.size()) {
-      res.push_back(getOne());
+      res.push_back(getOne<kJsonPathParseFlags>());
       return error_;
     }
 
@@ -1031,14 +1574,14 @@ class SkipScanner2 {
       if (c != '{') {
         if (complete) {
           pos_--;
-          skipOne();
+          skipOne<kJsonPathParseFlags>();
         } else {
           setError(SonicError::kUnmatchedTypeInJsonPath);
         }
         return error_;
       }
 
-      bool found = advanceKey(path[index].key());
+      bool found = advanceKey<kJsonPathParseFlags>(path[index].key());
       if (hasError()) {
         return error_;
       }
@@ -1058,7 +1601,7 @@ class SkipScanner2 {
       if (c != '[') {
         if (complete) {
           pos_--;
-          skipOne();
+          skipOne<kJsonPathParseFlags>();
         } else {
           setError(SonicError::kUnmatchedTypeInJsonPath);
         }
@@ -1096,11 +1639,11 @@ class SkipScanner2 {
 
  public:
   SkipScanner scanner_;
-  const uint8_t *data_ = nullptr;
+  const uint8_t* data_ = nullptr;
   size_t pos_ = 0;
   size_t len_ = 0;
   SonicError error_ = SonicError::kErrorNone;
-  std::vector<uint8_t> kbuf_ = {};
+  Stack kbuf_{32};
   bool isFieldName = false;
 };
 }  // namespace internal

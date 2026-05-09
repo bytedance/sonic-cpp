@@ -133,6 +133,16 @@ TEST(WriteBuffer, ToStringIsIdempotentWhenCapacityHasSlack) {
   EXPECT_EQ(p1, p2);
 }
 
+TEST(WriteBuffer, ToStringViewDoesNotRequireNullTerminator) {
+  WriteBuffer wb(1);
+  wb.PushUnsafe<char>('x');
+  ASSERT_EQ(wb.Size(), wb.Capacity());
+
+  auto sv = wb.ToStringView();
+  EXPECT_EQ(sv, "x");
+  EXPECT_FALSE(wb.HadOom());
+}
+
 TEST(WriteBuffer, StringSize) {
   {
     WriteBuffer wb;

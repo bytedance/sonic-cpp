@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
-                                          uint64_t &prev_instring,
-                                          uint64_t &prev_escaped) {
+sonic_force_inline uint64_t GetStringBits(const uint8_t* data,
+                                          uint64_t& prev_instring,
+                                          uint64_t& prev_escaped) {
   const simd::simd8x64<uint8_t> v(data);
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
@@ -35,7 +35,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
 // GetNextToken find the next characters in tokens and update the position to
 // it.
 template <size_t N>
-sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
+sonic_force_inline uint8_t GetNextToken(const uint8_t* data, size_t& pos,
                                         size_t len, const char (&tokens)[N]) {
   while (pos + VEC_LEN <= len) {
     VecUint8Type v(data + pos);
@@ -62,7 +62,7 @@ sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
 }
 
 // pos is the after the ending quote
-sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
+sonic_force_inline int SkipString(const uint8_t* data, size_t& pos,
                                   size_t len) {
   const static int kEscaped = 2;
   const static int kNormal = 1;
@@ -119,11 +119,11 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 // return true if container is closed.
 // the implementation is inspired from JSONSki
 // reference: https://dl.acm.org/doi/10.1145/3503222.3507719
-sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
+sonic_force_inline bool SkipContainer(const uint8_t* data, size_t& pos,
                                       size_t len, uint8_t left, uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
-  const uint8_t *p;
+  const uint8_t* p;
   while (pos + 64 <= len) {
     p = data + pos;
 #define SKIP_LOOP()                                                    \
@@ -159,9 +159,9 @@ sonic_force_inline bool SkipContainer(const uint8_t *data, size_t &pos,
 }
 
 // TODO: optimize by removing bound checking.
-sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
-                                      size_t &nonspace_bits_end,
-                                      uint64_t &nonspace_bits) {
+sonic_force_inline uint8_t skip_space(const uint8_t* data, size_t& pos,
+                                      size_t& nonspace_bits_end,
+                                      uint64_t& nonspace_bits) {
   // fast path for single space
   if (!IsSpace(data[pos++])) return data[pos - 1];
   if (!IsSpace(data[pos++])) return data[pos - 1];
@@ -199,10 +199,11 @@ sonic_force_inline uint8_t skip_space(const uint8_t *data, size_t &pos,
   return data[pos++];
 }
 
-sonic_force_inline uint8_t skip_space_safe(const uint8_t *data, size_t &pos,
+sonic_force_inline uint8_t skip_space_safe(const uint8_t* data, size_t& pos,
                                            size_t len,
-                                           size_t &nonspace_bits_end,
-                                           uint64_t &nonspace_bits) {
+                                           size_t& nonspace_bits_end,
+                                           uint64_t& nonspace_bits) {
+  if (sonic_unlikely(pos >= len)) return 0;
   if (pos + 64 + 2 > len) {
     goto tail;
   }
@@ -247,6 +248,7 @@ sonic_force_inline uint8_t skip_space_safe(const uint8_t *data, size_t &pos,
 tail:
   while (pos < len && IsSpace(data[pos++]))
     ;
+  if (sonic_unlikely(pos == 0)) return 0;
   // if not found, still return the space chars
   return data[pos - 1];
 }

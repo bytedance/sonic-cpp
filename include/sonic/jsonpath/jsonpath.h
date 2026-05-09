@@ -157,7 +157,7 @@ class JsonPath : public std::vector<JsonPathNode> {
   // 8 extra '\0' bytes after `logical_len`.
   // The caller must keep the buffer alive while the parsed JsonPath is used.
   sonic_force_inline bool ParsePaddedInternal(StringView padded,
-                                              size_t logical_len) noexcept {
+                                              size_t logical_len) {
     StringView p(padded.data(), logical_len);
 
     if (p.empty() || p[0] != '$') {
@@ -350,14 +350,13 @@ class JsonPath : public std::vector<JsonPathNode> {
  public:
   // Parse with a padded, writable buffer (avoids extra copy).
   // See ParsePaddedInternal() for lifetime and padding requirements.
-  sonic_force_inline bool ParsePadded(StringView padded,
-                                      size_t logical_len) noexcept {
+  sonic_force_inline bool ParsePadded(StringView padded, size_t logical_len) {
     this->clear();
     padded_.clear();
     return ParsePaddedInternal(padded, logical_len);
   }
 
-  sonic_force_inline bool Parse(StringView path) noexcept {
+  sonic_force_inline bool Parse(StringView path) {
     this->clear();
     padded_ = paddingJsonPath(path);
     return ParsePaddedInternal(StringView(padded_.data(), padded_.size()),

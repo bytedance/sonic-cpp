@@ -19,11 +19,14 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "sonic/dom/handler.h"
 #include "sonic/dom/parser.h"
+#include "sonic/experiment/lazy_update.h"
 #include "sonic/sonic.h"
 
 namespace {
@@ -87,13 +90,20 @@ struct AlwaysOomAllocator {
   static constexpr bool kNeedFree = false;
 };
 
+static constexpr size_t kJsonHeadroom = 64;
+
 static std::vector<uint8_t> pad_json_bytes(const char* json, size_t len) {
-  std::vector<uint8_t> buf(len + 64, 0);
-  std::memcpy(buf.data(), json, len);
-  buf[len] = 'x';
-  buf[len + 1] = '"';
-  buf[len + 2] = 'x';
+  std::vector<uint8_t> buf(kJsonHeadroom + len + 64, 0);
+  uint8_t* data = buf.data() + kJsonHeadroom;
+  std::memcpy(data, json, len);
+  data[len] = 'x';
+  data[len + 1] = '"';
+  data[len + 2] = 'x';
   return buf;
+}
+
+static uint8_t* padded_json_data(std::vector<uint8_t>& buf) {
+  return buf.data() + kJsonHeadroom;
 }
 
 TEST(Document, OomDoesNotCrashPushBack) {
@@ -104,6 +114,32 @@ TEST(Document, OomDoesNotCrashPushBack) {
   val.SetInt64(42);
   arr.PushBack(std::move(val), alloc);
   EXPECT_EQ(0u, arr.Size());
+}
+
+TEST(Document, MutatingStatusApisReportOom) {
+  AlwaysOomAllocator alloc;
+
+  DNode<AlwaysOomAllocator> arr;
+  arr.SetArray();
+  EXPECT_EQ(kErrorNoMem,
+            arr.PushBackWithError(DNode<AlwaysOomAllocator>(42), alloc));
+  EXPECT_EQ(0u, arr.Size());
+  EXPECT_EQ(kErrorNoMem, arr.ReserveWithError(16, alloc));
+
+  DNode<AlwaysOomAllocator> obj;
+  obj.SetObject();
+  DNode<AlwaysOomAllocator>::MemberIterator inserted = nullptr;
+  EXPECT_EQ(kErrorNoMem,
+            obj.AddMemberWithError("k", DNode<AlwaysOomAllocator>(1), alloc,
+                                   true, &inserted));
+  EXPECT_EQ(obj.MemberEnd(), inserted);
+  EXPECT_EQ(0u, obj.Size());
+  EXPECT_EQ(kErrorNoMem, obj.MemberReserveWithError(16, alloc));
+
+  DNode<AlwaysOomAllocator> num;
+  EXPECT_EQ(kErrorNoMem,
+            num.SetStringNumberWithError(StringView("123", 3), alloc));
+  EXPECT_TRUE(num.IsNull());
 }
 
 TEST(Document, NoFreeAllocatorWithoutClearCompilesAndRuns) {
@@ -184,6 +220,23 @@ TEST(Document, OomDoesNotCrashParseArray) {
   EXPECT_TRUE(doc.HasParseError());
 }
 
+TEST(Document, ParseArrayOomReportsNoMemAtParserOffset) {
+  OomAfterNthAllocator alloc(1);
+  GenericDocument<DNode<OomAfterNthAllocator>> doc(&alloc);
+  doc.Parse("[1,2,3]");
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kErrorNoMem, doc.GetParseError());
+  EXPECT_GT(doc.GetErrorOffset(), 0u);
+}
+
+TEST(Document, ParseRejectsLengthPaddingOverflowBeforeCopy) {
+  Document doc;
+  doc.Parse("", std::numeric_limits<size_t>::max());
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kErrorNoMem, doc.GetParseError());
+  EXPECT_EQ(0u, doc.GetErrorOffset());
+}
+
 TEST(Document, ParseImplHandlesRepeatedOomCleanly) {
   OomAfterNthAllocator alloc(0);
   GenericDocument<DNode<OomAfterNthAllocator>> doc(&alloc);
@@ -244,7 +297,7 @@ TEST(Document, ParseLazyEscapedKeyOomReportsNoMem) {
   Parser<ParseFlags::kParseDefault> p;
   const char* json = R"({"\n": 1})";
   auto buf = pad_json_bytes(json, std::strlen(json));
-  auto res = p.ParseLazy(buf.data(), std::strlen(json), sax);
+  auto res = p.ParseLazy(padded_json_data(buf), std::strlen(json), sax);
   EXPECT_EQ(kErrorNoMem, res.Error());
 }
 
@@ -277,6 +330,179 @@ TEST(Document, AddMemberWithoutMapOnOomLeavesObjectEmpty) {
   EXPECT_EQ(0u, obj.Size());
 }
 
+TEST(Document, AddMemberCopiedKeyOomLeavesObjectEmpty) {
+  OomAfterNthAllocator alloc(1);
+  DNode<OomAfterNthAllocator> obj;
+  obj.SetObject();
+  DNode<OomAfterNthAllocator> val;
+  val.SetInt64(1);
+
+  auto it = obj.AddMember("k", std::move(val), alloc, true);
+  EXPECT_EQ(obj.MemberEnd(), it);
+  EXPECT_EQ(0u, obj.Size());
+}
+
+TEST(Document, CreateMapOomForTreeNodeReturnsFalse) {
+  OomAfterNthAllocator alloc(2);
+  DNode<OomAfterNthAllocator> obj;
+  obj.SetObject();
+  obj.AddMember("k", DNode<OomAfterNthAllocator>(1), alloc, false);
+  ASSERT_EQ(1u, obj.Size());
+
+  alloc.remaining = 1;
+  EXPECT_FALSE(obj.CreateMap(alloc));
+}
+
+TEST(Document, RemoveMemberWithMapDoesNotAllocateOrThrow) {
+  OomAfterNthAllocator alloc(16);
+  DNode<OomAfterNthAllocator> obj;
+  obj.SetObject();
+  obj.AddMember("a", DNode<OomAfterNthAllocator>(1), alloc, false);
+  obj.AddMember("b", DNode<OomAfterNthAllocator>(2), alloc, false);
+  ASSERT_TRUE(obj.CreateMap(alloc));
+
+  alloc.remaining = 0;
+  EXPECT_TRUE(obj.RemoveMember("a"));
+  ASSERT_EQ(1u, obj.Size());
+  auto it = obj.FindMember("b");
+  ASSERT_NE(obj.MemberEnd(), it);
+  EXPECT_EQ(2, it->value.GetInt64());
+}
+
+TEST(Document, TryCopyFromOomPreservesDestination) {
+  OomAfterNthAllocator alloc(64);
+  GenericDocument<DNode<OomAfterNthAllocator>> src(&alloc);
+  src.Parse(R"({"a":{"b":"copied"},"c":2})");
+  ASSERT_FALSE(src.HasParseError());
+
+  DNode<OomAfterNthAllocator> dst;
+  dst.SetObject();
+  dst.AddMember("old", DNode<OomAfterNthAllocator>(1), alloc, false);
+  ASSERT_EQ(1u, dst.Size());
+
+  alloc.remaining = 1;
+  EXPECT_FALSE(dst.TryCopyFrom(src, alloc));
+  ASSERT_TRUE(dst.IsObject());
+  ASSERT_EQ(1u, dst.Size());
+  auto old = dst.FindMember("old");
+  ASSERT_NE(dst.MemberEnd(), old);
+  EXPECT_EQ(1, old->value.GetInt64());
+
+  alloc.remaining = 1;
+  dst.CopyFrom(src, alloc);
+  ASSERT_TRUE(dst.IsObject());
+  ASSERT_EQ(1u, dst.Size());
+  old = dst.FindMember("old");
+  ASSERT_NE(dst.MemberEnd(), old);
+  EXPECT_EQ(1, old->value.GetInt64());
+}
+
+TEST(Document, ContainerReserveOverflowDoesNotChangeCapacity) {
+  OomAfterNthAllocator alloc(1);
+  DNode<OomAfterNthAllocator> arr;
+  arr.SetArray();
+
+  arr.Reserve(std::numeric_limits<size_t>::max(), alloc);
+  EXPECT_EQ(0u, arr.Capacity());
+  EXPECT_EQ(0u, arr.Size());
+}
+
+TEST(Document, HandlerSetupRejectsCapacityOverflow) {
+  OomAfterNthAllocator alloc(1);
+  SAXHandler<DNode<OomAfterNthAllocator>> sax(alloc);
+  EXPECT_FALSE(
+      sax.SetUp(StringView("", std::numeric_limits<size_t>::max() - 1)));
+  EXPECT_TRUE(sax.oom_);
+  EXPECT_EQ(kErrorNoMem, sax.GetError());
+}
+
+TEST(Document, ParseSchemaStringUpdateOomReportsNoMem) {
+  TrackingNthOomAllocator::balance = 0;
+  TrackingNthOomAllocator::remaining = 32;
+  TrackingNthOomAllocator alloc;
+  GenericDocument<DNode<TrackingNthOomAllocator>> doc(&alloc);
+  doc.Parse(R"({"a":"old"})");
+  ASSERT_FALSE(doc.HasParseError());
+  ASSERT_EQ("old", doc["a"].GetStringView());
+
+  TrackingNthOomAllocator::remaining = 1;
+  doc.ParseSchema(R"({"a":"new"})");
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kErrorNoMem, doc.GetParseError());
+  EXPECT_EQ("old", doc["a"].GetStringView());
+}
+
+TEST(Document, ParseSchemaNewObjectOomPreservesExistingValue) {
+  TrackingNthOomAllocator::balance = 0;
+  TrackingNthOomAllocator::remaining = 32;
+  TrackingNthOomAllocator alloc;
+  GenericDocument<DNode<TrackingNthOomAllocator>> doc(&alloc);
+  doc.Parse(R"({"a":"old"})");
+  ASSERT_FALSE(doc.HasParseError());
+  ASSERT_EQ("old", doc["a"].GetStringView());
+
+  TrackingNthOomAllocator::remaining = 1;
+  doc.ParseSchema(R"({"a":{"b":2}})");
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kErrorNoMem, doc.GetParseError());
+  ASSERT_TRUE(doc["a"].IsString());
+  EXPECT_EQ("old", doc["a"].GetStringView());
+}
+
+TEST(Document, ParseSchemaNewArrayOomPreservesExistingValue) {
+  TrackingNthOomAllocator::balance = 0;
+  TrackingNthOomAllocator::remaining = 32;
+  TrackingNthOomAllocator alloc;
+  GenericDocument<DNode<TrackingNthOomAllocator>> doc(&alloc);
+  doc.Parse(R"({"a":"old"})");
+  ASSERT_FALSE(doc.HasParseError());
+  ASSERT_EQ("old", doc["a"].GetStringView());
+
+  TrackingNthOomAllocator::remaining = 1;
+  doc.ParseSchema(R"({"a":[1]} )");
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kErrorNoMem, doc.GetParseError());
+  ASSERT_TRUE(doc["a"].IsString());
+  EXPECT_EQ("old", doc["a"].GetStringView());
+}
+
+TEST(Document, ParseSchemaStringNumberOverwriteFreesOldValue) {
+  TrackingNthOomAllocator::balance = 0;
+  TrackingNthOomAllocator::remaining = 64;
+  {
+    TrackingNthOomAllocator alloc;
+    GenericDocument<DNode<TrackingNthOomAllocator>> doc(&alloc);
+    doc.ParseSchema<ParseFlags::kParseOverflowNumAsNumStr>(
+        R"({"n":184467440737095516160})");
+    ASSERT_FALSE(doc.HasParseError());
+    doc.ParseSchema<ParseFlags::kParseOverflowNumAsNumStr>(
+        R"({"n":184467440737095516161})");
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc["n"].IsNumber());
+    ASSERT_TRUE(doc["n"].IsStringNumber());
+    EXPECT_EQ("184467440737095516161", doc["n"].GetStringNumber());
+  }
+  EXPECT_EQ(0, TrackingNthOomAllocator::balance);
+}
+
+TEST(Document, UpdateNodeLazyReportsAddMemberOom) {
+  OomAfterNthAllocator alloc(8);
+  DNode<OomAfterNthAllocator> target(kObject);
+  target.AddMember("a", DNode<OomAfterNthAllocator>(1), alloc, false);
+  DNode<OomAfterNthAllocator> source(kObject);
+  source.AddMember("b", DNode<OomAfterNthAllocator>(2), alloc, false);
+  ASSERT_EQ(1u, target.Size());
+  ASSERT_EQ(1u, source.Size());
+
+  alloc.remaining = 0;
+  auto err =
+      internal::UpdateNodeLazy<DNode<OomAfterNthAllocator>,
+                               OomAfterNthAllocator, ParseFlags::kParseDefault>(
+          target, source, alloc);
+  EXPECT_EQ(kErrorNoMem, err);
+  EXPECT_EQ(1u, target.Size());
+}
+
 TEST(LazySAXHandler, EndObjectOomLeavesStackMatchingSuccessArm) {
   TrackingNthOomAllocator::balance = 0;
   TrackingNthOomAllocator::remaining = 1;
@@ -292,9 +518,10 @@ TEST(LazySAXHandler, EndObjectOomLeavesStackMatchingSuccessArm) {
   std::memcpy(buf, kKey, sizeof(kKey));
   ASSERT_TRUE(sax.Key(static_cast<const char*>(buf), sizeof(kKey) - 1, 1));
   ASSERT_TRUE(sax.Raw("1", 1));
-  ASSERT_TRUE(sax.EndObject(1));
+  ASSERT_FALSE(sax.EndObject(1));
   EXPECT_TRUE(sax.oom_);
-  EXPECT_EQ(sizeof(Node), sax.stack_.Size());
+  EXPECT_EQ(kErrorNoMem, sax.GetError());
+  EXPECT_EQ(sizeof(Node), sax.StackSizeBytes());
 }
 
 TEST(Document, ParseLazyFreesEscapedKeyOnKeyFailure) {
@@ -304,7 +531,7 @@ TEST(Document, ParseLazyFreesEscapedKeyOnKeyFailure) {
   Parser<ParseFlags::kParseDefault> p;
   const char* json = R"({"\n": 1})";
   auto buf = pad_json_bytes(json, std::strlen(json));
-  p.ParseLazy(buf.data(), std::strlen(json), sax);
+  p.ParseLazy(padded_json_data(buf), std::strlen(json), sax);
 
   ASSERT_TRUE(sax.key_called);
   EXPECT_EQ(0, SentinelTrackingAllocator::balance);
@@ -377,6 +604,18 @@ TEST(Parser, EndArrayFalseAbortsParse) {
   Parser<ParseFlags::kParseDefault> p;
   auto res = p.Parse(buf.data(), std::strlen(json), sax);
   EXPECT_EQ(kSaxTermination, res.Error());
+}
+
+TEST(Parser, SaxHandlerArrayOomReportsNoMem) {
+  const char* json = "[1,2,3]";
+  auto buf = pad_json_for_parser(json, std::strlen(json));
+  OomAfterNthAllocator alloc(0);
+  SAXHandler<DNode<OomAfterNthAllocator>> sax(alloc);
+  ASSERT_TRUE(sax.SetUp(StringView(json, std::strlen(json))));
+  Parser<ParseFlags::kParseDefault> p;
+  auto res = p.Parse(buf.data(), std::strlen(json), sax);
+  EXPECT_EQ(kErrorNoMem, res.Error());
+  EXPECT_GT(res.Offset(), 0u);
 }
 
 TEST(Parser, EndObjectFalseAbortsParse) {
@@ -543,6 +782,32 @@ TEST(Parser, KeyFalsePreservesSkipSemanticsUnderCheckKeyReturn) {
   EXPECT_EQ(2, sax.keys_seen);
 }
 
+struct OomKeyCheckReturnSAX {
+  static constexpr bool check_key_return = true;
+  bool Null() { return true; }
+  bool Bool(bool) { return true; }
+  bool Int(int64_t) { return true; }
+  bool Uint(uint64_t) { return true; }
+  bool Double(double) { return true; }
+  bool NumStr(StringView) { return true; }
+  bool Key(StringView) { return false; }
+  bool String(StringView) { return true; }
+  bool StartArray() { return true; }
+  bool EndArray(uint32_t) { return true; }
+  bool StartObject() { return true; }
+  bool EndObject(uint32_t) { return true; }
+  SonicError GetError() const { return kErrorNoMem; }
+};
+
+TEST(Parser, KeyFalseUnderCheckKeyReturnPropagatesHandlerError) {
+  const char* json = R"({"a":1})";
+  auto buf = pad_json_for_parser(json, std::strlen(json));
+  OomKeyCheckReturnSAX sax;
+  Parser<ParseFlags::kParseDefault> p;
+  auto res = p.Parse(buf.data(), std::strlen(json), sax);
+  EXPECT_EQ(kErrorNoMem, res.Error());
+}
+
 struct RejectAllLazySax {
   using Allocator = SONIC_DEFAULT_ALLOCATOR;
   Allocator alloc_;
@@ -560,7 +825,7 @@ TEST(ParseLazy, RawRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = "42";
   auto buf = pad_json_bytes(j, 2);
-  auto r = p.ParseLazy(buf.data(), 2, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 2, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -569,7 +834,7 @@ TEST(ParseLazy, StartArrayRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = "[1,2,3]";
   auto buf = pad_json_bytes(j, 7);
-  auto r = p.ParseLazy(buf.data(), 7, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 7, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -578,7 +843,7 @@ TEST(ParseLazy, StartObjectRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = R"({"k":1})";
   auto buf = pad_json_bytes(j, 7);
-  auto r = p.ParseLazy(buf.data(), 7, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 7, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -599,8 +864,74 @@ TEST(ParseLazy, AcceptAllStillCompletesCleanly) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = R"({"a":1,"b":[2,3]})";
   auto buf = pad_json_bytes(j, std::strlen(j));
-  auto r = p.ParseLazy(buf.data(), std::strlen(j), sax);
+  auto r = p.ParseLazy(padded_json_data(buf), std::strlen(j), sax);
   EXPECT_EQ(r.Error(), kErrorNone);
+}
+
+struct CapturingLazySax {
+  using Allocator = SimpleAllocator;
+  Allocator alloc_;
+  std::vector<std::string> keys;
+
+  Allocator& GetAllocator() { return alloc_; }
+  bool StartArray() { return true; }
+  bool EndArray(size_t) { return true; }
+  bool StartObject() { return true; }
+  bool EndObject(size_t) { return true; }
+  bool Key(const char* data, size_t len, size_t allocated) {
+    keys.emplace_back(data, len);
+    if (allocated) Allocator::Free(const_cast<char*>(data));
+    return true;
+  }
+  bool Raw(const char*, size_t) { return true; }
+};
+
+TEST(ParseLazy, EscapedObjectKeyScratchKeepsClosingQuote) {
+  CapturingLazySax sax;
+  Parser<ParseFlags::kParseDefault> p;
+  const char* j = R"({"\n":1})";
+  auto buf = pad_json_bytes(j, std::strlen(j));
+  auto r = p.ParseLazy(padded_json_data(buf), std::strlen(j), sax);
+  EXPECT_EQ(r.Error(), kErrorNone);
+  ASSERT_EQ(sax.keys.size(), 1);
+  EXPECT_EQ(sax.keys[0], "\n");
+}
+
+TEST(ParseLazy, EmptyInputReportsZeroOffset) {
+  AcceptAllLazySax sax;
+  Parser<ParseFlags::kParseDefault> p;
+  auto r = p.ParseLazy(reinterpret_cast<const uint8_t*>(""), 0, sax);
+  EXPECT_EQ(kParseErrorInvalidChar, r.Error());
+  EXPECT_EQ(0u, r.Offset());
+}
+
+TEST(ParseLazy, WhitespaceOnlyInputDoesNotWrapOffset) {
+  AcceptAllLazySax sax;
+  Parser<ParseFlags::kParseDefault> p;
+  const char* j = "   ";
+  auto buf = pad_json_bytes(j, std::strlen(j));
+  auto r = p.ParseLazy(padded_json_data(buf), std::strlen(j), sax);
+  EXPECT_EQ(kParseErrorInvalidChar, r.Error());
+  EXPECT_LE(r.Offset(), std::strlen(j));
+}
+
+TEST(ParseLazy, UnterminatedObjectKeyReportsCurrentOffset) {
+  AcceptAllLazySax sax;
+  Parser<ParseFlags::kParseDefault> p;
+  const char* j = R"({"abc)";
+  auto buf = pad_json_bytes(j, std::strlen(j));
+  auto r = p.ParseLazy(padded_json_data(buf), std::strlen(j), sax);
+  EXPECT_EQ(kParseErrorInvalidChar, r.Error());
+  EXPECT_EQ(std::strlen(j), r.Offset());
+}
+
+TEST(LazySAXHandler, HandlerOwnsStackAndIsMoveOnly) {
+  using Handler = LazySAXHandler<Node>;
+  static_assert(!std::is_copy_constructible<Handler>::value,
+                "LazySAXHandler owns a raw stack and must not be copyable");
+  static_assert(
+      !std::is_copy_assignable<Handler>::value,
+      "LazySAXHandler owns a raw stack and must not be copy assignable");
 }
 
 struct StringKeyCountingSAX {
@@ -645,6 +976,17 @@ TEST(Parser, InvalidSurrogateInKeyDoesNotInvokeKeyCallback) {
   auto res = p.Parse(buf.data(), std::strlen(json), sax);
   EXPECT_TRUE(res.Error() != kErrorNone);
   EXPECT_EQ(0, sax.key_calls);
+}
+
+TEST(Parser, PaddedShortLiteralReturnsInvalidChar) {
+  for (char c : {'t', 'f', 'n'}) {
+    char json[2] = {c, '\0'};
+    auto buf = pad_json_for_parser(json, 1);
+    StringKeyCountingSAX sax;
+    Parser<ParseFlags::kParseDefault> p;
+    auto res = p.Parse(buf.data(), 1, sax);
+    EXPECT_EQ(kParseErrorInvalidChar, res.Error()) << c;
+  }
 }
 
 }  // namespace

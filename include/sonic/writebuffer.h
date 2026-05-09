@@ -42,28 +42,33 @@ class WriteBuffer {
    * @note Not thread-safe.
    */
   sonic_force_inline const char* ToString() const {
-    if (sonic_likely(stack_.Size() < stack_.Capacity())) {
-      *(stack_.template End<char>()) = '\0';
-      return stack_.template Begin<char>();
-    }
-    stack_.Grow(1);
-    *(stack_.template End<char>()) = '\0';
+    if (sonic_unlikely(!ensureNullTerminated())) return "";
     return stack_.template Begin<char>();
   }
 
   sonic_force_inline StringView ToStringView() const {
-    return StringView(ToString(), Size());
+    if (Empty()) return StringView("", 0);
+    return StringView(stack_.template Begin<char>(), Size());
+  }
+
+  sonic_force_inline bool EnsureNullTerminated() const {
+    return ensureNullTerminated();
   }
 
   sonic_force_inline size_t Size() const { return stack_.Size(); }
   sonic_force_inline size_t Capacity() const { return stack_.Capacity(); }
   sonic_force_inline bool Empty() const { return stack_.Empty(); }
+  sonic_force_inline bool HadOom() const { return stack_.HadOom(); }
+  sonic_force_inline SonicError GetError() const { return stack_.GetError(); }
+  sonic_force_inline void ClearOom() { stack_.ClearOom(); }
 
   /**
    * @brief Increase the capacity of buffer if new_cap is greater than the
    * current capacity(). Otherwise, do nothing.
    */
-  sonic_force_inline void Reserve(size_t new_cap) { stack_.Reserve(new_cap); }
+  sonic_force_inline bool Reserve(size_t new_cap) {
+    return stack_.Reserve(new_cap);
+  }
 
   /**
    * @brief Erases all contexts in the buffer.
@@ -75,8 +80,8 @@ class WriteBuffer {
    * @param v the pushed value, as char, int...
    */
   template <typename T>
-  sonic_force_inline void Push(T v) {
-    stack_.template Push<T>(v);
+  sonic_force_inline bool Push(T v) {
+    return stack_.template Push<T>(v);
   }
 
   /**
@@ -84,12 +89,14 @@ class WriteBuffer {
    * @param s the beginning of string
    * @param n the string size
    */
-  sonic_force_inline void Push(const char* s, size_t n) { stack_.Push(s, n); }
+  sonic_force_inline bool Push(const char* s, size_t n) {
+    return stack_.Push(s, n);
+  }
   sonic_force_inline void PushUnsafe(const char* s, size_t n) {
     stack_.PushUnsafe(s, n);
   }
-  sonic_force_inline void PushStr(StringView s) {
-    stack_.Push(s.data(), s.size());
+  sonic_force_inline bool PushStr(StringView s) {
+    return stack_.Push(s.data(), s.size());
   }
 
   template <typename T>
@@ -108,8 +115,8 @@ class WriteBuffer {
   }
 
   // faster api for push 5 ~ 8 bytes.
-  sonic_force_inline void Push5_8(const char* bytes8, size_t n) {
-    stack_.Push5_8(bytes8, n);
+  sonic_force_inline bool Push5_8(const char* bytes8, size_t n) {
+    return stack_.Push5_8(bytes8, n);
   }
 
   /**
@@ -166,6 +173,16 @@ class WriteBuffer {
   }
 
  private:
+  sonic_force_inline bool ensureNullTerminated() const {
+    if (sonic_likely(stack_.Size() < stack_.Capacity())) {
+      *(stack_.template End<char>()) = '\0';
+      return true;
+    }
+    if (sonic_unlikely(stack_.Grow(1) == nullptr)) return false;
+    *(stack_.template End<char>()) = '\0';
+    return true;
+  }
+
   mutable internal::Stack stack_;
 };
 

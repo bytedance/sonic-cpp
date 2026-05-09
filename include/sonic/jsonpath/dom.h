@@ -1,68 +1,80 @@
 
 #pragma once
 
+#include <new>
+
 #include "sonic/dom/generic_document.h"
 #include "sonic/jsonpath/dump.h"
 
 namespace sonic_json {
 
+static constexpr ParseFlags kJsonPathParseFlags =
+    ParseFlags::kParseAllowUnescapedControlChars |
+    ParseFlags::kParseIntegerAsRaw;
+
 sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPathInternal(
     Document& dom, StringView jsonpath) {
-  // get the nodes
-  auto result = dom.AtJsonPath(jsonpath);
-  if (result.error != kErrorNone) {
-    return std::make_tuple("", result.error);
-  }
+  try {
+    // get the nodes
+    auto result = dom.AtJsonPath(jsonpath);
+    if (result.error != kErrorNone) {
+      return std::make_tuple("", result.error);
+    }
 
-  // filter the null nodes
-  result.nodes.erase(
-      std::remove_if(result.nodes.begin(), result.nodes.end(),
-                     [](const auto& node) { return node->IsNull(); }),
-      result.nodes.end());
+    // filter the null nodes
+    result.nodes.erase(
+        std::remove_if(result.nodes.begin(), result.nodes.end(),
+                       [](const auto& node) { return node->IsNull(); }),
+        result.nodes.end());
 
-  if (result.nodes.empty()) {
-    return std::make_tuple("null", result.error);
-  }
+    if (result.nodes.empty()) {
+      return std::make_tuple("null", result.error);
+    }
 
-  WriteBuffer wb;
-  if (result.nodes.size() == 1) {
-    // not serialize the single string
-    auto& root = result.nodes[0];
-    if (root->IsString()) {
-      wb.Push(root->GetStringView().data(), root->Size());
+    WriteBuffer wb;
+    if (result.nodes.size() == 1) {
+      // not serialize the single string
+      auto& root = result.nodes[0];
+      if (root->IsString()) {
+        if (!wb.Push(root->GetStringView().data(), root->Size())) {
+          return std::make_tuple("", kErrorNoMem);
+        }
+      } else {
+        auto err =
+            result.nodes[0]
+                ->template Serialize<SerializeFlags::kSerializeEscapeEmoji>(wb);
+        if (err != kErrorNone) {
+          return std::make_tuple("", err);
+        }
+      }
     } else {
-      auto err =
-          result.nodes[0]
-              ->template Serialize<SerializeFlags::kSerializeEscapeEmoji>(wb);
-      if (err != kErrorNone) {
-        return std::make_tuple("", err);
+      if (!wb.Push('[')) return std::make_tuple("", kErrorNoMem);
+      for (const auto& node : result.nodes) {
+        auto err =
+            node->template Serialize<SerializeFlags::kSerializeAppendBuffer |
+                                     SerializeFlags::kSerializeEscapeEmoji>(wb);
+        if (err != kErrorNone) {
+          return std::make_tuple("", err);
+        }
+        if (!wb.Push(',')) return std::make_tuple("", kErrorNoMem);
       }
-    }
-  } else {
-    wb.Push('[');
-    for (const auto& node : result.nodes) {
-      auto err =
-          node->template Serialize<SerializeFlags::kSerializeAppendBuffer |
-                                   SerializeFlags::kSerializeEscapeEmoji>(wb);
-      if (err != kErrorNone) {
-        return std::make_tuple("", err);
+      if (*(wb.Top<char>()) == ',') {
+        wb.Pop<char>(1);
       }
-      wb.Push(',');
+      if (!wb.Push(']')) return std::make_tuple("", kErrorNoMem);
     }
-    if (*(wb.Top<char>()) == ',') {
-      wb.Pop<char>(1);
-    }
-    wb.Push(']');
+    auto sv = wb.ToStringView();
+    return std::make_tuple(std::string(sv.data(), sv.size()), kErrorNone);
+  } catch (const std::bad_alloc&) {
+    return std::make_tuple("", kErrorNoMem);
   }
-  auto sv = wb.ToStringView();
-  return std::make_tuple(std::string(sv.data(), sv.size()), kErrorNone);
 }
 
 sonic_force_inline std::tuple<std::string, SonicError> GetByJsonPath(
     StringView json, StringView jsonpath) {
   // parse json into dom
   Document dom;
-  dom.Parse(json);
+  dom.Parse<kJsonPathParseFlags>(json);
   if (dom.HasParseError()) {
     return std::make_tuple("", dom.GetParseError());
   }
@@ -74,16 +86,21 @@ sonic_force_inline
     GetByJsonPaths(StringView json, const std::vector<StringView>& jsonpaths) {
   // parse json into dom
   Document dom;
-  dom.Parse(json);
+  dom.Parse<kJsonPathParseFlags>(json);
   if (dom.HasParseError()) {
     return std::make_tuple(std::vector<std::tuple<std::string, SonicError>>(),
                            dom.GetParseError());
   }
   std::vector<std::tuple<std::string, SonicError>> results;
-  results.reserve(jsonpaths.size());
+  try {
+    results.reserve(jsonpaths.size());
 
-  for (const auto& jsonpath : jsonpaths) {
-    results.emplace_back(GetByJsonPathInternal(dom, jsonpath));
+    for (const auto& jsonpath : jsonpaths) {
+      results.emplace_back(GetByJsonPathInternal(dom, jsonpath));
+    }
+  } catch (const std::bad_alloc&) {
+    return std::make_tuple(std::vector<std::tuple<std::string, SonicError>>(),
+                           kErrorNoMem);
   }
   return std::make_tuple(results, kErrorNone);
 }

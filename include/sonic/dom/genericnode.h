@@ -19,6 +19,8 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <new>
+#include <utility>
 #include <vector>
 
 #include "sonic/dom/handler.h"
@@ -36,8 +38,24 @@ namespace sonic_json {
 template <typename NodeType>
 class MemberNodeT {
  public:
-  const NodeType name;
+  MemberNodeT(NodeType&& key, NodeType&& member_value) noexcept
+      : name(std::move(key)), value(std::move(member_value)) {}
+  MemberNodeT(const MemberNodeT&) = delete;
+  MemberNodeT& operator=(const MemberNodeT&) = delete;
+  MemberNodeT(MemberNodeT&& rhs) noexcept
+      : name(std::move(rhs.name)), value(std::move(rhs.value)) {}
+  MemberNodeT& operator=(MemberNodeT&&) = delete;
+  ~MemberNodeT() = default;
+
+  // Object lookup maps cache key StringViews. Mutating a key after insertion
+  // can make lookups inconsistent; update members through object APIs instead.
+  NodeType name;
   NodeType value;
+
+ private:
+  friend NodeType;
+
+  NodeType& mutableName() noexcept { return name; }
 };
 
 // Forward Declaration.
@@ -77,7 +95,7 @@ class GenericNode {
   /**
    * @brief Default constructor, which creates a null node.
    */
-  GenericNode() noexcept {}
+  GenericNode() noexcept { setType(kNull); }
 
   /**
    * @brief Constructor for creating specific types.
@@ -161,8 +179,11 @@ class GenericNode {
    *       heap. This constructor function only copies the pointer.
    */
   GenericNode(const char* s, size_t len) noexcept {
-    setLength(len, kStringConst);
-    sv.p = s;
+    if (sonic_likely(setLengthChecked(len, kStringConst))) {
+      sv.p = s;
+    } else {
+      sv.p = "";
+    }
   }
 
   /**
@@ -170,8 +191,11 @@ class GenericNode {
    * @param s string_view that contains string pointer and length.
    */
   explicit GenericNode(StringView s) noexcept {
-    setLength(s.size(), kStringConst);
-    sv.p = s.data();
+    if (sonic_likely(setLengthChecked(s.size(), kStringConst))) {
+      sv.p = s.data();
+    } else {
+      sv.p = "";
+    }
   }
 
   /**
@@ -181,6 +205,7 @@ class GenericNode {
    * @param alloc Allocator
    */
   GenericNode(const char* s, size_t len, alloc_type& alloc) {
+    setType(kNull);
     StringCopy(s, len, alloc);
   }
 
@@ -190,6 +215,7 @@ class GenericNode {
    * @param alloc Allocator
    */
   GenericNode(StringView s, alloc_type& alloc) {
+    setType(kNull);
     StringCopy(s.data(), s.size(), alloc);
   }
 
@@ -202,14 +228,23 @@ class GenericNode {
    * @note: If failed when allocating memory, the node will be set as an empty
    * string.
    */
-  void StringCopy(const char* s, size_t len, alloc_type& alloc) {
-    sv.p = (char*)(alloc.Malloc(len + 1));
-    if (sv.p) {
-      std::memcpy(const_cast<char*>(sv.p), s, len);
-      const_cast<char*>(sv.p)[len] = '\0';
+  bool StringCopy(const char* s, size_t len, alloc_type& alloc) {
+    if (sonic_unlikely(len > kMaxStoredLength)) {
+      downCast()->destroy();
+      setEmptyString();
+      return false;
+    }
+    char* p = (char*)(alloc.Malloc(len + 1));
+    downCast()->destroy();
+    if (p) {
+      std::memcpy(p, s, len);
+      p[len] = '\0';
+      sv.p = p;
       setLength(len, kStringFree);
+      return true;
     } else {
       setEmptyString();
+      return false;
     }
   }
 
@@ -457,16 +492,28 @@ class GenericNode {
   NodeType& SetStringNumber(StringView s, alloc_type& alloc) {
     return downCast()->setStringNumberImpl(s, alloc);
   }
+
+  bool TrySetStringNumber(StringView s, alloc_type& alloc) {
+    return downCast()->trySetStringNumberImpl(s, alloc);
+  }
+
+  SonicError SetStringNumberWithError(StringView s, alloc_type& alloc) {
+    return TrySetStringNumber(s, alloc) ? kErrorNone : kErrorNoMem;
+  }
   /**
    * @brief Set this node as a copied string through the allocator alloc.
    * allocator.
    * @param s string_view that contains string pointer and size.
    * @param alloc Allocator which maintains the node's memory.
    * @return NodeType& Reference to this.
-   * @note this node will deconstruct firstly.
+   * @note On allocation failure this node is unchanged. Use TrySetString to
+   * detect failure.
    */
   NodeType& SetString(StringView s, alloc_type& alloc) {
     return SetString(s.data(), s.size(), alloc);
+  }
+  bool TrySetString(StringView s, alloc_type& alloc) {
+    return TrySetString(s.data(), s.size(), alloc);
   }
   /**
    * @brief Set this node as a copied string through the allocator alloc.
@@ -474,10 +521,14 @@ class GenericNode {
    * @param len string length
    * @param alloc Allocator which manages the node's memory.
    * @return NodeType& Reference to this.
-   * @note this node will deconstruct firstly.
+   * @note On allocation failure this node is unchanged. Use TrySetString to
+   * detect failure.
    */
   NodeType& SetString(const char* s, size_t len, alloc_type& alloc) {
     return downCast()->setStringImpl(s, len, alloc);
+  }
+  bool TrySetString(const char* s, size_t len, alloc_type& alloc) {
+    return downCast()->trySetStringImpl(s, len, alloc);
   }
 
   /**
@@ -745,20 +796,25 @@ class GenericNode {
     ret.error = kErrorNone;
     internal::JsonPath path;
 
-    // padding some buffers
-    std::string pathpadd = internal::paddingJsonPath(jsonpath);
-    // Only parse the logical jsonpath length; the extra '\0' bytes are for
-    // safe lookahead during unescaping.
-    if (!path.ParsePadded(StringView(pathpadd.data(), pathpadd.size()),
-                          jsonpath.size())) {
-      ret.error = kUnsupportedJsonPath;
-      return ret;
-    }
+    try {
+      // padding some buffers
+      std::string pathpadd = internal::paddingJsonPath(jsonpath);
+      // Only parse the logical jsonpath length; the extra '\0' bytes are for
+      // safe lookahead during unescaping.
+      if (!path.ParsePadded(StringView(pathpadd.data(), pathpadd.size()),
+                            jsonpath.size())) {
+        ret.error = kUnsupportedJsonPath;
+        return ret;
+      }
 
-    if (path[0].is_root() && path.size() == 1) {
-      ret.nodes.push_back(self);
-    } else if (!self->atJsonPathImpl(path, 1, ret.nodes)) {
-      ret.error = kNotFoundByJsonPath;
+      if (path[0].is_root() && path.size() == 1) {
+        ret.nodes.push_back(self);
+      } else if (!self->atJsonPathImpl(path, 1, ret.nodes)) {
+        ret.error = kNotFoundByJsonPath;
+        ret.nodes.clear();
+      }
+    } catch (const std::bad_alloc&) {
+      ret.error = kErrorNoMem;
       ret.nodes.clear();
     }
     return ret;
@@ -854,6 +910,15 @@ class GenericNode {
     return downCast()->addMemberImpl(key, value, alloc, copyKey);
   }
 
+  SonicError AddMemberWithError(StringView key, NodeType&& value,
+                                alloc_type& alloc, bool copyKey = true,
+                                MemberIterator* inserted = nullptr) {
+    sonic_assert(this->IsObject());
+    MemberIterator it = downCast()->addMemberImpl(key, value, alloc, copyKey);
+    if (inserted) *inserted = it;
+    return it == MemberEnd() ? kErrorNoMem : kErrorNone;
+  }
+
   /**
    * @brief Reserve object capacity if NodeType support. Otherwise do nothing.
    * @param new_cap Expected object capacity, unit is member(key-value pair)
@@ -863,6 +928,14 @@ class GenericNode {
   NodeType& MemberReserve(size_t new_cap, alloc_type& alloc) {
     sonic_assert(this->IsObject());
     return downCast()->memberReserveImpl(new_cap, alloc);
+  }
+
+  SonicError MemberReserveWithError(size_t new_cap, alloc_type& alloc) {
+    sonic_assert(this->IsObject());
+    size_t old_cap = Capacity();
+    downCast()->memberReserveImpl(new_cap, alloc);
+    return new_cap <= old_cap || Capacity() >= new_cap ? kErrorNone
+                                                       : kErrorNoMem;
   }
 
   /**
@@ -1004,6 +1077,14 @@ class GenericNode {
     return downCast()->reserveImpl(new_cap, alloc);
   }
 
+  SonicError ReserveWithError(size_t new_cap, alloc_type& alloc) {
+    sonic_assert(this->IsArray());
+    size_t old_cap = Capacity();
+    downCast()->reserveImpl(new_cap, alloc);
+    return new_cap <= old_cap || Capacity() >= new_cap ? kErrorNone
+                                                       : kErrorNoMem;
+  }
+
   /**
    * @brief Push an element into an array.
    * @tparam ValueType push node type
@@ -1015,6 +1096,17 @@ class GenericNode {
   NodeType& PushBack(NodeType&& value, alloc_type& alloc) {
     sonic_assert(this->IsArray());
     return downCast()->pushBackImpl(value, alloc);
+  }
+
+  bool TryPushBack(NodeType&& value, alloc_type& alloc) {
+    sonic_assert(this->IsArray());
+    size_t old_size = Size();
+    downCast()->pushBackImpl(value, alloc);
+    return Size() == old_size + 1;
+  }
+
+  SonicError PushBackWithError(NodeType&& value, alloc_type& alloc) {
+    return TryPushBack(std::move(value), alloc) ? kErrorNone : kErrorNoMem;
   }
 
   /**
@@ -1054,6 +1146,10 @@ class GenericNode {
    * @note erase in the range [first, last)
    */
   ValueIterator Erase(size_t first, size_t last) noexcept {
+    if (first == last) {
+      auto b = Begin();
+      return b == nullptr ? b : b + first;
+    }
     return Erase(Begin() + first, Begin() + last);
   }
 
@@ -1086,6 +1182,9 @@ class GenericNode {
   }
 
  protected:
+  static constexpr size_t kMaxStoredLength =
+      static_cast<size_t>(std::numeric_limits<uint64_t>::max() >> kInfoBits);
+
   sonic_force_inline NodeType* next() noexcept {
     return downCast()->nextImpl();
   }
@@ -1106,10 +1205,26 @@ class GenericNode {
     return static_cast<TypeFlag>(t.t & kBasicTypeMask);
   }
   sonic_force_inline void setLength(size_t len) noexcept {
+    if (sonic_unlikely(len > kMaxStoredLength)) {
+      setType(kNull);
+      return;
+    }
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(t.t);
   }
   sonic_force_inline void setLength(size_t len, TypeFlag flag) noexcept {
+    if (sonic_unlikely(len > kMaxStoredLength)) {
+      setType(kNull);
+      return;
+    }
     sv.len = (len << kInfoBits) | static_cast<uint64_t>(flag);
+  }
+  sonic_force_inline bool setLengthChecked(size_t len, TypeFlag flag) noexcept {
+    if (sonic_unlikely(len > kMaxStoredLength)) {
+      setType(kNull);
+      return false;
+    }
+    sv.len = (len << kInfoBits) | static_cast<uint64_t>(flag);
+    return true;
   }
   sonic_force_inline void setType(TypeFlag flag) noexcept {
     sv.len = static_cast<uint64_t>(flag);
@@ -1218,9 +1333,9 @@ class GenericNode {
         }
         return nullptr;
       } else {  // Json Pointer node is number
-        if (re->IsArray()) {
-          int idx = node.GetNum();
-          if (idx >= 0 && idx < static_cast<int>(re->Size())) {
+        if (re->IsArray() && node.IsValidNum()) {
+          uint64_t idx = node.GetNum();
+          if (idx < re->Size()) {
             re = &(re->operator[]((size_t)idx));
             continue;
           }

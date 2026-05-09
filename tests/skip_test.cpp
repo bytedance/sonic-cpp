@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <limits>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -37,6 +38,14 @@ void TestGetOnDemandFailed(StringView json, const JsonPointer& path,
   auto result = GetOnDemand(json, path, target);
   EXPECT_EQ(result.Error(), expect.Error()) << json << expect.Error();
   EXPECT_EQ(result.Offset(), expect.Offset()) << json << expect.Error();
+  EXPECT_EQ(target, "");
+}
+
+void TestGetOnDemandError(StringView json, const JsonPointer& path,
+                          SonicError expect) {
+  StringView target;
+  auto result = GetOnDemand(json, path, target);
+  EXPECT_EQ(result.Error(), expect) << json << result.Offset();
   EXPECT_EQ(target, "");
 }
 
@@ -85,7 +94,7 @@ TEST(GetOnDemand, SuccessEscapeCharacters) {
                       "1234567890123456789012345678901\"123":"avx2_string",
                       "obj\n\t\\":{"name\\\\\\\\":"string\\\\"},
                       "array\"\t\n\b\r":["\n\tHello,\nworld!\n",
-                        "{\" / \b \f \n \r \t } [景] 测试中文 😀")],
+                        "{\" / \b \f \n \r \t } [景] 测试中文 😀"],
                       "\"a\"":"\n\tHello,\nworld!\n"})",
                   {"\"a\""}, R"("\n\tHello,\nworld!\n")");
 }
@@ -94,12 +103,95 @@ TEST(GetOnDemand, Failed) {
   TestGetOnDemandFailed("{}", {1}, ParseResult(kParseErrorMismatchType, 0));
   TestGetOnDemandFailed("{}", {"a"}, ParseResult(kParseErrorUnknownObjKey, 1));
 
-  TestGetOnDemandFailed("{123}", {"a"},
-                        ParseResult(kParseErrorUnknownObjKey, 4));
+  TestGetOnDemandFailed("{123}", {"a"}, ParseResult(kParseErrorInvalidChar, 2));
 
   TestGetOnDemandFailed("[]", {1},
                         ParseResult(kParseErrorArrIndexOutOfRange, 2));
+  TestGetOnDemandFailed("[]", {0},
+                        ParseResult(kParseErrorArrIndexOutOfRange, 2));
 
-  TestGetOnDemandFailed(R"("\")", {}, ParseResult(kParseErrorInvalidChar, 3));
+  TestGetOnDemandError(R"("\")", {}, kParseErrorInvalidChar);
+}
+
+TEST(GetOnDemand, EmptyInputDoesNotReadBeforeBuffer) {
+  TestGetOnDemandFailed("", {}, ParseResult(kParseErrorInvalidChar, 0));
+}
+
+TEST(GetOnDemand, LargeIntegralPointerDoesNotWrapToZero) {
+  JsonPointer path{JsonPointerNode(uint64_t{1} << 32)};
+  TestGetOnDemandFailed("[10,20]", path,
+                        ParseResult(kParseErrorArrIndexOutOfRange, 6));
+}
+
+TEST(GetOnDemand, HugeUnsignedPointerDoesNotWrapThroughSignedStorage) {
+  JsonPointer path{JsonPointerNode(std::numeric_limits<uint64_t>::max())};
+  TestGetOnDemandFailed("[10,20]", path,
+                        ParseResult(kParseErrorArrIndexOutOfRange, 6));
+}
+
+TEST(GetOnDemand, NegativePointerIndexReportsOutOfRange) {
+  JsonPointer path{JsonPointerNode(-1)};
+  TestGetOnDemandFailed("[10,20]", path,
+                        ParseResult(kParseErrorArrIndexOutOfRange, 1));
+}
+
+TEST(GetOnDemand, RejectsInvalidSkippedValuesAndTrailingTargetGarbage) {
+  TestGetOnDemandFailed(R"({"x":1abc "a":2})", {"a"},
+                        ParseResult(kParseErrorInvalidChar, 6));
+  TestGetOnDemandFailed(R"([1abc,2])", {1},
+                        ParseResult(kParseErrorInvalidChar, 2));
+  TestGetOnDemandFailed(R"({"a":[1] 2})", {"a"},
+                        ParseResult(kParseErrorInvalidChar, 9));
+  TestGetOnDemandFailed(R"({"a":"x" 2})", {"a"},
+                        ParseResult(kParseErrorInvalidChar, 9));
+  TestGetOnDemandError(R"({"x":{]},"a":2})", {"a"}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"x":[}],"a":2})", {"a"}, kParseErrorInvalidChar);
+  TestGetOnDemandError("{]}", {}, kParseErrorInvalidChar);
+  TestGetOnDemandError("[}]", {}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":1]})", {"a"}, kParseErrorInvalidChar);
+  TestGetOnDemandError("1]", {}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":1,"bad":"\q"})", {"missing"},
+                       kParseErrorEscapedFormat);
+}
+
+TEST(GetOnDemand, RejectsInvalidMatchedPathContainerSuffix) {
+  TestGetOnDemandError(R"({"a":[1] 2})", {"a", 0}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":{"b":1} 2})", {"a", "b"},
+                       kParseErrorInvalidChar);
+  TestGetOnDemandError(R"([[1] 2])", {0, 0}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":[{"b":1} 2]})", {"a", 0, "b"},
+                       kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":[1,]})", {"a", 0}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":{"b":1,}})", {"a", "b"}, kParseErrorInvalidChar);
+  TestGetOnDemandError(R"({"a":1,})", {"a"}, kParseErrorInvalidChar);
+}
+
+TEST(GetOnDemand, FastModeDoesNotValidateUnvisitedSuffix) {
+  TestGetOnDemand(R"({"a":1,"bad":"\q"})", {"a"}, "1");
+  TestGetOnDemand(R"({"a":1} garbage)", {"a"}, "1");
+  TestGetOnDemand(R"({"a":[1,2] 3})", {"a", 0}, "1");
+}
+
+TEST(GetOnDemand, FullValidationModeRejectsUnvisitedSuffix) {
+  StringView target;
+  auto escaped = GetOnDemand<ParseFlags::kParseValidateOnDemandFull>(
+      R"({"a":1,"bad":"\q"})", JsonPointer{"a"}, target);
+  EXPECT_EQ(escaped.Error(), kParseErrorEscapedFormat);
+  EXPECT_EQ(target, "");
+
+  auto infinity = GetOnDemand<ParseFlags::kParseValidateOnDemandFull>(
+      R"({"a":1,"bad":1e309})", JsonPointer{"a"}, target);
+  EXPECT_EQ(infinity.Error(), kParseErrorInfinity);
+  EXPECT_EQ(target, "");
+
+  auto trailing_match = GetOnDemand<ParseFlags::kParseValidateOnDemandFull>(
+      R"({"a":1} garbage)", JsonPointer{"a"}, target);
+  EXPECT_EQ(trailing_match.Error(), kParseErrorInvalidChar);
+  EXPECT_EQ(target, "");
+
+  auto trailing_no_match = GetOnDemand<ParseFlags::kParseValidateOnDemandFull>(
+      R"({"a":1} garbage)", JsonPointer{"missing"}, target);
+  EXPECT_EQ(trailing_no_match.Error(), kParseErrorInvalidChar);
+  EXPECT_EQ(target, "");
 }
 }  // namespace

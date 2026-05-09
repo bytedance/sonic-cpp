@@ -10,7 +10,7 @@ Usage:
     -g, --gcc       compiler is gcc
     -c, --clang     compiler is clang
     -h, --help      display this message
-    --arch={aarch64|haswell|westmere} target architecture, default is haswell
+    --arch={aarch64|arm64|haswell|westmere} target architecture, default is haswell
     --dispatch={dynamic|static} sonic dispatch mode, default is static
 
     example: bash unittest.sh -g --arch=westmere --dispatch=static
@@ -45,7 +45,7 @@ while true; do
     --arch)
       case "$2" in
         "") shift 2 ;;
-        aarch64 | haswell | westmere)
+        aarch64 | arm64 | haswell | westmere)
           UNIT_TEST_ARCH="$2"
           shift 2
           ;;
@@ -87,10 +87,17 @@ BAZEL="$(sonic_pick_bazel "${TOP_DIR}")"
 
 cd "${TOP_DIR}"
 
+BAZEL_UNIT_TEST_ARCH="${UNIT_TEST_ARCH}"
+case "${BAZEL_UNIT_TEST_ARCH}" in
+  aarch64 | arm64)
+    BAZEL_UNIT_TEST_ARCH=arm
+    ;;
+esac
+
 # default target
 set -x
 
-${BAZEL} run //:unittest --//:sonic_arch=$UNIT_TEST_ARCH \
+${BAZEL} run //:unittest --//:sonic_arch=${BAZEL_UNIT_TEST_ARCH} \
   --//:sonic_sanitizer=${UNIT_TEST_SANITIZER} \
   --//:sonic_dispatch=${UNIT_TEST_DISPATCH} \
   --copt="-DSONIC_LOCKED_ALLOCATOR" -s

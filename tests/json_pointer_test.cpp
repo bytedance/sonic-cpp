@@ -16,6 +16,7 @@
 
 #include "sonic/dom/json_pointer.h"
 
+#include <limits>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -183,10 +184,25 @@ TYPED_TEST(JsonPointerTest, QueryNode) {
   {
     QueryNode n1(0);
     EXPECT_TRUE(n1.IsNum());
+    EXPECT_TRUE(n1.IsValidNum());
     EXPECT_FALSE(n1.IsStr());
     EXPECT_EQ(0, n1.GetNum());
     EXPECT_EQ(n1.GetStr(), "");
     EXPECT_EQ(0, n1.GetStr().size());
+  }
+
+  {
+    QueryNode n1(-1);
+    EXPECT_TRUE(n1.IsNum());
+    EXPECT_FALSE(n1.IsValidNum());
+    EXPECT_EQ(0, n1.GetNum());
+  }
+
+  {
+    QueryNode n1(std::numeric_limits<uint64_t>::max());
+    EXPECT_TRUE(n1.IsNum());
+    EXPECT_TRUE(n1.IsValidNum());
+    EXPECT_EQ(std::numeric_limits<uint64_t>::max(), n1.GetNum());
   }
 
   {

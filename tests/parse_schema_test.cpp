@@ -102,6 +102,9 @@ TEST(ParseSchema, SuccessBasic) {
         "string": null, "object": null, "array": null})",
       R"([])", R"([])");
   TestSuccess(R"({"obj":{}})", R"({"obj":{"a":1}})", R"({"obj":{"a":1}})");
+  TestSuccess(R"({"obj":{}, "keep":0})",
+              R"({"obj":{"a":1}, "keep":2, "obj":3})",
+              R"({"obj":{"a":1}, "keep":2})");
   TestSuccess(R"({"obj":{"a":2}})", R"({"obj":{"a":1, "b":1}})",
               R"({"obj":{"a":1}})");
   TestSuccess(
@@ -164,6 +167,19 @@ TEST(ParseSchema, FailedBasic) {
   TestFailed(R"(null)", R"([null,])");
 }
 
+TEST(ParseSchema, FailedUpdatePreservesOriginalDocument) {
+  Document doc;
+  doc.Parse(R"({"a":"old","b":"old"})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  doc.ParseSchema(R"({"a":"new","b":)");
+  ASSERT_TRUE(doc.HasParseError());
+  ASSERT_TRUE(doc["a"].IsString());
+  ASSERT_TRUE(doc["b"].IsString());
+  EXPECT_EQ("old", doc["a"].GetStringView());
+  EXPECT_EQ("old", doc["b"].GetStringView());
+}
+
 TEST(ParseSchema, ParseOverflowNumAsNumStr) {
   std::string schema = R"({"val": 1})";
   std::string json = R"({"val": 18446744073709551616})";
@@ -173,6 +189,61 @@ TEST(ParseSchema, ParseOverflowNumAsNumStr) {
   EXPECT_FALSE(doc.HasParseError());
   EXPECT_TRUE(doc["val"].IsStringNumber());
   EXPECT_EQ(doc["val"].GetStringView(), "18446744073709551616");
+}
+
+TEST(ParseSchema, SkippedUnknownFieldPropagatesParseError) {
+  Document doc;
+  doc.Parse(R"({"a":1})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  doc.ParseSchema(R"({"x":1abc,"a":2})");
+  EXPECT_TRUE(doc.HasParseError());
+  EXPECT_EQ(kParseErrorInvalidChar, doc.GetParseError());
+  EXPECT_EQ(1, doc["a"].GetInt64());
+}
+
+TEST(ParseSchema, SkippedUnknownFieldHonorsParseFlags) {
+  Document doc;
+  doc.Parse(R"({"a":1})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  doc.ParseSchema<ParseFlags::kParseOverflowNumAsNumStr>(
+      R"({"x":1e309,"a":2})");
+  EXPECT_FALSE(doc.HasParseError());
+  EXPECT_EQ(2, doc["a"].GetInt64());
+}
+
+TEST(ParseSchema, FailedOwnAllocatorTransactionDoesNotGrowPool) {
+  Document doc;
+  doc.Parse(
+      R"({"a":"old","b":{"c":[1,2,3]},"pad":"abcdefghijklmnopqrstuvwxyz"})");
+  ASSERT_FALSE(doc.HasParseError());
+  const size_t size_before = doc.GetAllocator().Size();
+
+  for (int i = 0; i < 16; ++i) {
+    doc.ParseSchema(R"({"a":"new","b":)");
+    ASSERT_TRUE(doc.HasParseError());
+    EXPECT_EQ("old", doc["a"].GetStringView());
+    EXPECT_EQ(size_before, doc.GetAllocator().Size());
+  }
+}
+
+TEST(ParseSchema, SuccessfulOwnAllocatorTransactionDoesNotGrowUnbounded) {
+  Document doc;
+  doc.Parse(
+      R"({"a":"old","b":{"c":[1,2,3]},"pad":"abcdefghijklmnopqrstuvwxyz"})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  doc.ParseSchema(R"({"a":"new","b":{"c":[4,5,6]}})");
+  ASSERT_FALSE(doc.HasParseError());
+  const size_t size_after_first_update = doc.GetAllocator().Size();
+
+  for (int i = 0; i < 16; ++i) {
+    doc.ParseSchema(R"({"a":"new","b":{"c":[4,5,6]}})");
+    ASSERT_FALSE(doc.HasParseError());
+    EXPECT_EQ("new", doc["a"].GetStringView());
+    EXPECT_EQ(size_after_first_update, doc.GetAllocator().Size());
+  }
 }
 
 }  // namespace
