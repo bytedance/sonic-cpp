@@ -72,8 +72,19 @@ jobs:
             bazel-coverage-html
             coverage.dat
 
-      - name: Upload coverage to CodeCov
+      - name: Upload pull request coverage to CodeCov
+        if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v4
         with:
           files: coverage.dat
           verbose: true
+          fail_ci_if_error: true
+
+      - name: Upload push coverage to CodeCov
+        if: github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          use_oidc: true
+          files: coverage.dat
+          verbose: true
+          fail_ci_if_error: true

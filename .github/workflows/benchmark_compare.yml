@@ -1,0 +1,117 @@
+name: CI / Benchmark Compare
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  benchmark-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Initialize benchmark result
+        run: |
+          cat > "$RUNNER_TEMP/benchmark_comment.md" <<'EOF'
+          ## Benchmark
+
+          Benchmark comparison did not complete. Check the workflow logs.
+
+          Overall severity: `critical`
+
+          Conclusion: informational only. Benchmark issues are reported in this summary/artifact and do not block the workflow.
+          EOF
+
+      - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: base
+          fetch-depth: 1
+
+      - name: Checkout head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: head
+          fetch-depth: 1
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: ${{ runner.os }}-benchmark-bazel-${{ hashFiles('base/.bazelversion', 'head/.bazelversion', 'base/MODULE.bazel.lock', 'head/MODULE.bazel.lock', 'base/WORKSPACE.bzlmod', 'head/WORKSPACE.bzlmod', 'base/BUILD.bazel', 'head/BUILD.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-benchmark-bazel-
+
+      - name: Benchmark base
+        id: benchmark_base
+        continue-on-error: true
+        working-directory: base
+        run: |
+          source scripts/bazel_common.sh
+          BAZEL_BIN="$(sonic_pick_bazel "$PWD")"
+          "$BAZEL_BIN" run --compilation_mode=opt --//:sonic_arch=haswell --//:sonic_dispatch=static :benchmark -- --benchmark_filter=Sonic --benchmark_repetitions=5 --benchmark_report_aggregates_only=true --benchmark_out="$RUNNER_TEMP/sonic_bench_base.json" --benchmark_out_format=json
+
+      - name: Benchmark head
+        id: benchmark_head
+        continue-on-error: true
+        working-directory: head
+        run: |
+          source scripts/bazel_common.sh
+          BAZEL_BIN="$(sonic_pick_bazel "$PWD")"
+          "$BAZEL_BIN" run --compilation_mode=opt --//:sonic_arch=haswell --//:sonic_dispatch=static :benchmark -- --benchmark_filter=Sonic --benchmark_repetitions=5 --benchmark_report_aggregates_only=true --benchmark_out="$RUNNER_TEMP/sonic_bench_head.json" --benchmark_out_format=json
+
+      - name: Write benchmark execution failure
+        if: steps.benchmark_base.outcome == 'failure' || steps.benchmark_head.outcome == 'failure'
+        run: |
+          cat > "$RUNNER_TEMP/benchmark_comment.md" <<EOF
+          ## Benchmark
+
+          Benchmark execution did not complete before comparison.
+
+          | Severity | Step | Outcome |
+          | --- | --- | --- |
+          | critical | base | ${{ steps.benchmark_base.outcome }} |
+          | critical | head | ${{ steps.benchmark_head.outcome }} |
+
+          Overall severity: `critical`
+
+          Conclusion: informational only. Benchmark issues are reported in this summary/artifact and do not block the workflow.
+          EOF
+          cat "$RUNNER_TEMP/benchmark_comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare benchmark
+        if: steps.benchmark_base.outcome == 'success' && steps.benchmark_head.outcome == 'success'
+        id: compare
+        working-directory: head
+        run: |
+          python3 scripts/tools/compare-benchmark.py "$RUNNER_TEMP/sonic_bench_base.json" "$RUNNER_TEMP/sonic_bench_head.json" --include-regex=Sonic --warn-threshold=3 --fail-threshold=10 --output="$RUNNER_TEMP/benchmark_comment.md"
+          cat "$RUNNER_TEMP/benchmark_comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-compare
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/sonic_bench_base.json
+            ${{ runner.temp }}/sonic_bench_head.json
+            ${{ runner.temp }}/benchmark_comment.md
