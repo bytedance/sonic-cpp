@@ -403,7 +403,7 @@ class DNode : public GenericNode<DNode<Allocator>> {
     size_t cap;
     map_type* map;
 
-    ~MetaNode() {
+    ~MetaNode() __attribute__((noinline)) {
       if (map) {
         map->~map_type();
         Allocator::Free(map);

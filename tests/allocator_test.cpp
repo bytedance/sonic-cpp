@@ -32,6 +32,11 @@ namespace {
 
 using namespace sonic_json;
 
+size_t RuntimeHugeAllocationSize() {
+  volatile size_t size = size_t{1} << 62;
+  return size;
+}
+
 #ifdef SONIC_MEMSTAT
 #define MEMSTAT_ISEMPTY() EXPECT_TRUE(MemStat::Instance().stat.empty())
 #define MEMSTAT_NOTEMPTY() EXPECT_FALSE(MemStat::Instance().stat.empty())
@@ -217,8 +222,7 @@ TEST(Stack, ConstructorOomLeavesConsistentState) {
   // (absent) buffer.  Otherwise Grow()'s guard `top_+cnt >= buf_+cap_` reads
   // as `1 >= cap_ + 0` and skips the re-allocation entirely, letting a
   // subsequent Push() dereference a null top_.
-  constexpr size_t kHuge = (size_t{1} << 62);
-  sonic_json::internal::Stack s(kHuge);
+  sonic_json::internal::Stack s(RuntimeHugeAllocationSize());
 
   if (s.Begin<char>() == nullptr) {
     EXPECT_EQ(0u, s.Capacity())

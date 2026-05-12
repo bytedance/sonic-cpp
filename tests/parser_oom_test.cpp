@@ -87,13 +87,20 @@ struct AlwaysOomAllocator {
   static constexpr bool kNeedFree = false;
 };
 
+static constexpr size_t kJsonHeadroom = 64;
+
 static std::vector<uint8_t> pad_json_bytes(const char* json, size_t len) {
-  std::vector<uint8_t> buf(len + 64, 0);
-  std::memcpy(buf.data(), json, len);
-  buf[len] = 'x';
-  buf[len + 1] = '"';
-  buf[len + 2] = 'x';
+  std::vector<uint8_t> buf(kJsonHeadroom + len + 64, 0);
+  uint8_t* data = buf.data() + kJsonHeadroom;
+  std::memcpy(data, json, len);
+  data[len] = 'x';
+  data[len + 1] = '"';
+  data[len + 2] = 'x';
   return buf;
+}
+
+static uint8_t* padded_json_data(std::vector<uint8_t>& buf) {
+  return buf.data() + kJsonHeadroom;
 }
 
 TEST(Document, OomDoesNotCrashPushBack) {
@@ -244,7 +251,7 @@ TEST(Document, ParseLazyEscapedKeyOomReportsNoMem) {
   Parser<ParseFlags::kParseDefault> p;
   const char* json = R"({"\n": 1})";
   auto buf = pad_json_bytes(json, std::strlen(json));
-  auto res = p.ParseLazy(buf.data(), std::strlen(json), sax);
+  auto res = p.ParseLazy(padded_json_data(buf), std::strlen(json), sax);
   EXPECT_EQ(kErrorNoMem, res.Error());
 }
 
@@ -304,7 +311,7 @@ TEST(Document, ParseLazyFreesEscapedKeyOnKeyFailure) {
   Parser<ParseFlags::kParseDefault> p;
   const char* json = R"({"\n": 1})";
   auto buf = pad_json_bytes(json, std::strlen(json));
-  p.ParseLazy(buf.data(), std::strlen(json), sax);
+  p.ParseLazy(padded_json_data(buf), std::strlen(json), sax);
 
   ASSERT_TRUE(sax.key_called);
   EXPECT_EQ(0, SentinelTrackingAllocator::balance);
@@ -560,7 +567,7 @@ TEST(ParseLazy, RawRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = "42";
   auto buf = pad_json_bytes(j, 2);
-  auto r = p.ParseLazy(buf.data(), 2, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 2, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -569,7 +576,7 @@ TEST(ParseLazy, StartArrayRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = "[1,2,3]";
   auto buf = pad_json_bytes(j, 7);
-  auto r = p.ParseLazy(buf.data(), 7, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 7, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -578,7 +585,7 @@ TEST(ParseLazy, StartObjectRejectionReportsSaxTermination) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = R"({"k":1})";
   auto buf = pad_json_bytes(j, 7);
-  auto r = p.ParseLazy(buf.data(), 7, sax);
+  auto r = p.ParseLazy(padded_json_data(buf), 7, sax);
   EXPECT_EQ(r.Error(), kSaxTermination);
 }
 
@@ -599,7 +606,7 @@ TEST(ParseLazy, AcceptAllStillCompletesCleanly) {
   Parser<ParseFlags::kParseDefault> p;
   const char* j = R"({"a":1,"b":[2,3]})";
   auto buf = pad_json_bytes(j, std::strlen(j));
-  auto r = p.ParseLazy(buf.data(), std::strlen(j), sax);
+  auto r = p.ParseLazy(padded_json_data(buf), std::strlen(j), sax);
   EXPECT_EQ(r.Error(), kErrorNone);
 }
 
