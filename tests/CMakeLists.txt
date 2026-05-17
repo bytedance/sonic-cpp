@@ -23,6 +23,7 @@ FetchContent_MakeAvailable(googletest)
 
 # for arm CI: ASAN is very annoying when dealing with qemu
 option(ENABLE_ASAN "Enable AddressSanitizer" ON)
+option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
 file(GLOB SONIC_TEST_FILES
      "${PROJECT_SOURCE_DIR}/tests/*.h"
@@ -46,6 +47,11 @@ else()
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(unittest PRIVATE -O0 -g -Werror -Wall -Wno-use-after-free)
     endif()
+endif()
+
+if(ENABLE_UBSAN)
+    target_compile_options(unittest PRIVATE -fsanitize=undefined -fno-sanitize-recover=undefined)
+    target_link_options(unittest PRIVATE -fsanitize=undefined)
 endif()
 
 include("${PROJECT_SOURCE_DIR}/cmake/set_arch_flags.cmake")

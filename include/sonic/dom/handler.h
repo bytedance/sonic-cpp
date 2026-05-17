@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <limits>
 #include <string>
 
 #include "sonic/dom/type.h"
+#include "sonic/error.h"
 #include "sonic/internal/arch/simd_base.h"
 #include "sonic/string_view.h"
 #include "sonic/writebuffer.h"
@@ -37,12 +39,13 @@ class SAXHandler {
   bool oom_{false};
 
   SAXHandler() = default;
-  SAXHandler(Allocator &alloc) : alloc_(&alloc) {}
+  SAXHandler(Allocator& alloc) : alloc_(&alloc) {}
 
-  SAXHandler(const SAXHandler &) = delete;
-  SAXHandler &operator=(const SAXHandler &rhs) = delete;
-  SAXHandler(SAXHandler &&rhs)
+  SAXHandler(const SAXHandler&) = delete;
+  SAXHandler& operator=(const SAXHandler& rhs) = delete;
+  SAXHandler(SAXHandler&& rhs)
       : oom_(rhs.oom_),
+        error_(rhs.error_),
         st_(rhs.st_),
         np_(rhs.np_),
         cap_(rhs.cap_),
@@ -53,9 +56,10 @@ class SAXHandler {
     rhs.np_ = 0;
     rhs.alloc_ = 0;
     rhs.oom_ = false;
+    rhs.error_ = kErrorNone;
   }
 
-  SAXHandler &operator=(SAXHandler &&rhs) {
+  SAXHandler& operator=(SAXHandler&& rhs) {
     TearDown();
     st_ = rhs.st_;
     np_ = rhs.np_;
@@ -63,6 +67,7 @@ class SAXHandler {
     parent_ = rhs.parent_;
     alloc_ = rhs.alloc_;
     oom_ = rhs.oom_;
+    error_ = rhs.error_;
 
     rhs.st_ = nullptr;
     rhs.np_ = 0;
@@ -70,32 +75,34 @@ class SAXHandler {
     rhs.parent_ = 0;
     rhs.alloc_ = 0;
     rhs.oom_ = false;
+    rhs.error_ = kErrorNone;
     return *this;
   }
 
   ~SAXHandler() { TearDown(); }
 
+  sonic_force_inline SonicError GetError() const noexcept { return error_; }
+
   sonic_force_inline bool SetUp(StringView json) {
+    oom_ = false;
+    error_ = kErrorNone;
     size_t len = json.size();
     size_t cap = len / 2 + 2;
     if (cap < 16) cap = 16;
-    if (!st_ || cap_ < cap) {
-      NodeType *new_st = static_cast<NodeType *>(
-          std::realloc((void *)(st_), sizeof(NodeType) * cap));
-      if (!new_st) return false;
-      st_ = new_st;
-      cap_ = cap;
-    }
-    return true;
+    return reserveStack(cap);
   }
 
   sonic_force_inline void TearDown() {
-    if (st_ == nullptr) return;
-    for (size_t i = 0; i < np_; i++) {
-      st_[i].~NodeType();
+    if (st_ != nullptr) {
+      for (size_t i = 0; i < np_; i++) {
+        st_[i].~NodeType();
+      }
+      std::free(st_);
     }
-    std::free(st_);
     st_ = nullptr;
+    np_ = 0;
+    cap_ = 0;
+    parent_ = 0;
   }
 
 #define SONIC_ADD_NODE()       \
@@ -145,7 +152,7 @@ class SAXHandler {
     return true;
   }
 
-  sonic_force_inline bool Raw(const char *data, size_t len) {
+  sonic_force_inline bool Raw(const char* data, size_t len) {
     SONIC_ADD_NODE();
     new (&st_[np_ - 1]) NodeType();
     auto raw = StringView(data, len);
@@ -156,7 +163,7 @@ class SAXHandler {
   sonic_force_inline bool StartObject() noexcept {
     SONIC_ADD_NODE();
     new (&st_[np_ - 1]) NodeType();
-    NodeType *cur = &st_[np_ - 1];
+    NodeType* cur = &st_[np_ - 1];
     cur->o.next.ofs = parent_;
     parent_ = np_ - 1;
     return true;
@@ -165,60 +172,75 @@ class SAXHandler {
   sonic_force_inline bool StartArray() noexcept {
     SONIC_ADD_NODE();
     new (&st_[np_ - 1]) NodeType();
-    NodeType *cur = &st_[np_ - 1];
+    NodeType* cur = &st_[np_ - 1];
     cur->o.next.ofs = parent_;
     parent_ = np_ - 1;
     return true;
   }
 
   sonic_force_inline bool EndObject(uint32_t pairs) {
-    NodeType &obj = st_[parent_];
+    NodeType& obj = st_[parent_];
     size_t old = obj.o.next.ofs;
     obj.setLength(pairs, kObject);
+    bool ok = true;
     if (pairs) {
-      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
+      void* mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       if (sonic_unlikely(mem == nullptr)) {
-        NodeType *children = &obj + 1;
+        NodeType* children = &obj + 1;
         for (size_t i = 0; i < size_t(pairs) * 2; i++) children[i].~NodeType();
         obj.setLength(0, kObject);
         obj.setChildren(nullptr);
-        oom_ = true;
+        setOom();
+        ok = false;
       } else {
         obj.setChildren(mem);
-        internal::Xmemcpy<sizeof(MemberType)>(
-            (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
+        MemberType* dst =
+            reinterpret_cast<MemberType*>(obj.getObjChildrenFirstUnsafe());
+        NodeType* src = &obj + 1;
+        for (size_t i = 0; i < pairs; ++i) {
+          new (&dst[i])
+              MemberType(std::move(src[i * 2]), std::move(src[i * 2 + 1]));
+          src[i * 2].~NodeType();
+          src[i * 2 + 1].~NodeType();
+        }
       }
     } else {
       obj.setChildren(nullptr);
     }
     np_ = parent_ + 1;
     parent_ = old;
-    return true;
+    return ok;
   }
 
   sonic_force_inline bool EndArray(uint32_t count) {
-    NodeType &arr = st_[parent_];
+    NodeType& arr = st_[parent_];
     size_t old = arr.o.next.ofs;
     arr.setLength(count, kArray);
+    bool ok = true;
     if (count) {
-      void *mem = arr.template containerMalloc<NodeType>(count, *alloc_);
+      void* mem = arr.template containerMalloc<NodeType>(count, *alloc_);
       if (sonic_unlikely(mem == nullptr)) {
-        NodeType *children = &arr + 1;
+        NodeType* children = &arr + 1;
         for (size_t i = 0; i < count; i++) children[i].~NodeType();
         arr.setLength(0, kArray);
         arr.setChildren(nullptr);
-        oom_ = true;
+        setOom();
+        ok = false;
       } else {
         arr.setChildren(mem);
-        internal::Xmemcpy<sizeof(NodeType)>(
-            (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
+        NodeType* dst = arr.getArrChildrenFirstUnsafe();
+        NodeType* src = &arr + 1;
+        for (size_t i = 0; i < count; ++i) {
+          new (&dst[i]) NodeType(std::move(src[i]));
+          src[i].~NodeType();
+        }
       }
     } else {
       arr.setChildren(nullptr);
     }
     np_ = parent_ + 1;
     parent_ = old;
-    return true;
+    return ok;
   }
 
  private:
@@ -239,24 +261,55 @@ class SAXHandler {
       np_++;
       return true;
     }
-    size_t new_cap = cap_ * 2;
-    NodeType *new_st = static_cast<NodeType *>(
-        std::realloc((void *)(st_), sizeof(NodeType) * new_cap));
-    if (!new_st) {
-      oom_ = true;
+    if (sonic_unlikely(cap_ > std::numeric_limits<size_t>::max() / 2)) {
+      setOom();
       return false;
     }
-    st_ = new_st;
-    cap_ = new_cap;
+    size_t new_cap = cap_ * 2;
+    if (sonic_unlikely(new_cap >
+                       std::numeric_limits<size_t>::max() / sizeof(NodeType))) {
+      setOom();
+      return false;
+    }
+    if (sonic_unlikely(!reserveStack(new_cap))) return false;
     np_++;
     return true;
   }
 
-  NodeType *st_{nullptr};
+  sonic_force_inline bool reserveStack(size_t new_cap) {
+    if (new_cap <= cap_) return true;
+    if (sonic_unlikely(new_cap >
+                       std::numeric_limits<size_t>::max() / sizeof(NodeType))) {
+      setOom();
+      return false;
+    }
+    NodeType* new_st =
+        static_cast<NodeType*>(std::malloc(sizeof(NodeType) * new_cap));
+    if (!new_st) {
+      setOom();
+      return false;
+    }
+    for (size_t i = 0; i < np_; ++i) {
+      new (&new_st[i]) NodeType(std::move(st_[i]));
+      st_[i].~NodeType();
+    }
+    std::free(st_);
+    st_ = new_st;
+    cap_ = new_cap;
+    return true;
+  }
+
+  sonic_force_inline void setOom() noexcept {
+    oom_ = true;
+    error_ = kErrorNoMem;
+  }
+
+  SonicError error_{kErrorNone};
+  NodeType* st_{nullptr};
   size_t np_{0};
   size_t cap_{0};
   size_t parent_{0};
-  Allocator *alloc_{nullptr};
+  Allocator* alloc_{nullptr};
 };
 
 template <typename NodeType>
@@ -266,43 +319,95 @@ class LazySAXHandler {
   using MemberType = typename NodeType::MemberNode;
 
   LazySAXHandler() = delete;
-  LazySAXHandler(Allocator &alloc) : alloc_(&alloc) {}
+  LazySAXHandler(Allocator& alloc) : alloc_(&alloc) {}
+  LazySAXHandler(const LazySAXHandler&) = delete;
+  LazySAXHandler& operator=(const LazySAXHandler&) = delete;
+  LazySAXHandler(LazySAXHandler&& rhs) noexcept
+      : alloc_(rhs.alloc_),
+        st_(rhs.st_),
+        np_(rhs.np_),
+        cap_(rhs.cap_),
+        oom_(rhs.oom_),
+        error_(rhs.error_) {
+    rhs.alloc_ = nullptr;
+    rhs.st_ = nullptr;
+    rhs.np_ = 0;
+    rhs.cap_ = 0;
+    rhs.oom_ = false;
+    rhs.error_ = kErrorNone;
+  }
+  LazySAXHandler& operator=(LazySAXHandler&& rhs) noexcept {
+    if (this == &rhs) return *this;
+    TearDown();
+    alloc_ = rhs.alloc_;
+    st_ = rhs.st_;
+    np_ = rhs.np_;
+    cap_ = rhs.cap_;
+    oom_ = rhs.oom_;
+    error_ = rhs.error_;
+    rhs.alloc_ = nullptr;
+    rhs.st_ = nullptr;
+    rhs.np_ = 0;
+    rhs.cap_ = 0;
+    rhs.oom_ = false;
+    rhs.error_ = kErrorNone;
+    return *this;
+  }
 
-  ~LazySAXHandler() {
-    NodeType *st_ = stack_.template Begin<NodeType>();
-    // free allocated escaped buffers
-    for (size_t i = 0; i < stack_.Size() / sizeof(NodeType); i++) {
-      st_[i].~NodeType();
+  ~LazySAXHandler() { TearDown(); }
+
+  void TearDown() noexcept {
+    if (st_ != nullptr) {
+      for (size_t i = 0; i < np_; i++) st_[i].~NodeType();
+      std::free(st_);
     }
+    st_ = nullptr;
+    np_ = 0;
+    cap_ = 0;
   }
 
   sonic_force_inline bool StartArray() {
-    new (stack_.PushSize<NodeType>(1)) NodeType(kArray);
+    NodeType* mem = pushNode();
+    if (sonic_unlikely(mem == nullptr)) {
+      setOom();
+      return false;
+    }
+    new (mem) NodeType(kArray);
     return true;
   }
 
   sonic_force_inline bool StartObject() {
-    new (stack_.PushSize<NodeType>(1)) NodeType(kObject);
+    NodeType* mem = pushNode();
+    if (sonic_unlikely(mem == nullptr)) {
+      setOom();
+      return false;
+    }
+    new (mem) NodeType(kObject);
     return true;
   }
 
   sonic_force_inline bool EndArray(size_t count) {
-    NodeType &arr = *stack_.template Begin<NodeType>();
+    NodeType& arr = *st_;
     arr.setLength(count, kArray);
     if (count) {
-      void *mem = arr.template containerMalloc<NodeType>(count, *alloc_);
+      void* mem = arr.template containerMalloc<NodeType>(count, *alloc_);
       if (sonic_unlikely(mem == nullptr)) {
-        NodeType *children = &arr + 1;
+        NodeType* children = &arr + 1;
         for (size_t i = 0; i < count; i++) children[i].~NodeType();
-        stack_.Pop<NodeType>(count);
+        popNodes(count);
         arr.setLength(0, kArray);
         arr.setChildren(nullptr);
-        oom_ = true;
+        setOom();
+        return false;
       } else {
         arr.setChildren(mem);
-        internal::Xmemcpy<sizeof(NodeType)>(
-            (void *)arr.getArrChildrenFirstUnsafe(), (void *)(&arr + 1), count);
-        stack_.Pop<NodeType>(count);
+        NodeType* dst = arr.getArrChildrenFirstUnsafe();
+        NodeType* src = &arr + 1;
+        for (size_t i = 0; i < count; ++i) {
+          new (&dst[i]) NodeType(std::move(src[i]));
+          src[i].~NodeType();
+        }
+        popNodes(count);
       }
     } else {
       arr.setChildren(nullptr);
@@ -311,22 +416,30 @@ class LazySAXHandler {
   }
 
   sonic_force_inline bool EndObject(size_t pairs) {
-    NodeType &obj = *stack_.template Begin<NodeType>();
+    NodeType& obj = *st_;
     obj.setLength(pairs, kObject);
     if (pairs) {
-      void *mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
+      void* mem = obj.template containerMalloc<MemberType>(pairs, *alloc_);
       if (sonic_unlikely(mem == nullptr)) {
-        NodeType *children = &obj + 1;
+        NodeType* children = &obj + 1;
         for (size_t i = 0; i < size_t(pairs) * 2; i++) children[i].~NodeType();
-        stack_.Pop<MemberType>(pairs);
+        popNodes(size_t(pairs) * 2);
         obj.setLength(0, kObject);
         obj.setChildren(nullptr);
-        oom_ = true;
+        setOom();
+        return false;
       } else {
         obj.setChildren(mem);
-        internal::Xmemcpy<sizeof(MemberType)>(
-            (void *)obj.getObjChildrenFirstUnsafe(), (void *)(&obj + 1), pairs);
-        stack_.Pop<MemberType>(pairs);
+        MemberType* dst =
+            reinterpret_cast<MemberType*>(obj.getObjChildrenFirstUnsafe());
+        NodeType* src = &obj + 1;
+        for (size_t i = 0; i < pairs; ++i) {
+          new (&dst[i])
+              MemberType(std::move(src[i * 2]), std::move(src[i * 2 + 1]));
+          src[i * 2].~NodeType();
+          src[i * 2 + 1].~NodeType();
+        }
+        popNodes(size_t(pairs) * 2);
       }
     } else {
       obj.setChildren(nullptr);
@@ -334,27 +447,90 @@ class LazySAXHandler {
     return true;
   }
 
-  sonic_force_inline bool Key(const char *data, size_t len, size_t allocated) {
-    new (stack_.PushSize<NodeType>(1)) NodeType();
-    NodeType *key = stack_.Top<NodeType>();
-    key->setLength(len, allocated ? kStringFree : kStringCopy);
-    key->sv.p = data;
+  sonic_force_inline bool Key(const char* data, size_t len, size_t allocated) {
+    NodeType* mem = pushNode();
+    if (sonic_unlikely(mem == nullptr)) {
+      setOom();
+      return false;
+    }
+    new (mem) NodeType();
+    mem->setLength(len, allocated ? kStringFree : kStringCopy);
+    mem->sv.p = data;
     return true;
   }
 
-  sonic_force_inline bool Raw(const char *data, size_t len) {
-    new (stack_.PushSize<NodeType>(1)) NodeType();
-    stack_.Top<NodeType>()->setRaw(StringView(data, len));
+  sonic_force_inline bool Raw(const char* data, size_t len) {
+    NodeType* mem = pushNode();
+    if (sonic_unlikely(mem == nullptr)) {
+      setOom();
+      return false;
+    }
+    new (mem) NodeType();
+    mem->setRaw(StringView(data, len));
     return true;
   }
 
-  sonic_force_inline Allocator &GetAllocator() { return *alloc_; }
+  sonic_force_inline Allocator& GetAllocator() { return *alloc_; }
+  sonic_force_inline SonicError GetError() const noexcept { return error_; }
+  sonic_force_inline NodeType* Root() noexcept { return st_; }
+  sonic_force_inline size_t StackSizeBytes() const noexcept {
+    return np_ * sizeof(NodeType);
+  }
 
   static constexpr size_t kDefaultNum = 16;
+
+ private:
+  sonic_force_inline NodeType* pushNode() {
+    if (sonic_unlikely(np_ == cap_ && !reserveStack(nextCap()))) {
+      return nullptr;
+    }
+    return &st_[np_++];
+  }
+
+  sonic_force_inline void popNodes(size_t n) { np_ -= n; }
+
+  sonic_force_inline size_t nextCap() const {
+    if (cap_ == 0) return kDefaultNum;
+    size_t max_count = std::numeric_limits<size_t>::max() / sizeof(NodeType);
+    return cap_ > max_count / 2 ? max_count : cap_ * 2;
+  }
+
+  sonic_force_inline bool reserveStack(size_t new_cap) {
+    if (new_cap <= cap_) return true;
+    if (sonic_unlikely(new_cap >
+                       std::numeric_limits<size_t>::max() / sizeof(NodeType))) {
+      setOom();
+      return false;
+    }
+    NodeType* new_st =
+        static_cast<NodeType*>(std::malloc(sizeof(NodeType) * new_cap));
+    if (sonic_unlikely(new_st == nullptr)) {
+      setOom();
+      return false;
+    }
+    for (size_t i = 0; i < np_; ++i) {
+      new (&new_st[i]) NodeType(std::move(st_[i]));
+      st_[i].~NodeType();
+    }
+    std::free(st_);
+    st_ = new_st;
+    cap_ = new_cap;
+    return true;
+  }
+
+  sonic_force_inline void setOom() noexcept {
+    oom_ = true;
+    error_ = kErrorNoMem;
+  }
+
+ public:
   // allocator for node stack and string buffers
-  Allocator *alloc_{nullptr};
-  internal::Stack stack_{};
+  Allocator* alloc_{nullptr};
+  NodeType* st_{nullptr};
+  size_t np_{0};
+  size_t cap_{0};
   bool oom_{false};
+  SonicError error_{kErrorNone};
 };
 
 }  // namespace sonic_json

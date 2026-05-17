@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <type_traits>
 #include <vector>
 
@@ -38,15 +39,17 @@ class GenericJsonPointerNode {
   GenericJsonPointerNode() = delete;
   GenericJsonPointerNode(std::nullptr_t) = delete;
   GenericJsonPointerNode(StringView str)
-      : str_(str), num_(0), is_number_(false) {}
+      : str_(str), num_(0), is_number_(false), number_valid_(true) {}
   GenericJsonPointerNode(const std::string& str)
-      : str_(str), num_(0), is_number_(false) {}
+      : str_(str), num_(0), is_number_(false), number_valid_(true) {}
   GenericJsonPointerNode(const char* str)
-      : str_(str), num_(0), is_number_(false) {}
+      : str_(str), num_(0), is_number_(false), number_valid_(true) {}
   template <typename T, typename std::enable_if<std::is_integral<T>::value,
                                                 bool>::type = true>
   GenericJsonPointerNode(T i)
-      : str_(), num_(static_cast<int>(i)), is_number_(true) {}
+      : str_(), num_(0), is_number_(true), number_valid_(true) {
+    setNumber(i);
+  }
 
   GenericJsonPointerNode(const GenericJsonPointerNode& rhs) = default;
   GenericJsonPointerNode(GenericJsonPointerNode&& rhs) = default;
@@ -56,7 +59,9 @@ class GenericJsonPointerNode {
   ~GenericJsonPointerNode() = default;
 
   bool operator==(const GenericJsonPointerNode& rhs) const {
-    return IsStr() ? str_ == rhs.str_ : num_ == rhs.num_;
+    if (is_number_ != rhs.is_number_) return false;
+    return IsStr() ? str_ == rhs.str_
+                   : (number_valid_ == rhs.number_valid_ && num_ == rhs.num_);
   }
   bool operator!=(const GenericJsonPointerNode& rhs) const {
     return !(*this == rhs);
@@ -64,15 +69,29 @@ class GenericJsonPointerNode {
 
   bool IsNum() const { return is_number_; }
   bool IsStr() const { return !is_number_; }
-  int GetNum() const { return num_; }
+  bool IsValidNum() const { return !is_number_ || number_valid_; }
+  uint64_t GetNum() const { return num_; }
   const StringType& GetStr() const { return str_; }
   size_t Size() const { return str_.size(); }
   const char* Data() const { return str_.data(); }
 
  private:
+  template <typename T>
+  void setNumber(T i) {
+    if constexpr (std::is_signed<T>::value) {
+      if (i < 0) {
+        number_valid_ = false;
+        num_ = 0;
+        return;
+      }
+    }
+    num_ = static_cast<uint64_t>(i);
+  }
+
   StringType str_{};
-  int num_{};
+  uint64_t num_{};
   bool is_number_{};
+  bool number_valid_{};
 };
 
 template <typename StringType = SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>

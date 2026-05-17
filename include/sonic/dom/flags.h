@@ -29,6 +29,9 @@ enum class ParseFlags : uint32_t {
   // native numeric representation. In-range floating-point numbers stay
   // double; in-range integers stay int64/uint64.
   kParseOverflowNumAsNumStr = 1 << 3,
+  // ParseOnDemand keeps its default short-circuit behavior. Set this flag when
+  // callers require full-document validation before returning a target.
+  kParseValidateOnDemandFull = 1 << 4,
 };
 
 // Compatibility layer for downstream users.
@@ -46,6 +49,10 @@ using ParseFlag [[deprecated("Use ParseFlags instead")]] = ParseFlags;
 [[deprecated(
     "Use ParseFlags::kParseOverflowNumAsNumStr instead")]] constexpr ParseFlags
     kParseOverflowNumAsNumStr = ParseFlags::kParseOverflowNumAsNumStr;
+[[deprecated(
+    "Use ParseFlags::kParseValidateOnDemandFull "
+    "instead")]] constexpr ParseFlags kParseValidateOnDemandFull =
+    ParseFlags::kParseValidateOnDemandFull;
 
 constexpr ParseFlags operator|(ParseFlags lhs, ParseFlags rhs) {
   return static_cast<ParseFlags>(static_cast<uint32_t>(lhs) |

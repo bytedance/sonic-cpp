@@ -16,8 +16,10 @@
 
 #include <gtest/gtest.h>
 
+#include <tuple>
 #include <vector>
 
+#include "sonic/dom/generic_document.h"
 #include "sonic/experiment/lazy_update.h"
 
 namespace {
@@ -112,7 +114,7 @@ TEST(UpdateLazy, Basic) {
       },
   };
 
-  for (const auto &t : tests) {
+  for (const auto& t : tests) {
     auto ret =
         sonic_json::UpdateLazy<ParseFlags::kParseDefault>(t.target, t.source);
     EXPECT_STREQ(ret.c_str(), t.updated.c_str());
@@ -149,26 +151,107 @@ TEST(UpdateLazy, InvalidJson) {
 }
 
 TEST(UpdateLazy, NestedInvalidTargetPropagates) {
-  // Nested invalid target merged with nested valid source:
-  // the error from the target-side lazy parse must be propagated and
-  // the update must fail ("{}"); it must NOT be silently overwritten
-  // by the source's successful parse.
+  // Nested invalid target merged with nested valid source follows the same
+  // legacy fallback as an invalid top-level target, but WithError must still
+  // propagate the parse error instead of silently reporting success.
   {
     std::string target = R"({"a":{"foo":}})";  // nested {"foo":} is invalid
     std::string source = R"({"a":{"bar":5}})";
     auto ret =
         sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
-    EXPECT_STREQ(ret.c_str(), "{}")
-        << "invalid nested target must propagate as update failure";
+    EXPECT_STREQ(ret.c_str(), source.c_str());
+    auto ret_with_error =
+        sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(target,
+                                                                   source);
+    EXPECT_EQ(std::get<0>(ret_with_error), source);
+    EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorInvalidChar);
   }
   {
     std::string target = R"({"a":{"foo": @}})";  // invalid token inside nested
     std::string source = R"({"a":{"bar":5}})";
     auto ret =
         sonic_json::UpdateLazy<ParseFlags::kParseDefault>(target, source);
-    EXPECT_STREQ(ret.c_str(), "{}")
-        << "invalid nested target must propagate as update failure";
+    EXPECT_STREQ(ret.c_str(), source.c_str());
+    auto ret_with_error =
+        sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(target,
+                                                                   source);
+    EXPECT_EQ(std::get<0>(ret_with_error), source);
+    EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorInvalidChar);
   }
+}
+
+TEST(UpdateLazy, RejectsInvalidRawNumbers) {
+  for (const auto* source : {R"({"a":01})", R"({"a":1abc})", R"({"a":-})"}) {
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(R"({"a":0})", source);
+    EXPECT_STREQ(ret.c_str(), R"({"a":0})") << source;
+    auto ret_with_error =
+        sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(R"({"a":0})",
+                                                                   source);
+    EXPECT_EQ(std::get<0>(ret_with_error), R"({"a":0})") << source;
+    EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorInvalidChar)
+        << source;
+
+    sonic_json::Document doc;
+    doc.Parse(ret);
+    EXPECT_FALSE(doc.HasParseError()) << source << " -> " << ret;
+  }
+
+  for (const auto* source : {R"({"a":{"b":01}})", R"({"a":{"b":1abc}})",
+                             R"({"a":{"b":-}})", R"({"b":{]}})"}) {
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(R"({"a":0})", source);
+    EXPECT_STREQ(ret.c_str(), R"({"a":0})") << source;
+    auto ret_with_error =
+        sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(R"({"a":0})",
+                                                                   source);
+    EXPECT_EQ(std::get<0>(ret_with_error), R"({"a":0})") << source;
+    EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorInvalidChar)
+        << source;
+
+    sonic_json::Document doc;
+    doc.Parse(ret);
+    EXPECT_FALSE(doc.HasParseError()) << source << " -> " << ret;
+  }
+
+  {
+    const char* source = R"({"a":{"b":1e309}})";
+    auto ret =
+        sonic_json::UpdateLazy<ParseFlags::kParseDefault>(R"({"a":0})", source);
+    EXPECT_STREQ(ret.c_str(), R"({"a":0})");
+    auto ret_with_error =
+        sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(R"({"a":0})",
+                                                                   source);
+    EXPECT_EQ(std::get<0>(ret_with_error), R"({"a":0})");
+    EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorInfinity);
+  }
+}
+
+TEST(UpdateLazy, RejectsInvalidEscapesInRawValues) {
+  const char* source = R"({"a":"\q"})";
+  auto ret =
+      sonic_json::UpdateLazy<ParseFlags::kParseDefault>(R"({"a":0})", source);
+  EXPECT_STREQ(ret.c_str(), R"({"a":0})");
+
+  auto ret_with_error =
+      sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(R"({"a":0})",
+                                                                 source);
+  EXPECT_EQ(std::get<0>(ret_with_error), R"({"a":0})");
+  EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kParseErrorEscapedFormat);
+}
+
+TEST(UpdateLazy, NestedRawMergeDoesNotBorrowFreedShadowBuffer) {
+  auto ret_with_error =
+      sonic_json::UpdateLazyWithError<ParseFlags::kParseDefault>(
+          R"({"a":{"x":1}})", R"({"a":{"y":2}})");
+  EXPECT_EQ(std::get<1>(ret_with_error), sonic_json::kErrorNone);
+
+  sonic_json::Document doc;
+  doc.Parse(std::get<0>(ret_with_error));
+  ASSERT_FALSE(doc.HasParseError()) << std::get<0>(ret_with_error);
+  ASSERT_TRUE(doc["a"].IsObject());
+  EXPECT_TRUE(doc["a"].HasMember("x"));
+  EXPECT_TRUE(doc["a"].HasMember("y"));
 }
 
 }  // namespace

@@ -17,14 +17,17 @@
 #include "sonic/allocator.h"
 
 #include <atomic>
+#include <limits>
 #include <thread>
 
 #include "gtest/gtest.h"
+#include "sonic/dom/dynamicnode.h"
 #include "sonic/internal/stack.h"
+#include "sonic/writebuffer.h"
 
 // Let huge-allocation OOM tests return null under ASAN instead of aborting.
 // Dead code in non-ASAN builds; ASAN_OPTIONS still overrides it.
-extern "C" __attribute__((used)) const char *__asan_default_options() {
+extern "C" __attribute__((used)) const char* __asan_default_options() {
   return "allocator_may_return_null=1";
 }
 
@@ -43,7 +46,7 @@ using namespace sonic_json;
 TEST(Allocator, Free) {
   SimpleAllocator a;
   MEMSTAT_ISEMPTY();
-  void *ptr = a.Malloc(24);
+  void* ptr = a.Malloc(24);
   MEMSTAT_NOTEMPTY();
   ptr = a.Realloc(ptr, 24, 48);
   MEMSTAT_NOTEMPTY();
@@ -61,7 +64,7 @@ TEST(Allocator, SimpleAllocatorEdgeCases) {
   EXPECT_EQ(a.Malloc(0), nullptr);
 
   // Realloc(..., new_size=0) should free and return nullptr.
-  void *ptr = a.Malloc(8);
+  void* ptr = a.Malloc(8);
   ASSERT_NE(ptr, nullptr);
   EXPECT_EQ(a.Realloc(ptr, 8, 0), nullptr);
 }
@@ -94,7 +97,7 @@ TEST(Allocator, MemoryPoolAllocatorMoveAndMapAllocator) {
   {
     MemoryPoolAllocator<> pool;
     MapAllocator<int, MemoryPoolAllocator<>> ma(&pool);
-    int *p = ma.allocate(1);
+    int* p = ma.allocate(1);
     ASSERT_NE(p, nullptr);
     ma.deallocate(p, 1);
   }
@@ -130,26 +133,92 @@ TEST(Stack, ReservePreservesContents) {
 // "failed allocation sets hadOom" path without polluting test output.
 struct FailAfterFirstChunkAllocator {
   bool allow_ctor = true;
-  void *Malloc(size_t n) {
+  void* Malloc(size_t n) {
     if (allow_ctor) {
       allow_ctor = false;
       return std::malloc(n);
     }
     return nullptr;
   }
-  void *Realloc(void *, size_t, size_t) { return nullptr; }
-  static void Free(void *p) { std::free(p); }
+  void* Realloc(void*, size_t, size_t) { return nullptr; }
+  static void Free(void* p) { std::free(p); }
+};
+
+struct FailAllAllocator {
+  void* Malloc(size_t) { return nullptr; }
+  void* Realloc(void*, size_t, size_t) { return nullptr; }
+  static void Free(void* p) { std::free(p); }
 };
 
 TEST(Allocator, MemoryPoolAllocatorHadOomSignalsFailedMalloc) {
   FailAfterFirstChunkAllocator base;
   MemoryPoolAllocator<FailAfterFirstChunkAllocator> pool(8, &base);
   EXPECT_FALSE(pool.HadOom());
-  void *p = pool.Malloc(16);
+  void* p = pool.Malloc(16);
   EXPECT_EQ(p, nullptr);
   EXPECT_TRUE(pool.HadOom());
   pool.ClearOom();
   EXPECT_FALSE(pool.HadOom());
+}
+
+TEST(Allocator, MemoryPoolAllocatorConstructorOomIsQueryableAndSafe) {
+  FailAllAllocator base;
+  MemoryPoolAllocator<FailAllAllocator> pool(8, &base);
+
+  EXPECT_TRUE(pool.HadOom());
+  EXPECT_EQ(nullptr, pool.Malloc(8));
+  EXPECT_TRUE(pool.HadOom());
+}
+
+TEST(Allocator, MemoryPoolAllocatorUserBufferRejectsTooSmallAfterAlignment) {
+  alignas(void*) char storage[64];
+  MemoryPoolAllocator<> pool(storage + 1, 56);
+
+  EXPECT_TRUE(pool.HadOom());
+  EXPECT_EQ(0u, pool.Capacity());
+  EXPECT_EQ(nullptr, pool.Malloc(8));
+
+  MemoryPoolAllocator<> tiny(storage + 1, 1);
+  EXPECT_TRUE(tiny.HadOom());
+  EXPECT_EQ(0u, tiny.Capacity());
+}
+
+TEST(Allocator, MemoryPoolAllocatorRejectsOversizedMallocWithoutWraparound) {
+  MemoryPoolAllocator<> pool(8);
+
+  EXPECT_EQ(nullptr, pool.Malloc(std::numeric_limits<size_t>::max()));
+  EXPECT_TRUE(pool.HadOom());
+}
+
+TEST(Allocator, MemoryPoolAllocatorRejectsChunkHeaderOverflow) {
+  MemoryPoolAllocator<> pool(8);
+
+  EXPECT_EQ(nullptr,
+            pool.Malloc(std::numeric_limits<size_t>::max() - sizeof(void*)));
+  EXPECT_TRUE(pool.HadOom());
+}
+
+TEST(Allocator, DNodeContainerOverflowMarksPoolOom) {
+  MemoryPoolAllocator<> alloc;
+  DNode<MemoryPoolAllocator<>> arr(kArray);
+
+  alloc.ClearOom();
+  arr.Reserve(std::numeric_limits<size_t>::max(), alloc);
+  EXPECT_TRUE(alloc.HadOom());
+  EXPECT_EQ(0u, arr.Capacity());
+
+  DNode<MemoryPoolAllocator<>> obj(kObject);
+  alloc.ClearOom();
+  obj.MemberReserve(std::numeric_limits<size_t>::max(), alloc);
+  EXPECT_TRUE(alloc.HadOom());
+  EXPECT_EQ(0u, obj.Capacity());
+}
+
+TEST(Allocator, AdaptiveChunkPolicyHandlesHighBitNeedsWithoutShiftOverflow) {
+  AdaptiveChunkPolicy cp(1024);
+
+  EXPECT_EQ(size_t{1} << 63, cp.ChunkSize(size_t{1} << 63));
+  EXPECT_EQ((size_t{1} << 63) + 1, cp.ChunkSize((size_t{1} << 63) + 1));
 }
 
 // Both MemoryPoolAllocator ctors place SharedData (incl. atomic<bool>
@@ -230,6 +299,70 @@ TEST(Stack, ConstructorOomLeavesConsistentState) {
   ASSERT_NE(s.Begin<char>(), nullptr);
   EXPECT_EQ(1u, s.Size());
   EXPECT_EQ('X', *s.Top<char>());
+}
+
+TEST(Stack, PushSizeReportsOomAndDoesNotAdvanceTop) {
+  sonic_json::internal::Stack s(8);
+  ASSERT_FALSE(s.HadOom());
+  ASSERT_NE(nullptr, s.Begin<char>());
+  ASSERT_EQ(0u, s.Size());
+
+  constexpr size_t kHuge = (size_t{1} << 62);
+  char* p = s.PushSize<char>(kHuge);
+  EXPECT_EQ(nullptr, p);
+  EXPECT_TRUE(s.HadOom());
+  EXPECT_EQ(0u, s.Size());
+  EXPECT_EQ(8u, s.Capacity());
+
+  s.ClearOom();
+  EXPECT_FALSE(s.HadOom());
+  p = s.PushSize<char>(1);
+  ASSERT_NE(nullptr, p);
+  *p = 'Y';
+  EXPECT_EQ(1u, s.Size());
+  EXPECT_EQ('Y', *s.Top<char>());
+}
+
+TEST(Stack, PushStringOverflowReportsOomAndDoesNotAdvanceTop) {
+  sonic_json::internal::Stack s(8);
+  ASSERT_FALSE(s.HadOom());
+  ASSERT_NE(nullptr, s.Begin<char>());
+
+  EXPECT_FALSE(s.Push("x", std::numeric_limits<size_t>::max()));
+  EXPECT_TRUE(s.HadOom());
+  EXPECT_EQ(0u, s.Size());
+}
+
+TEST(Stack, TypedPushAlignsAfterBytePush) {
+  sonic_json::internal::Stack s(8);
+  ASSERT_TRUE(s.Push<char>('x'));
+
+  ASSERT_TRUE(s.Push<uint64_t>(0x0102030405060708ULL));
+  const auto* p = s.Top<uint64_t>();
+  EXPECT_EQ(0u, reinterpret_cast<uintptr_t>(p) % alignof(uint64_t));
+  EXPECT_EQ(0x0102030405060708ULL, *p);
+}
+
+TEST(Stack, PushSizeAlignsAfterBytePush) {
+  sonic_json::internal::Stack s(8);
+  ASSERT_TRUE(s.Push<char>('x'));
+
+  uint64_t* p = s.PushSize<uint64_t>(1);
+  ASSERT_NE(nullptr, p);
+  EXPECT_EQ(0u, reinterpret_cast<uintptr_t>(p) % alignof(uint64_t));
+  *p = 0x1112131415161718ULL;
+  EXPECT_EQ(p, s.Top<uint64_t>());
+  EXPECT_EQ(0x1112131415161718ULL, *s.Top<uint64_t>());
+}
+
+TEST(WriteBuffer, ReserveOverflowReportsOom) {
+  WriteBuffer wb(8);
+  EXPECT_FALSE(wb.HadOom());
+
+  EXPECT_FALSE(wb.Reserve(std::numeric_limits<size_t>::max()));
+  EXPECT_TRUE(wb.HadOom());
+  EXPECT_EQ(kErrorNoMem, wb.GetError());
+  EXPECT_EQ(0u, wb.Size());
 }
 
 }  // namespace

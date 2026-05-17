@@ -19,6 +19,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "sonic/dom/flags.h"
 #include "sonic/dom/type.h"
@@ -26,6 +27,7 @@
 #include "sonic/internal/arch/simd_quote.h"
 #include "sonic/internal/ftoa.h"
 #include "sonic/internal/itoa.h"
+#include "sonic/internal/stack.h"
 #include "sonic/writebuffer.h"
 
 namespace sonic_json {
@@ -35,8 +37,11 @@ namespace internal {
 template <SerializeFlags serializeFlags, typename NodeType>
 sonic_force_inline SonicError SerializeImpl(const NodeType* node,
                                             WriteBuffer& wb) {
+  using MemberNode = typename NodeType::MemberNode;
+  static_assert(sizeof(MemberNode) == sizeof(NodeType) * 2,
+                "SerializeImpl relies on compact object member layout");
   struct ParentCtx {
-    uint64_t len;
+    size_t len;
     const NodeType* ptr;
   };
 
@@ -45,11 +50,15 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   constexpr size_t kNumberSize = 33;
 
   size_t node_nums = node->IsContainer() ? node->Size() : 1;
+  if (sonic_unlikely(node_nums > (std::numeric_limits<size_t>::max() - 64) /
+                                     kExpectMinifyRatio)) {
+    return kErrorNoMem;
+  }
   size_t estimate = node_nums * kExpectMinifyRatio + 64;
   bool is_obj = node->IsObject();
   bool is_key, is_obj_nxt;
-  uint32_t member_cnt = 0;
-  uint32_t val_cnt, val_cnt_nxt;
+  size_t member_cnt = 0;
+  size_t val_cnt, val_cnt_nxt;
   size_t str_len;
   long inc_len;
   const char* str_ptr;
@@ -59,9 +68,13 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   if constexpr ((serializeFlags & SerializeFlags::kSerializeAppendBuffer) ==
                 0) {
     wb.Clear();
-    wb.Reserve(estimate);
+    if (sonic_unlikely(!wb.Reserve(estimate))) return kErrorNoMem;
   } else {
-    wb.Reserve(estimate + wb.Size());
+    if (sonic_unlikely(estimate >
+                       std::numeric_limits<size_t>::max() - wb.Size())) {
+      return kErrorNoMem;
+    }
+    if (sonic_unlikely(!wb.Reserve(estimate + wb.Size()))) return kErrorNoMem;
   }
 
   bool is_single = (!node->IsContainer()) || node->Empty();
@@ -69,18 +82,29 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
     val_cnt = 1;
     goto val_begin;
   }
+  if (sonic_unlikely(is_obj &&
+                     node->Size() > std::numeric_limits<size_t>::max() / 2)) {
+    return kErrorNoMem;
+  }
   val_cnt = node->Size() << is_obj;
   member_cnt = node->Size();
   wb.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
-  node = is_obj ? node->getObjChildrenFirstUnsafe()
-                : node->getArrChildrenFirstUnsafe();
+  if (is_obj) {
+    node = &node->getObjChildrenFirstUnsafe()->name;
+  } else {
+    node = node->getArrChildrenFirstUnsafe();
+  }
 val_begin:
   switch (node->getBasicType()) {
     case kString: {
-      is_key = ((size_t)(is_obj) & (~val_cnt));
+      is_key = is_obj && ((val_cnt & 1) == 0);
       str_len = node->Size();
-      inc_len = str_len * 6 + 32 + 3;
-      wb.Grow(inc_len);
+      if (sonic_unlikely(str_len >
+                         (std::numeric_limits<size_t>::max() - 35) / 6)) {
+        return kErrorNoMem;
+      }
+      inc_len = static_cast<long>(str_len * 6 + 32 + 3);
+      if (sonic_unlikely(wb.Grow(inc_len) == nullptr)) return kErrorNoMem;
       str_ptr = node->GetStringView().data();
       rn = internal::Quote<serializeFlags>(str_ptr, str_len, wb.End<char>()) -
            wb.End<char>();
@@ -91,7 +115,7 @@ val_begin:
     }
 
     case kNumber: {
-      wb.Grow(kNumberSize);
+      if (sonic_unlikely(wb.Grow(kNumberSize) == nullptr)) return kErrorNoMem;
       switch (node->GetType()) {
         case kSint:
           rn = internal::I64toa(wb.End<char>(), node->GetInt64()) -
@@ -105,7 +129,6 @@ val_begin:
           const double d = node->GetDouble();
           rn = internal::F64toa<serializeFlags>(wb.End<char>(), d);
           // support Infinity/-Infinity or NaN/-NaN
-
           if (sonic_unlikely(rn <= 0)) {
             if (serializeFlags & SerializeFlags::kSerializeInfNan) {
               if (sonic_unlikely(std::isinf(d))) {
@@ -130,7 +153,12 @@ val_begin:
         case kNumStr: {
           rn = 0;
           str_len = node->Size();
-          wb.Grow(str_len + 1);
+          if (sonic_unlikely(str_len == std::numeric_limits<size_t>::max())) {
+            return kErrorNoMem;
+          }
+          if (sonic_unlikely(wb.Grow(str_len + 1) == nullptr)) {
+            return kErrorNoMem;
+          }
           wb.PushUnsafe(node->GetStringNumber().data(), str_len);
           break;
         }
@@ -143,17 +171,19 @@ val_begin:
       break;
     }
     case kBool: {
-      wb.Push5_8(node->IsFalse() ? "false,  " : "true,   ",
-                 5 + node->IsFalse());
+      if (sonic_unlikely(!wb.Push5_8(node->IsFalse() ? "false,  " : "true,   ",
+                                     5 + node->IsFalse()))) {
+        return kErrorNoMem;
+      }
       break;
     }
     case kNull: {
-      wb.Push5_8("null,   ", 5);
+      if (sonic_unlikely(!wb.Push5_8("null,   ", 5))) return kErrorNoMem;
       break;
     }
     case kObject:
     case kArray: {
-      wb.Grow(3);
+      if (sonic_unlikely(wb.Grow(3) == nullptr)) return kErrorNoMem;
       is_obj_nxt = node->IsObject();
       val_cnt_nxt = node->Size();
       if (sonic_unlikely(val_cnt_nxt == 0)) {
@@ -162,6 +192,11 @@ val_begin:
         wb.PushUnsafe<char>(',');
         break;
       } else {
+        if (sonic_unlikely(is_obj &&
+                           member_cnt >
+                               (std::numeric_limits<size_t>::max() - 1) / 2)) {
+          return kErrorNoMem;
+        }
         // check the serialized member count
         // member_cnt is remained member counts, val_cnt is remained value
         // counts. If the object key is string type, "member_cnt * 2 + 1 =
@@ -169,20 +204,33 @@ val_begin:
         if (sonic_unlikely(is_obj && ((member_cnt << 1) + 1 != val_cnt))) {
           goto key_err;
         }
-        stk.Push(ParentCtx{val_cnt << 1 | is_obj, node});
+        if (sonic_unlikely(!stk.Push(ParentCtx{val_cnt << 1 | is_obj, node}))) {
+          return kErrorNoMem;
+        }
+        if (sonic_unlikely(is_obj_nxt &&
+                           val_cnt_nxt >
+                               std::numeric_limits<size_t>::max() / 2)) {
+          return kErrorNoMem;
+        }
         val_cnt = val_cnt_nxt << is_obj_nxt;
         member_cnt = val_cnt_nxt;
         is_obj = is_obj_nxt;
         wb.PushUnsafe<char>('[' | (uint8_t)(is_obj) << 5);
-        node = is_obj ? node->getObjChildrenFirstUnsafe()
-                      : node->getArrChildrenFirstUnsafe();
+        if (is_obj) {
+          node = &node->getObjChildrenFirstUnsafe()->name;
+        } else {
+          node = node->getArrChildrenFirstUnsafe();
+        }
         goto val_begin;
       }
       break;
     }
     case kRaw: {
       str_len = node->Size();
-      wb.Grow(str_len + 1);
+      if (sonic_unlikely(str_len == std::numeric_limits<size_t>::max())) {
+        return kErrorNoMem;
+      }
+      if (sonic_unlikely(wb.Grow(str_len + 1) == nullptr)) return kErrorNoMem;
       wb.PushUnsafe(node->GetRaw().data(), str_len);
       wb.PushUnsafe<char>(',');
       break;
@@ -201,7 +249,7 @@ scope_end:
   if (sonic_unlikely((member_cnt && is_obj) != 0)) {
     goto key_err;
   }
-  wb.Grow(2);
+  if (sonic_unlikely(wb.Grow(2) == nullptr)) return kErrorNoMem;
   wb.PushUnsafe<char>(']' | (uint8_t)(is_obj) << 5);
   wb.PushUnsafe<char>(',');
   if (sonic_unlikely(stk.Size() == 0)) goto doc_end;

@@ -35,6 +35,8 @@ using namespace sonic_json;
 using namespace sonic_json::internal;
 using Document = GenericDocument<DNode<>>;
 
+Document&& MoveDocument(Document& doc) { return std::move(doc); }
+
 TEST(Document, DNode) {
   // constructors
   {
@@ -249,6 +251,20 @@ TEST(Document, ParseBasic) {
       // EXPECT_STREQ(wb.ToString(), data.c_str());
     }
   }
+}
+
+TEST(Document, MoveAssignSelfPreservesParsedDocument) {
+  Document doc;
+  doc.Parse(R"({"k":"v","n":1})");
+  ASSERT_FALSE(doc.HasParseError());
+
+  doc = MoveDocument(doc);
+
+  ASSERT_FALSE(doc.HasParseError());
+  ASSERT_TRUE(doc.IsObject());
+  ASSERT_TRUE(doc.HasMember("k"));
+  EXPECT_EQ(doc["k"].GetString(), "v");
+  EXPECT_FALSE(doc.GetAllocator().HadOom());
 }
 
 template <typename Document>
@@ -470,6 +486,7 @@ TYPED_TEST(DocumentTest, ParseOnDemand) {
       {json, {"titles", 1}, &Document::IsString, kNoError},
       {json, {"hots", 2}, &Document::IsTrue, kNoError},
       {json, {"authors", 2, 0}, &Document::IsArray, kNoError},
+      {R"({"a":1} garbage)", {"a"}, &Document::IsNumber, kNoError},
 
       // parse ondemand failed
       {json, {"unknown"}, &Document::IsNull, kError},
@@ -484,6 +501,14 @@ TYPED_TEST(DocumentTest, ParseOnDemand) {
       {R"({"a"})", {"a"}, &Document::IsNull, kError},
       {R"({"x":[[[]])", {"a"}, &Document::IsNull, kError},
       {R"({"x":{)", {"a"}, &Document::IsNull, kError},
+      {R"({"x":1abc "a":2})", {"a"}, &Document::IsNull, kError},
+      {R"([1abc,2])", {1}, &Document::IsNull, kError},
+      {R"({"a":[1] 2})", {"a"}, &Document::IsNull, kError},
+      {R"({"a":"x" 2})", {"a"}, &Document::IsNull, kError},
+      {R"({"x":{]},"a":2})", {"a"}, &Document::IsNull, kError},
+      {R"({"x":[}],"a":2})", {"a"}, &Document::IsNull, kError},
+      {R"({"a":1]})", {"a"}, &Document::IsNull, kError},
+      {"1]", {}, &Document::IsNull, kError},
       {json, {"authors", 2, 1}, &Document::IsNull, kError},
       {json, {"authors", 3}, &Document::IsNull, kError},
       {json, {"hots", 5}, &Document::IsNull, kError},
@@ -498,6 +523,36 @@ TYPED_TEST(DocumentTest, ParseOnDemand) {
     EXPECT_EQ(doc.HasParseError(), test.has_error) << error_info;
     EXPECT_TRUE((doc.*(test.check))()) << error_info;
   }
+}
+
+TYPED_TEST(DocumentTest, ParseOnDemandHonorsParseFlags) {
+  using Document = TypeParam;
+
+  std::string control_char_json = std::string(R"({"a":")") + char(1) + R"("})";
+  Document control_char_doc;
+  control_char_doc
+      .template ParseOnDemand<ParseFlags::kParseAllowUnescapedControlChars>(
+          control_char_json.data(), control_char_json.size(), JsonPointer{"a"});
+  EXPECT_FALSE(control_char_doc.HasParseError());
+  ASSERT_TRUE(control_char_doc.IsString());
+  EXPECT_EQ(control_char_doc.GetStringView(),
+            StringView(control_char_json.data() + 6, 1));
+
+  std::string overflow_json = R"({"a":1e309})";
+  Document overflow_doc;
+  overflow_doc.template ParseOnDemand<ParseFlags::kParseOverflowNumAsNumStr>(
+      overflow_json.data(), overflow_json.size(), JsonPointer{"a"});
+  EXPECT_FALSE(overflow_doc.HasParseError());
+  ASSERT_TRUE(overflow_doc.IsStringNumber());
+  EXPECT_EQ(overflow_doc.GetStringView(), "1e309");
+
+  std::string trailing_json = R"({"a":1} garbage)";
+  Document full_validation_doc;
+  full_validation_doc
+      .template ParseOnDemand<ParseFlags::kParseValidateOnDemandFull>(
+          trailing_json.data(), trailing_json.size(), JsonPointer{"a"});
+  EXPECT_TRUE(full_validation_doc.HasParseError());
+  EXPECT_EQ(full_validation_doc.GetParseError(), kParseErrorInvalidChar);
 }
 
 TYPED_TEST(DocumentTest, Move) {

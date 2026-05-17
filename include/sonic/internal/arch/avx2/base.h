@@ -217,11 +217,11 @@ static sonic_force_inline int cmp_lt_32(const void* _l, const void* _r,
 #pragma GCC diagnostic pop
 #endif
     __m256i ans = _mm256_cmpeq_epi8(vec_l, vec_r);
-    int mask = _mm256_movemask_epi8(ans) + 1;
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1u;
     // mask = mask << (32 -s);
     __asm__("bzhil  %1, %2, %[result]\n\t"
             : [result] "=r"(mask)
-            : "r"((int)s), "r"(mask));
+            : "r"(static_cast<uint32_t>(s)), "r"(mask));
     if (mask) {
       int ne_idx = __builtin_ctz(mask);
       // if (lhs[ne_idx] < rhs[ne_idx]) return -1;
@@ -276,11 +276,11 @@ static sonic_force_inline bool is_eq_lt_32(const void* _a, const void* _b,
     __m256i vec_a = _mm256_loadu_si256((__m256i const*)a);
     __m256i vec_b = _mm256_loadu_si256((__m256i const*)b);
     __m256i ans = _mm256_cmpeq_epi8(vec_a, vec_b);
-    int mask = _mm256_movemask_epi8(ans) + 1;
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1u;
     // mask = mask << (32 -s);
     __asm__("bzhil  %1, %2, %[result]\n\t"
             : [result] "=r"(mask)
-            : "r"((int)s), "r"(mask));
+            : "r"(static_cast<uint32_t>(s)), "r"(mask));
     return mask == 0;
   }
   return is_eq_lt_32_cross_page(a, b, s);
@@ -305,7 +305,7 @@ sonic_force_inline bool InlinedMemcmpEq(const void* _a, const void* _b,
     vec_a = _mm256_loadu_si256((__m256i const*)(a + i));
     vec_b = _mm256_loadu_si256((__m256i const*)(b + i));
     __m256i ans = _mm256_cmpeq_epi8(vec_a, vec_b);
-    unsigned int mask = _mm256_movemask_epi8(ans) + 1;
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1u;
     if (mask) return false;
   }
   // no branch for s = x32
@@ -316,7 +316,7 @@ sonic_force_inline bool InlinedMemcmpEq(const void* _a, const void* _b,
     vec_b = _mm256_loadu_si256((__m256i const*)(b + s - 32));
     __m256i ans = _mm256_cmpeq_epi8(vec_a, vec_b);
     ans = _mm256_and_si256(ans, ans_1);
-    unsigned int mask = _mm256_movemask_epi8(ans) + 1;
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1u;
     if (mask) return false;
   }
   return true;
@@ -361,7 +361,7 @@ sonic_force_inline int InlinedMemcmp(const void* _l, const void* _r, size_t s) {
     vec_r = _mm256_loadu_si256((__m256i const*)(rhs + offset));
     __m256i ans = _mm256_cmpeq_epi8(vec_l, vec_r);
     // ans = _mm256_and_si256(ans, ans_1);
-    unsigned int mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1;
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1u;
     if (mask) {
       int ne_idx = __builtin_ctz(mask);
       return lhs[offset + ne_idx] - rhs[offset + ne_idx];

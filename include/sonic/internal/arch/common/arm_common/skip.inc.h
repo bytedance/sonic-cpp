@@ -19,9 +19,9 @@
 #endif
 
 template <typename T>
-sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
-                                          uint64_t &prev_instring,
-                                          uint64_t &prev_escaped) {
+sonic_force_inline uint64_t GetStringBits(const uint8_t* data,
+                                          uint64_t& prev_instring,
+                                          uint64_t& prev_escaped) {
   const T v(data);
   uint64_t escaped = 0;
   uint64_t bs_bits = v.eq('\\');
@@ -40,7 +40,7 @@ sonic_force_inline uint64_t GetStringBits(const uint8_t *data,
 // GetNextToken find the next characters in tokens and update the position to
 // it.
 template <size_t N>
-sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
+sonic_force_inline uint8_t GetNextToken(const uint8_t* data, size_t& pos,
                                         size_t len, const char (&tokens)[N]) {
   while (pos + VEC_LEN <= len) {
     uint8x16_t v = vld1q_u8(data + pos);
@@ -74,7 +74,7 @@ sonic_force_inline uint8_t GetNextToken(const uint8_t *data, size_t &pos,
 }
 
 // pos is the after the ending quote
-sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
+sonic_force_inline int SkipString(const uint8_t* data, size_t& pos,
                                   size_t len) {
   const static int kEscaped = 2;
   const static int kNormal = 1;
@@ -123,12 +123,12 @@ sonic_force_inline int SkipString(const uint8_t *data, size_t &pos,
 
 // return true if container is closed.
 template <typename T>
-sonic_force_inline bool skip_container(const uint8_t *data, size_t &pos,
+sonic_force_inline bool skip_container(const uint8_t* data, size_t& pos,
                                        size_t len, uint8_t left,
                                        uint8_t right) {
   uint64_t prev_instring = 0, prev_escaped = 0, instring;
   int rbrace_num = 0, lbrace_num = 0, last_lbrace_num;
-  const uint8_t *p;
+  const uint8_t* p;
   while (pos + 64 <= len) {
     p = data + pos;
 #define SKIP_LOOP()                                                    \
@@ -163,10 +163,12 @@ sonic_force_inline bool skip_container(const uint8_t *data, size_t &pos,
   return false;
 }
 
-sonic_force_inline uint8_t skip_space_safe(const uint8_t *data, size_t &pos,
-                                           size_t len, size_t &, uint64_t &) {
+sonic_force_inline uint8_t skip_space_safe(const uint8_t* data, size_t& pos,
+                                           size_t len, size_t&, uint64_t&) {
+  if (sonic_unlikely(pos >= len)) return 0;
   while (pos < len && IsSpace(data[pos++]))
     ;
+  if (sonic_unlikely(pos == 0)) return 0;
   // if not found, still return the space chars
   return data[pos - 1];
 }

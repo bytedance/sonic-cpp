@@ -15,9 +15,14 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <map>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 #include "gtest/gtest.h"
 #include "sonic/dom/dynamicnode.h"
@@ -346,6 +351,23 @@ TYPED_TEST(NodeTest, FindMember) {
     auto& value1 = obj["Unknown"];
     EXPECT_TRUE(value1.IsNull());
   }
+  {
+    const NodeType& const_obj = obj;
+    const auto& missing = const_obj["Unknown"];
+    EXPECT_TRUE(missing.IsNull());
+    EXPECT_TRUE(const_obj["Unknown"].IsNull());
+  }
+}
+
+TYPED_TEST(NodeTest, MemberStorageIsCompactAndMovable) {
+  using MemberNode = typename TypeParam::MemberNode;
+  using NameRef = decltype((std::declval<MemberNode&>().name));
+  static_assert(std::is_lvalue_reference<NameRef>::value,
+                "member key should remain reference-like through expressions");
+  static_assert(std::is_move_constructible<MemberNode>::value,
+                "object members must be movable during container maintenance");
+  static_assert(sizeof(MemberNode) == sizeof(TypeParam) * 2,
+                "object members should stay compact for traversal performance");
 }
 
 template <typename StringType, typename NodeType>
@@ -382,6 +404,9 @@ TYPED_TEST(NodeTest, AtPointer) {
                   {"Object", "Array", 1, "Double"})) == nullptr);
   EXPECT_TRUE(obj.AtPointer(JsonPointerType({"EArray", 0})) == nullptr);
   EXPECT_TRUE(obj.AtPointer(JsonPointerType({"EArray", -1})) == nullptr);
+  EXPECT_TRUE(obj.AtPointer(JsonPointerType(
+                  {"EArray", std::numeric_limits<uint64_t>::max()})) ==
+              nullptr);
   EXPECT_TRUE(obj.AtPointer(JsonPointerType({"Object", 0})) == nullptr);
 
   AtPointerHelper<std::string>(obj);
@@ -527,11 +552,35 @@ TYPED_TEST(NodeTest, RemoveMemberWithDupKey) {
   EXPECT_TRUE(node_map.Empty());
 }
 
+TYPED_TEST(NodeTest, RemoveMemberWithMapKeepsDuplicateKeyOrder) {
+  using NodeType = TypeParam;
+  using Allocator = typename NodeType::alloc_type;
+  Allocator a;
+  NodeType obj(kObject);
+  obj.AddMember("x", NodeType(0), a);
+  obj.AddMember("dup", NodeType(1), a);
+  obj.AddMember("dup", NodeType(2), a);
+  ASSERT_TRUE(obj.CreateMap(a));
+
+  ASSERT_TRUE(obj.RemoveMember("x"));
+  auto it = obj.FindMember("dup");
+  ASSERT_NE(it, obj.MemberEnd());
+  EXPECT_EQ(2, it->value.GetInt64());
+}
+
 TYPED_TEST(NodeTest, Erase) {
   using NodeType = TypeParam;
   using Allocator = typename NodeType::alloc_type;
   NodeType node1;
   Allocator a;
+
+  {
+    NodeType empty;
+    empty.SetArray();
+    auto ret = empty.Erase(empty.Begin(), empty.End());
+    EXPECT_EQ(ret, empty.Begin());
+    EXPECT_TRUE(empty.Empty());
+  }
 
   TestFixture::Push100Nodes(node1, a);
   {
@@ -576,6 +625,20 @@ TYPED_TEST(NodeTest, Erase) {
       node2.Erase(0, 10);
       EXPECT_TRUE(node2.Size() == size_t((9 - i) * 10));
     }
+  }
+  {
+    NodeType node2;
+    node2.SetArray();
+    node2.PushBack(NodeType("a", 1, a), a);
+    node2.PushBack(NodeType(kObject), a);
+    node2[1].AddMember("k", NodeType("v", 1, a), a);
+    node2.PushBack(NodeType("tail", 4, a), a);
+    node2.Erase(node2.Begin(), node2.Begin() + 1);
+    ASSERT_EQ(2u, node2.Size());
+    ASSERT_TRUE(node2[0].IsObject());
+    ASSERT_TRUE(node2[0].HasMember("k"));
+    EXPECT_EQ("v", node2[0]["k"].GetStringView());
+    EXPECT_EQ("tail", node2[1].GetStringView());
   }
 }
 
@@ -909,6 +972,52 @@ TEST(DNodeTest, CopyRawOrNumStrWithNullAllocatorDoesNotCrash) {
       },
       ::testing::ExitedWithCode(0), "");
 #endif
+}
+
+struct MovingReallocAllocator {
+  void* Malloc(size_t n) { return std::malloc(n); }
+  void* Realloc(void* p, size_t old_size, size_t new_size) {
+    if (new_size == 0) {
+      std::free(p);
+      return nullptr;
+    }
+    void* q = std::malloc(new_size);
+    if (q && p) {
+      std::memcpy(q, p, std::min(old_size, new_size));
+    }
+    std::free(p);
+    return q;
+  }
+  static void Free(void* p) { std::free(p); }
+  static constexpr bool kNeedFree = true;
+};
+
+TEST(DNodeTest, PushBackValueAliasedInsideArraySurvivesReallocation) {
+  using NodeType = DNode<MovingReallocAllocator>;
+  MovingReallocAllocator alloc;
+  NodeType arr(kArray);
+  arr.Reserve(1, alloc);
+  arr.PushBack(NodeType(7), alloc);
+  ASSERT_EQ(1u, arr.Size());
+  ASSERT_EQ(1u, arr.Capacity());
+
+  arr.PushBack(std::move(arr[0]), alloc);
+  ASSERT_EQ(2u, arr.Size());
+  EXPECT_TRUE(arr[0].IsNull());
+  EXPECT_EQ(7, arr[1].GetInt64());
+}
+
+TEST(DNodeTest, CopyFromSelfLeavesNodeUnchanged) {
+  using NodeType = DNode<SimpleAllocator>;
+  SimpleAllocator alloc;
+  NodeType node(kObject);
+  node.AddMember("a", NodeType("value", alloc), alloc);
+  ASSERT_EQ(1u, node.Size());
+
+  node.CopyFrom(node, alloc, true);
+  ASSERT_TRUE(node.IsObject());
+  ASSERT_EQ(1u, node.Size());
+  EXPECT_EQ("value", node["a"].GetStringView());
 }
 
 TYPED_TEST(NodeTest, SourceAllocator) {
