@@ -41,6 +41,11 @@
 #define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(neon/file)
 #endif
 
+#if defined(SONIC_HAVE_RVV_128)
+#define SONIC_USING_ARCH_FUNC(func) using rvv_128::func
+#define INCLUDE_ARCH_FILE(file) SONIC_STRINGIFY(rvv-128/file)
+#endif
+
 #elif defined(SONIC_DYNAMIC_DISPATCH)
 
 // TODO: support SVE2 runtime dispatch

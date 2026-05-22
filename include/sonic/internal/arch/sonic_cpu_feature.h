@@ -44,4 +44,8 @@
 #if defined(__ARM_FEATURE_SVE2) && (__ARM_FEATURE_SVE_BITS == 128)
 #define SONIC_HAVE_SVE2_128
 #endif
+#if defined(__riscv_vector) && defined(__riscv_v_fixed_vlen) && \
+    __riscv_v_fixed_vlen == 128
+#define SONIC_HAVE_RVV_128
+#endif
 #endif
