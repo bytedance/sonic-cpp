@@ -76,6 +76,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@v4
         with:
+          use_oidc: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           files: coverage.dat
           verbose: true
           fail_ci_if_error: true

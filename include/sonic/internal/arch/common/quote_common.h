@@ -157,17 +157,17 @@ sonic_static_inline void DoEscape(const char*& src, char*& dst, size_t& nb) {
           // Not enough bytes for a 4-byte emoji, handle as raw char or error
           *dst++ = *src++;
           nb--;
-          continue;
+        } else {
+          // TODO: validate the utf8?
+          uint32_t unicode = (src[0] & 0x07) << 18 | (src[1] & 0x3f) << 12 |
+                             (src[2] & 0x3f) << 6 | (src[3] & 0x3f);
+          unicode -= 0x10000;
+          writeHex<UnicodeEscapeUpperCase>(0xD800 | ((unicode >> 10) & 0x3FF),
+                                           dst);
+          writeHex<UnicodeEscapeUpperCase>(0xDC00 | (unicode & 0x3FF), dst);
+          src += 4;
+          nb -= 4;
         }
-        // TODO: validate the utf8?
-        uint32_t unicode = (src[0] & 0x07) << 18 | (src[1] & 0x3f) << 12 |
-                           (src[2] & 0x3f) << 6 | (src[3] & 0x3f);
-        unicode -= 0x10000;
-        writeHex<UnicodeEscapeUpperCase>(0xD800 | ((unicode >> 10) & 0x3FF),
-                                         dst);
-        writeHex<UnicodeEscapeUpperCase>(0xDC00 | (unicode & 0x3FF), dst);
-        src += 4;
-        nb -= 4;
       }
     }
 
