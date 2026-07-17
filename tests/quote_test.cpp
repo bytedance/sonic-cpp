@@ -40,6 +40,13 @@ void TestQuote(const std::string& input, const std::string& expect) {
   EXPECT_STREQ(buf.get(), expect.data());
 }
 
+void TestQuoteEscapeEmoji(const char* input, size_t n,
+                          const std::string& expect) {
+  auto buf = std::unique_ptr<char[]>(new char[(n + 2) * 12 + 32]);
+  char* end = Quote<SerializeFlags::kSerializeEscapeEmoji>(input, n, buf.get());
+  EXPECT_EQ(std::string(buf.get(), end - buf.get()), expect);
+}
+
 TEST(Quote, Normal) {
   std::vector<quoteTests> tests = {
       {"", "\"\""},
@@ -71,6 +78,13 @@ TEST(Quote, DiffSize) {
     std::string expect = "\"" + std::string(i * 2, '\\') + "\"";
     TestQuote(input, expect);
   }
+}
+
+TEST(Quote, EscapeEmojiStopsAtEndOfInvalidTail) {
+  const char input[] = {'\xfe', '\xff', '\xff'};
+  const char expect[] = {'"', '\xfe', '\xff', '\xff', '"'};
+  TestQuoteEscapeEmoji(input, sizeof(input),
+                       std::string(expect, sizeof(expect)));
 }
 
 }  // namespace
