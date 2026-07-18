@@ -29,25 +29,87 @@ jobs:
           script: |
             const run = context.payload.workflow_run;
             const {owner, repo} = context.repo;
-            let pr = run.pull_requests && run.pull_requests[0];
-            if (!pr) {
-              const prs = await github.paginate(
-                github.rest.repos.listPullRequestsAssociatedWithCommit,
-                {owner, repo, commit_sha: run.head_sha});
-              pr = prs.find((item) => item.state === 'open') || prs[0];
-            }
-            if (!pr) {
+            const headOwner =
+              run.head_repository &&
+              run.head_repository.owner &&
+              run.head_repository.owner.login;
+            const headLabel = `${headOwner || 'unknown'}:${run.head_branch || 'unknown'}`;
+
+            if (run.event !== 'pull_request') {
+              core.info(`Skipping benchmark comment for ${run.event} workflow_run ${run.id}.`);
               core.setOutput('skip', 'true');
               return;
             }
 
-            const artifacts = await github.paginate(
-              github.rest.actions.listWorkflowRunArtifacts,
-              {owner, repo, run_id: run.id});
-            const artifact = artifacts.find((item) =>
-              item.name === 'benchmark-compare' && !item.expired);
+            async function findPullRequest() {
+              let pr = run.pull_requests && run.pull_requests[0];
+              if (pr) {
+                core.info(`Found PR #${pr.number} from workflow_run payload.`);
+                return pr;
+              }
+
+              const prsByCommit = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {owner, repo, commit_sha: run.head_sha});
+              pr = prsByCommit.find((item) => item.state === 'open') || prsByCommit[0];
+              if (pr) {
+                core.info(`Found PR #${pr.number} associated with commit ${run.head_sha}.`);
+                return pr;
+              }
+
+              if (!headOwner || !run.head_branch) {
+                return undefined;
+              }
+
+              const prsByHead = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'open',
+                head: `${headOwner}:${run.head_branch}`,
+              });
+              pr = prsByHead.find((item) => item.head && item.head.sha === run.head_sha);
+              if (pr) {
+                core.info(`Found PR #${pr.number} from head ${headOwner}:${run.head_branch}.`);
+              } else if (prsByHead.length > 0) {
+                core.info(
+                  `Found ${prsByHead.length} PR(s) for ${headLabel}, but none match ${run.head_sha}; likely a stale workflow_run.`);
+              }
+              return pr;
+            }
+
+            async function findBenchmarkArtifact() {
+              const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+              for (let attempt = 1; attempt <= 12; ++attempt) {
+                const response = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner,
+                  repo,
+                  run_id: run.id,
+                  per_page: 100,
+                });
+                const artifacts = response.data.artifacts || [];
+                const artifact = artifacts.find((item) =>
+                  item.name === 'benchmark-compare' && !item.expired);
+                if (artifact) {
+                  core.info(`Found benchmark artifact ${artifact.id}.`);
+                  return artifact;
+                }
+                core.info(`benchmark-compare artifact not visible yet; attempt ${attempt}/12.`);
+                await sleep(10000);
+              }
+              return undefined;
+            }
+
+            const pr = await findPullRequest();
+            if (!pr) {
+              core.setFailed(
+                `Unable to find PR for workflow_run ${run.id}; head=${headLabel}; sha=${run.head_sha}.`);
+              return;
+            }
+
+            const artifact = await findBenchmarkArtifact();
             if (!artifact) {
-              core.setOutput('skip', 'true');
+              core.setFailed(
+                `Unable to find benchmark-compare artifact for workflow_run ${run.id}; head=${headLabel}; sha=${run.head_sha}.`);
               return;
             }
 
