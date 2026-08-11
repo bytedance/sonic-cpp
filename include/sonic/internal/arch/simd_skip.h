@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -246,18 +247,26 @@ class SkipScanner {
   query:
     if (i++ != path.size()) {
       c = SkipSpaceSafe(data, pos, len);
-      if (path[i - 1].IsStr()) {
-        if (c != '{') goto err_mismatch_type;
+      const auto &node = path[i - 1];
+      if (c == '{' && node.IsStr()) {
         c = GetNextToken(data, pos, len, "\"}");
         if (c != '"') goto err_unknown_key;
-        key = StringView(path[i - 1].GetStr());
+        key = StringView(node.GetStr());
         goto obj_key;
-      } else {
-        if (c != '[') goto err_mismatch_type;
-        err = GetArrayElem(data, pos, len, path[i - 1].GetNum());
+      }
+      if (c == '[') {
+        size_t index = 0;
+        if (!node.TryGetArrayIndex(index)) {
+          goto err_mismatch_type;
+        }
+        if (index > static_cast<size_t>(std::numeric_limits<int>::max())) {
+          return -kParseErrorArrIndexOutOfRange;
+        }
+        err = GetArrayElem(data, pos, len, static_cast<int>(index));
         if (err) return -err;
         goto query;
       }
+      goto err_mismatch_type;
     }
     return SkipOne(data, pos, len);
 

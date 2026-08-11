@@ -31,16 +31,28 @@ int main() {
 
   sonic_json::Node* node2 = doc.AtPointer(PointerType({"b", 1, "a"}));
   if (node2 != nullptr) {
-    std::cout << "/b/1/a Eixsts!\n";
+    std::cout << "/b/1/a exists!\n";
   } else {
     std::cout << "/b/1/a doesn't exist!\n";
   }
 
   sonic_json::Node* node3 = doc.AtPointer("b", 1, "b");
   if (node3 != nullptr) {
-    std::cout << "/b/1/b Eixsts!\n";
+    std::cout << "/b/1/b exists!\n";
   } else {
     std::cout << "/b/1/b doesn't exist!\n";
+  }
+
+  sonic_json::JsonPointer rfc_pointer;
+  if (!rfc_pointer.Parse("/b/1/b")) {
+    std::cout << "Invalid RFC 6901 pointer!\n";
+    return -1;
+  }
+  sonic_json::Node* node4 = doc.AtPointer(rfc_pointer);
+  if (node4 != nullptr) {
+    std::cout << "RFC pointer /b/1/b exists!\n";
+  } else {
+    std::cout << "RFC pointer /b/1/b doesn't exist!\n";
   }
 
   return 0;

@@ -19,6 +19,7 @@
 #include <string>
 
 #include "gtest/gtest.h"
+#include "sonic/sonic.h"
 #include "sonic/string_view.h"
 
 namespace {
@@ -111,6 +112,120 @@ TYPED_TEST(JsonPointerTest, Constructor) {
   { JsonPointerType p = path; }
 
   { JsonPointerType p = std::move(path); }
+}
+
+TEST(JsonPointerRfc6901, ParseReferenceTokens) {
+  JsonPointer pointer;
+
+  EXPECT_TRUE(pointer.Parse(""));
+  EXPECT_TRUE(pointer.empty());
+
+  ASSERT_TRUE(pointer.Parse("/foo/0/a~1b/m~0n/~01/"));
+  ASSERT_EQ(pointer.size(), 6);
+  const std::vector<std::string> expected = {"foo", "0",  "a/b",
+                                             "m~n", "~1", ""};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_TRUE(pointer[i].IsStr());
+    EXPECT_EQ(pointer[i].GetStr(), expected[i]);
+  }
+
+  const char pointer_with_nul[] = {'/', 'a', '\0', 'b'};
+  ASSERT_TRUE(
+      pointer.Parse(StringView(pointer_with_nul, sizeof(pointer_with_nul))));
+  ASSERT_EQ(pointer.size(), 1);
+  EXPECT_EQ(pointer[0].GetStr(), std::string("a\0b", 3));
+}
+
+TEST(JsonPointerRfc6901, RejectInvalidSyntax) {
+  JsonPointer pointer;
+  for (StringView invalid : {StringView("foo"), StringView("/~"),
+                             StringView("/~2"), StringView("/foo/~a")}) {
+    EXPECT_FALSE(pointer.Parse(invalid));
+    EXPECT_TRUE(pointer.empty());
+  }
+}
+
+TEST(JsonPointerRfc6901, ResolveObjectsAndArrays) {
+  Document doc;
+  doc.Parse(R"({
+    "foo":["bar","baz"],
+    "":0,
+    "a/b":1,
+    "m~n":2,
+    "c%d":3,
+    "e^f":4,
+    "g|h":5,
+    "i\\j":6,
+    "k\"l":7,
+    " ":8,
+    "0":"object zero",
+    "arr":["zero","one"],
+    "leading":{"01":"object leading zero"}
+  })");
+  ASSERT_FALSE(doc.HasParseError());
+
+  auto resolve = [&doc](StringView source) -> Node* {
+    JsonPointer pointer;
+    return pointer.Parse(source) ? doc.AtPointer(pointer) : nullptr;
+  };
+
+  EXPECT_EQ(resolve(""), &doc);
+
+  Node* node = resolve("/foo/0");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetString(), "bar");
+
+  node = resolve("/");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 0);
+
+  node = resolve("/a~1b");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 1);
+
+  node = resolve("/m~0n");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 2);
+
+  node = resolve("/c%d");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 3);
+
+  node = resolve("/e^f");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 4);
+
+  node = resolve("/g|h");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 5);
+
+  node = resolve("/i\\j");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 6);
+
+  node = resolve("/k\"l");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 7);
+
+  node = resolve("/ ");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetUint64(), 8);
+
+  node = resolve("/0");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetString(), "object zero");
+
+  node = resolve("/arr/1");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetString(), "one");
+
+  node = resolve("/leading/01");
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->GetString(), "object leading zero");
+
+  EXPECT_EQ(resolve("/arr/01"), nullptr);
+  EXPECT_EQ(resolve("/arr/-"), nullptr);
+  EXPECT_EQ(resolve("/arr/184467440737095516160"), nullptr);
 }
 
 TYPED_TEST(JsonPointerTest, PushAndPop) {

@@ -1208,25 +1208,20 @@ class GenericNode {
   NodeType* atPointerImpl(const GenericJsonPointer<StringType>& pointer) const {
     const NodeType* re = downCast();
     for (auto& node : pointer) {
-      if (node.IsStr()) {
-        if (re->IsObject()) {
-          auto m = re->FindMember(node.GetStr());
-          if (m != re->MemberEnd()) {
-            re = &(m->value);
-            continue;
-          }
+      if (re->IsObject() && node.IsStr()) {
+        auto m = re->FindMember(node.GetStr());
+        if (m != re->MemberEnd()) {
+          re = &(m->value);
+          continue;
         }
-        return nullptr;
-      } else {  // Json Pointer node is number
-        if (re->IsArray()) {
-          int idx = node.GetNum();
-          if (idx >= 0 && idx < static_cast<int>(re->Size())) {
-            re = &(re->operator[]((size_t)idx));
-            continue;
-          }
+      } else if (re->IsArray()) {
+        size_t idx = 0;
+        if (node.TryGetArrayIndex(idx) && idx < re->Size()) {
+          re = &(re->operator[](idx));
+          continue;
         }
-        return nullptr;
       }
+      return nullptr;
     }
     return const_cast<NodeType*>(re);
   }

@@ -231,26 +231,20 @@ The flag is sticky until cleared. This is a `MemoryPoolAllocator` feature, not
 part of the abstract allocator concept.
 
 ### JSON Pointer
-Sonic provides a JsonPointer class but doesn't support resolving the JSON pointer
-syntax of [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901). We will support
-it in the future.
+Sonic's owning `JsonPointer` type can parse the JSON Pointer string syntax from
+[RFC 6901](https://www.rfc-editor.org/rfc/rfc6901). It decodes `~1` as `/` and
+`~0` as `~`, and rejects malformed escapes. Empty input addresses the document
+root. Numeric reference tokens remain object keys when the current value is an
+object and are interpreted as canonical array indices when it is an array.
 
 ```c++
 #include "sonic/sonic.h"
 
-// Sonic JSON pointer need a template parameter that describes using which string
-// type, such as std::string and std::string_view. string_view can avoid coping
-// string data. But, the user should keep the memory is always valid when using
-// string_view as template parameter.
-using PointerType = sonic_json::GenericJsonPointer<sonic_json::StringView>;
+using PointerType = sonic_json::JsonPointer;
 
-// Sonic also defines a typename JsonPointerView using string_view.
-// example:
-//  using PointerType = sonic_json::JsonPointerView;
-// The typename JsonPointer in sonic is defined as:
-//  using JsonPointer =
-//    GenericJsonPointer<SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE>;
-// The macro SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE is std::string.
+// JsonPointerView is still available for pre-tokenized paths whose source
+// strings outlive the pointer. RFC parsing uses JsonPointer because decoded
+// tokens need owned storage.
 
 // query by JSON pointer
 
@@ -268,9 +262,14 @@ using PointerType = sonic_json::GenericJsonPointer<sonic_json::StringView>;
     std::cout << "/a doesn't exist!\n";
   }
 
-  sonic_json::Node* node2 = doc.AtPointer(PointerType({"b", 1, "a"}));
+  PointerType pointer;
+  if (!pointer.Parse("/b/1/a")) {
+    std::cout << "Invalid RFC 6901 pointer!\n";
+    return;
+  }
+  sonic_json::Node* node2 = doc.AtPointer(pointer);
   if (node2 != nullptr) {
-    std::cout << "/b/1/a Eixsts!\n";
+    std::cout << "/b/1/a exists!\n";
   } else {
     std::cout << "/b/1/a doesn't exist!\n";
   }
@@ -315,7 +314,7 @@ Example:
 ```c++
   sonic_json::Node* node3 = doc.AtPointer("b", 1, "b");
   if (node3 != nullptr) {
-    std::cout << "/b/1/b Eixsts!\n";
+    std::cout << "/b/1/b exists!\n";
   } else {
     std::cout << "/b/1/b doesn't exist!\n";
   }

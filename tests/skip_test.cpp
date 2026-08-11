@@ -60,6 +60,15 @@ TEST(GetOnDemand, SuccessNestedArray) {
   TestGetOnDemand(R"([[1], [2, 3], [4, 5, 6]])", {2, 2}, "6");
 }
 
+TEST(GetOnDemand, SuccessRfc6901Pointer) {
+  JsonPointer path;
+  ASSERT_TRUE(path.Parse("/a~1b/1/value"));
+  TestGetOnDemand(R"({"a/b":[{"value":1},{"value":2}]})", path, "2");
+
+  ASSERT_TRUE(path.Parse("/0"));
+  TestGetOnDemand(R"({"0":"object zero"})", path, R"("object zero")");
+}
+
 TEST(GetOnDemand, SuccessUnicode) {
   TestGetOnDemand(
       R"("未来简史-从智人到智神hello: world, \\ {\" / \b \f \n \r \t } [景] 测试中文 😀")",
