@@ -980,6 +980,11 @@ class DNode : public GenericNode<DNode<Allocator>> {
     return internal::SerializeImpl<serializeFlags>(this, wb);
   }
 
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
+  SonicError prettySerializeImpl(WriteBuffer& wb, size_t indentSize) const {
+    return internal::PrettySerializeImpl<serializeFlags>(this, wb, indentSize);
+  }
+
   sonic_force_inline DNode* nextImpl() { return this + 1; }
 
   sonic_force_inline const DNode* cnextImpl() const { return this + 1; }

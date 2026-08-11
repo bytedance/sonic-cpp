@@ -577,6 +577,70 @@ TYPED_TEST(DocumentTest, SerializeOK) {
   }
 }
 
+TYPED_TEST(DocumentTest, PrettySerialize) {
+  TypeParam doc;
+  const std::string json =
+      R"({"name":"sonic","items":[1,true,null,{"nested":"value"}],"empty":[]})";
+  doc.Parse(json);
+  ASSERT_FALSE(doc.HasParseError());
+
+  const std::string expected =
+      "{\n"
+      "  \"name\": \"sonic\",\n"
+      "  \"items\": [\n"
+      "    1,\n"
+      "    true,\n"
+      "    null,\n"
+      "    {\n"
+      "      \"nested\": \"value\"\n"
+      "    }\n"
+      "  ],\n"
+      "  \"empty\": []\n"
+      "}";
+
+  WriteBuffer wb;
+  EXPECT_EQ(doc.PrettySerialize(wb), kErrorNone);
+  EXPECT_EQ(wb.ToStringView(), expected);
+  EXPECT_EQ(doc.PrettyDump(), expected);
+
+  const std::string four_space_expected =
+      "{\n"
+      "    \"value\": 1\n"
+      "}";
+  TypeParam small_doc;
+  small_doc.Parse(R"({"value":1})");
+  ASSERT_FALSE(small_doc.HasParseError());
+  EXPECT_EQ(small_doc.PrettyDump(4), four_space_expected);
+}
+
+TYPED_TEST(DocumentTest, PrettySerializeFlagsAndErrors) {
+  TypeParam doc;
+  doc.Parse(R"([1,2])");
+  ASSERT_FALSE(doc.HasParseError());
+
+  WriteBuffer wb;
+  wb.Push("prefix:", 7);
+  EXPECT_EQ(
+      doc.template PrettySerialize<SerializeFlags::kSerializeAppendBuffer>(wb,
+                                                                           0),
+      kErrorNone);
+  EXPECT_STREQ(wb.ToString(), "prefix:[\n1,\n2\n]");
+
+  doc.SetDouble(std::numeric_limits<double>::infinity());
+  EXPECT_EQ(doc.PrettySerialize(wb), kSerErrorInfinity);
+  EXPECT_TRUE(doc.PrettyDump().empty());
+  EXPECT_EQ(doc.template PrettyDump<SerializeFlags::kSerializeInfNan>(),
+            "\"Infinity\"");
+
+  doc.Parse(R"({"key":1})");
+  ASSERT_FALSE(doc.HasParseError());
+  using DNode = typename TypeParam::NodeType;
+  auto member = doc.MemberBegin();
+  const_cast<DNode*>(&(member->name))->SetNull();
+  EXPECT_EQ(doc.PrettySerialize(wb), kSerErrorInvalidObjKey);
+  EXPECT_TRUE(doc.PrettyDump().empty());
+}
+
 TYPED_TEST(DocumentTest, SonicErrorInvalidKey) {
   using DNode = typename TypeParam::NodeType;
   auto iter = this->doc_.MemberBegin();
