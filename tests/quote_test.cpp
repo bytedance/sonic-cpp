@@ -54,8 +54,8 @@ TEST(Quote, Normal) {
       {"\"", "\"\\\"\""},
       {"\\", "\"\\\\\""},
       {
-          "\u666fhello\b\f\n\r\t\\\"world",
-          R"("景hello\b\f\n\r\t\\\"world")",
+          u8"\u666fhello\b\f\n\r\t\\\"world",
+          u8R"("景hello\b\f\n\r\t\\\"world")",
       },
       {
           "<a href=\"http://twitter.com/download/iphone\" "
