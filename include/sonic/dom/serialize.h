@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 
 #include "sonic/dom/flags.h"
@@ -51,9 +52,9 @@ sonic_force_inline SonicError SerializeImpl(const NodeType* node,
   uint32_t member_cnt = 0;
   uint32_t val_cnt, val_cnt_nxt;
   size_t str_len;
-  long inc_len;
+  size_t inc_len;
   const char* str_ptr;
-  ssize_t rn = 0;
+  std::ptrdiff_t rn = 0;
   internal::Stack stk;
   ParentCtx* parent;
   if constexpr ((serializeFlags & SerializeFlags::kSerializeAppendBuffer) ==
@@ -84,7 +85,7 @@ val_begin:
       str_ptr = node->GetStringView().data();
       rn = internal::Quote<serializeFlags>(str_ptr, str_len, wb.End<char>()) -
            wb.End<char>();
-      wb.PushSizeUnsafe<char>(rn);
+      wb.PushSizeUnsafe<char>(static_cast<size_t>(rn));
       wb.PushUnsafe<char>(is_key ? ':' : ',');
       member_cnt -= is_key;
       break;
@@ -138,7 +139,7 @@ val_begin:
           break;
       }
       sonic_assert(rn >= 0 && rn <= 32);
-      wb.PushSizeUnsafe<char>(rn);
+      wb.PushSizeUnsafe<char>(static_cast<size_t>(rn));
       wb.PushUnsafe<char>(',');
       break;
     }

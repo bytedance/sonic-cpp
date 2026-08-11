@@ -28,8 +28,8 @@
 #elif defined(__GNUG__)
 #pragma GCC push_options
 #pragma GCC target("sse,sse2,sse3,sse4.1")
-#else
-#error "Only g++ and clang is supported!"
+#elif !defined(_MSC_VER)
+#error "Unsupported compiler"
 #endif
 
 namespace sonic_json {
@@ -43,34 +43,34 @@ namespace x86_common {
 #define as_m128v(v) (*(const __m128i *)(v))
 #define as_uint64v(p) (*(uint64_t *)(p))
 
-static const char kVec16xAsc0[16] sonic_align(16) = {
+sonic_align(16) static const char kVec16xAsc0[16] = {
     '0', '0', '0', '0', '0', '0', '0', '0',
     '0', '0', '0', '0', '0', '0', '0', '0',
 };
 
-static const uint16_t kVec8x10[8] sonic_align(16) = {
+sonic_align(16) static const uint16_t kVec8x10[8] = {
     10, 10, 10, 10, 10, 10, 10, 10,
 };
 
-static const uint32_t kVec4x10k[4] sonic_align(16) = {
+sonic_align(16) static const uint32_t kVec4x10k[4] = {
     10000,
     10000,
     10000,
     10000,
 };
 
-static const uint32_t kVec4xDiv10k[4] sonic_align(16) = {
+sonic_align(16) static const uint32_t kVec4xDiv10k[4] = {
     0xd1b71759,
     0xd1b71759,
     0xd1b71759,
     0xd1b71759,
 };
 
-static const uint16_t kVecDivPowers[8] sonic_align(16) = {
+sonic_align(16) static const uint16_t kVecDivPowers[8] = {
     0x20c5, 0x147b, 0x3334, 0x8000, 0x20c5, 0x147b, 0x3334, 0x8000,
 };
 
-static const uint16_t kVecShiftPowers[8] sonic_align(16) = {
+sonic_align(16) static const uint16_t kVecShiftPowers[8] = {
     0x0080, 0x0800, 0x2000, 0x8000, 0x0080, 0x0800, 0x2000, 0x8000,
 };
 

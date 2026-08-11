@@ -693,7 +693,7 @@ static sonic_force_inline const uint64x2 Pow10CeilSig(int32_t k) {
 #undef KMAX
 }
 
-#if __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__)
 
 __extension__ using uint128_t = __uint128_t;
 

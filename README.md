@@ -4,13 +4,27 @@ A fast JSON serializing & deserializing library, accelerated by SIMD.
 
 [![clang-format Check](https://github.com/bytedance/sonic-cpp/actions/workflows/clang-format-check.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/clang-format-check.yml)
 [![Test](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/test_x86.yml)
+[![Windows](https://github.com/bytedance/sonic-cpp/actions/workflows/test_windows.yml/badge.svg)](https://github.com/bytedance/sonic-cpp/actions/workflows/test_windows.yml)
 [![codecov](https://codecov.io/gh/bytedance/sonic-cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/bytedance/sonic-cpp)
 
 ## Requirement
-- c++11 or above
-- x86 platform with AVX2 instruction
-- GCC or LLVM compiler (not support MSVC compiler now)
-- Linux OS
+- C++17 or above
+- A supported SIMD target (x86-64 with AVX2, AArch64, or RV64)
+- GCC, LLVM/Clang, or Microsoft Visual C++ from Visual Studio 2022
+- Linux, macOS, or 64-bit Windows
+
+### Visual Studio 2022
+
+The CMake build selects `/std:c++17` and `/arch:AVX2` for MSVC automatically:
+
+```powershell
+cmake -S . -B build -A x64 -DENABLE_ASAN=OFF
+cmake --build build --config Release --target unittest --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+When consuming the header-only library from a Visual Studio project directly,
+enable C++17 and **Advanced Vector Extensions 2** (`/arch:AVX2`).
 
 ## Features
 - Complete APIs for JSON value manipulation

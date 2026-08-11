@@ -71,7 +71,7 @@ sonic_force_inline uint64_t simd_str2int(const char* c, int& man_nd) {
   int is_num_end_int = _mm_movemask_epi8(is_num_end);
 
   if (is_num_end_int) {
-    num_end_idx = __builtin_ctz(is_num_end_int);
+    num_end_idx = CountTrailingZeros32(static_cast<uint32_t>(is_num_end_int));
   }
   man_nd = man_nd < num_end_idx ? man_nd : num_end_idx;
 

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#if defined(__SSE2__)
+#if defined(__SSE2__) || (defined(_MSC_VER) && defined(__AVX2__))
 #define SONIC_HAVE_SSE
 #define SONIC_HAVE_SSE2
 #if defined(__SSE3__)
