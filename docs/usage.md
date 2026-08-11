@@ -45,6 +45,10 @@ Document is the manager of Nodes. Sonic-Cpp organizes JSON value as a tree.
 Document also the root of JSON value tree. There is an allocator in Document,
 which you should use to allocate memory for Node and Document.
 
+See [`example/document_api.cpp`](../example/document_api.cpp) for a complete,
+runnable example that creates object and array nodes, updates and removes
+members, and serializes the resulting document.
+
 > **Note:** Re-parsing a `Document` discards the previous tree. Any raw
 > pointers, iterators, or `DNode*` obtained from an earlier `Parse()` become
 > invalid and must be re-acquired after each parse.
