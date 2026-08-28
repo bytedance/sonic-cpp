@@ -11,6 +11,7 @@ option(BUILD_UNITTEST "Build unittest." ON)
 option(BUILD_FUZZ "Build fuzz." OFF)
 option(BUILD_BENCH "Build benchmark." OFF)
 option(ENABLE_SVE2_128 "Build for Arm SVE2 with 128 bit vector size" OFF)
+option(ENABLE_RISCV_ZBB "Enable RISC-V Zbb extension for bit manipulation optimizations" OFF)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(BUILD_UNITTEST)

@@ -37,11 +37,18 @@
 #if defined(__AVX2__)
 #define SONIC_HAVE_AVX2
 #endif
-#else
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__) || \
+    defined(__ARM_FEATURE_SVE2)
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
 #define SONIC_HAVE_NEON
 #endif
 #if defined(__ARM_FEATURE_SVE2) && (__ARM_FEATURE_SVE_BITS == 128)
 #define SONIC_HAVE_SVE2_128
 #endif
+#elif defined(__riscv) && defined(__riscv_xlen) && (__riscv_xlen == 64)
+#define SONIC_IS_RISCV 1
+#if defined(__riscv_zbb)
+#define SONIC_HAVE_RISCV_ZBB 1
+#endif
+#define SONIC_HAVE_RISCV 1
 #endif

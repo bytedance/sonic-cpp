@@ -93,8 +93,9 @@ class SpinLock {
         __builtin_ia32_pause();
 #elif defined(__aarch64__) || defined(_M_ARM64)
         asm volatile("yield");
+#elif defined(__riscv)
+        __asm__ volatile("pause");
 #endif
-
 #endif
       }
     }

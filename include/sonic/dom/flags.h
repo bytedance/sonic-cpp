@@ -28,6 +28,22 @@ enum ParseFlag {
   kParseOverflowNumAsNumStr = 1 << 3,
 };
 
+// Scoped spelling used by newer downstream code while retaining the legacy
+// ParseFlag template API on this branch.
+struct ParseFlags {
+  static constexpr ParseFlag kParseDefault = ::kParseDefault;
+  static constexpr ParseFlag kParseAllowUnescapedControlChars =
+      ::kParseAllowUnescapedControlChars;
+  static constexpr ParseFlag kParseIntegerAsRaw = ::kParseIntegerAsRaw;
+  static constexpr ParseFlag kParseOverflowNumAsNumStr =
+      ::kParseOverflowNumAsNumStr;
+};
+
+constexpr ParseFlag operator|(ParseFlag lhs, ParseFlag rhs) {
+  return static_cast<ParseFlag>(static_cast<unsigned>(lhs) |
+                                static_cast<unsigned>(rhs));
+}
+
 // SerializeFlags is one-hot encoded for different serializing option.
 // User can define customed flags through combinations.
 enum SerializeFlags {
