@@ -23,6 +23,7 @@
 #include "sonic/dom/dynamicnode.h"
 #include "sonic/dom/json_pointer.h"
 #include "sonic/dom/parser.h"
+#include "sonic/dom/root_schema_filter.h"
 
 namespace sonic_json {
 
@@ -151,6 +152,43 @@ class GenericDocument : public NodeType {
   template <ParseFlags parseFlags = ParseFlags::kParseDefault>
   GenericDocument& ParseSchema(const char* data, size_t len) {
     return parseSchemaImpl<parseFlags>(data, len);
+  }
+
+  // Callback overload: selects root members without materializing a template.
+  // Missing keys are absent; order and duplicates are preserved. Rejected
+  // values use the existing non-validating schema skip path. This overload
+  // replaces the document; the original template overload is unchanged.
+  // The predicate must not throw or retain references to the decoded key.
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault, typename Predicate,
+            typename = decltype(static_cast<bool>(
+                std::declval<const Predicate&>()(std::declval<StringView>())))>
+  GenericDocument& ParseSchema(StringView json, const Predicate& keep) {
+    return ParseSchema<parseFlags>(json.data(), json.size(), keep);
+  }
+
+  template <ParseFlags parseFlags = ParseFlags::kParseDefault, typename Predicate,
+            typename = decltype(static_cast<bool>(
+                std::declval<const Predicate&>()(std::declval<StringView>())))>
+  GenericDocument& ParseSchema(const char* json, size_t len,
+                               const Predicate& keep) {
+    destroyDom();
+    Parser<parseFlags> parser;
+    internal::RootSchemaFilter<SAXHandler<NodeType>, Predicate> dom(*alloc_,
+                                                                    keep);
+    if (!dom.SetUp(StringView(json, len))) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    parse_result_ = allocateStringBuffer(json, len);
+    if (sonic_unlikely(HasParseError())) return *this;
+    parse_result_ = parser.Parse(str_, len, dom);
+    if (sonic_unlikely(dom.oom_)) {
+      parse_result_ = kErrorNoMem;
+      return *this;
+    }
+    if (sonic_unlikely(HasParseError())) return *this;
+    NodeType::operator=(std::move(dom.st_[0]));
+    return *this;
   }
 
   /**
