@@ -779,6 +779,33 @@ TEST(JsonPathDom, NegativeIndexSupportedButOnDemandUnsupported) {
   EXPECT_EQ(std::get<0>(ondemand_got), "");
 }
 
+TEST(JsonPathOnDemand, NegativeIndexReportsUnsupportedNotNoMatch) {
+  // A negative index is a feature this backend does not implement, which is
+  // not the same thing as the path being absent from the document. Reporting
+  // both as kErrorNoneNoMatch leaves callers unable to tell "sonic cannot
+  // evaluate this path" from "the document has no such member", so a path the
+  // DOM backend resolves fine looks merely missing here.
+  for (const char* path : {"$[-1]", "$[-3]", "$[-9]"}) {
+    auto got = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>("[0,1,2]", path);
+    EXPECT_EQ(std::get<1>(got), kUnsupportedJsonPath) << "path: " << path;
+    EXPECT_EQ(std::get<0>(got), "") << "path: " << path;
+  }
+
+  // Nested arrays reach the same code through a different call site.
+  auto nested = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"a":[10,11,12]})", "$.a[-1]");
+  EXPECT_EQ(std::get<1>(nested), kUnsupportedJsonPath);
+
+  // A genuinely absent member must keep reporting no-match, so the two
+  // outcomes stay distinguishable.
+  auto absent_key =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(R"({"a":1})", "$.zz");
+  EXPECT_EQ(std::get<1>(absent_key), kErrorNoneNoMatch);
+  auto absent_index =
+      GetByJsonPathOnDemand<kSerializeJavaStyleFlag>("[0,1,2]", "$[9]");
+  EXPECT_EQ(std::get<1>(absent_index), kErrorNoneNoMatch);
+}
+
 TEST(JsonPathDump, SerializeCoversEmptySingleAndMulti) {
   Document doc;
   doc.Parse(R"({"a":null,"s":"abc","arr":[null,"x",1]})");
