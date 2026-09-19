@@ -959,15 +959,21 @@ class SkipScanner2 {
       }
 
       if (found) {
-        // if not null
-        if (peek() != 'n') {
-          return getJsonPath<style, serializeFlags>(
-              path, index + 1, jsonGenerator, jsonGeneratorFactory);
-        } else {
+        // A null value only has to be skipped when the path continues past it,
+        // because nothing can be selected out of null. When the key is the last
+        // step, null is the result the caller asked for, so recurse and let the
+        // path_is_nil branch emit it -- exactly what the array element path
+        // already does for e.g. "$[0]" over "[null]".
+        // Under FLATTEN/QUOTE this call is collecting wildcard results, where
+        // nulls are deliberately dropped (see JsonPath.WildcardFiltersNull),
+        // so the skip must stay unconditional there.
+        if (peek() == 'n' && (style != RAW || index + 1 < path.size())) {
           // skip null
           RETURN_FALSE_IF_PARSE_ERROR(skipOne());
           return false;
         }
+        return getJsonPath<style, serializeFlags>(
+            path, index + 1, jsonGenerator, jsonGeneratorFactory);
       }
       return false;
     }

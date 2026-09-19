@@ -767,6 +767,53 @@ TEST(JsonPathDom, NotFoundAndUnsupportedPath) {
   EXPECT_EQ(std::get<0>(unsupported), "");
 }
 
+TEST(JsonPathOnDemand, NullObjectMemberIsReturnedNotSkipped) {
+  // A null object member is a value, not a missing member. The on-demand
+  // backend skipped it whenever a key matched, so $.a over {"a":null} reported
+  // no match while the DOM backend returned "null" for the same input.
+  // The null only has to be skipped when the path continues past it, since
+  // nothing can be selected out of null.
+  struct Case {
+    const char* json;
+    const char* path;
+  };
+  for (const auto& c :
+       {Case{R"({"a":null})", "$.a"}, Case{R"({"a":null,"b":1})", "$.a"},
+        Case{R"({"b":1,"a":null})", "$.a"},
+        Case{R"({"a":{"b":null}})", "$.a.b"},
+        Case{R"({"a":[{"b":null}]})", "$.a[0].b"}}) {
+    auto od = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(c.json, c.path);
+    EXPECT_EQ(std::get<1>(od), kErrorNone) << c.json << " " << c.path;
+    EXPECT_EQ(std::get<0>(od), "null") << c.json << " " << c.path;
+    // Both backends must agree.
+    auto dom = GetByJsonPath(c.json, c.path);
+    EXPECT_EQ(std::get<1>(dom), std::get<1>(od)) << c.json << " " << c.path;
+    EXPECT_EQ(std::get<0>(dom), std::get<0>(od)) << c.json << " " << c.path;
+  }
+
+  // Arrays already behaved correctly; keep them covered so the two stay
+  // aligned.
+  for (const auto& c : {Case{"[null]", "$[0]"}, Case{"[1,null]", "$[1]"}}) {
+    auto od = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(c.json, c.path);
+    EXPECT_EQ(std::get<1>(od), kErrorNone) << c.json << " " << c.path;
+    EXPECT_EQ(std::get<0>(od), "null") << c.json << " " << c.path;
+  }
+
+  // The path continuing past a null must still not match.
+  for (const auto& c :
+       {Case{R"({"a":null})", "$.a.b"}, Case{R"({"a":null})", "$.a[0]"},
+        Case{R"({"a":{"b":null}})", "$.a.b.c"}}) {
+    auto od = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(c.json, c.path);
+    EXPECT_NE(std::get<1>(od), kErrorNone) << c.json << " " << c.path;
+  }
+
+  // Wildcard collection deliberately drops nulls; that must not change.
+  auto wc = GetByJsonPathOnDemand<kSerializeJavaStyleFlag>(
+      R"({"root": [{"a":null},{"a":"foo"},{"a":"bar"}]})", "$.root[*].a");
+  EXPECT_EQ(std::get<1>(wc), kErrorNone);
+  EXPECT_EQ(std::get<0>(wc), R"(["foo","bar"])");
+}
+
 TEST(JsonPathDom, NegativeIndexSupportedButOnDemandUnsupported) {
   auto dom_got = GetByJsonPath("[0,1,2]", "$[-1]");
   EXPECT_EQ(std::get<1>(dom_got), kErrorNone);
