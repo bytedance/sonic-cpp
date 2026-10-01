@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -297,6 +298,49 @@ TEST(ParserTest, RoundUp) {
 
   TestParseDouble(1.0905441441816093e+30, "1090544144181609348671888949248");
   TestParseDouble(1.0905441441816094e+30, "1090544144181609348835077142190");
+}
+
+void TestParseDoubleBits(double num, const std::string& input) {
+  {
+    Document doc;
+    doc.Parse(input.data(), input.size());
+    EXPECT_FALSE(doc.HasParseError()) << input;
+    EXPECT_TRUE(doc.IsDouble()) << input;
+    uint64_t expect_bits, actual_bits;
+    static_assert(sizeof(double) == sizeof(uint64_t));
+    memcpy(&expect_bits, &num, sizeof(double));
+    double a = doc.GetDouble();
+    memcpy(&actual_bits, &a, sizeof(double));
+    EXPECT_EQ(expect_bits, actual_bits) << input;
+  }
+  {
+    uint64_t expect_bits, actual_bits;
+    memcpy(&expect_bits, &num, sizeof(double));
+    double a = internal::AtofNative(input.data(), input.size());
+    memcpy(&actual_bits, &a, sizeof(double));
+    EXPECT_EQ(expect_bits, actual_bits) << input;
+  }
+}
+
+TEST(ParserTest, LongMantissaWithExponent) {
+  // Integers longer than 19 digits are truncated to 19 digits on the slow
+  // path. When an explicit exponent follows, the truncated mantissa must not
+  // be treated as exact by the fast path; otherwise the result is off by
+  // 1 ULP. EXPECT_DOUBLE_EQ tolerates a 4-ULP difference, so compare bits.
+  TestParseDoubleBits(-3.2707769411490447e+19, "-32707769411490445312e0");
+  TestParseDoubleBits(1.9794616963580959e+20, "19794616963580957495e+1");
+  TestParseDoubleBits(2.6453884816999669e+36,
+                      "264538848169996678698051993472e+7");
+  TestParseDoubleBits(
+      8.3368019727581649e+58,
+      "833680197275816431386138346101649404102522117776285986458397e-1");
+  TestParseDoubleBits(-2.637588794821583e+26, "-26375887948215827999E+7");
+  TestParseDoubleBits(
+      1.2147161201801101e+61,
+      "121471612018011001563790188522981306789313383875185792679411e+2");
+  TestParseDoubleBits(
+      -5.0707170799712052e-250,
+      "-507071707997120489163576838330990277669096644300656345458938E-309");
 }
 
 TEST(ParserTest, ParseInvalidNumber) {
