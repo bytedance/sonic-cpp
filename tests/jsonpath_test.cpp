@@ -415,7 +415,7 @@ TEST(JsonPath, BadCases) {
 TEST(JsonPath, KeyNullElementPair) {
   auto json =
       R"( { "last_name": "Kim", "first_name":"Sam", "gender": false, "income": null, "age": 38} )";
-  TestOk(json, "$.income", "");
+  TestOk(json, "$.income", "null"); // null object member returned, not skipped (aligns with DOM)
 }
 
 TEST(JsonPath, KeyIntoStringValue) {
