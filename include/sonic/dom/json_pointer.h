@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <limits>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -26,7 +28,6 @@
 #define SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE \
   SONIC_JSON_POINTER_NODE_STRING
 #else
-#include <string>
 #define SONIC_JSON_POINTER_NODE_STRING_DEFAULT_TYPE std::string
 #endif
 
@@ -69,6 +70,43 @@ class GenericJsonPointerNode {
   size_t Size() const { return str_.size(); }
   const char* Data() const { return str_.data(); }
 
+  /**
+   * @brief Convert this token to an RFC 6901 array index when possible.
+   * @param index receives the parsed zero-based array index
+   * @return true for an integer node or a canonical decimal token
+   * @note String indices must be "0" or start with [1-9]. Leading zeroes,
+   *       signs, overflow, and the RFC "-" token are rejected.
+   */
+  bool TryGetArrayIndex(size_t& index) const noexcept {
+    if (IsNum()) {
+      if (num_ < 0) {
+        return false;
+      }
+      index = static_cast<size_t>(num_);
+      return true;
+    }
+
+    const size_t size = str_.size();
+    const char* data = str_.data();
+    if (size == 0 || (size > 1 && data[0] == '0')) {
+      return false;
+    }
+
+    size_t value = 0;
+    for (size_t i = 0; i < size; ++i) {
+      if (data[i] < '0' || data[i] > '9') {
+        return false;
+      }
+      const size_t digit = static_cast<size_t>(data[i] - '0');
+      if (value > (std::numeric_limits<size_t>::max() - digit) / 10) {
+        return false;
+      }
+      value = value * 10 + digit;
+    }
+    index = value;
+    return true;
+  }
+
  private:
   StringType str_{};
   int num_{};
@@ -104,6 +142,56 @@ class GenericJsonPointer
     this->reserve(nodes.size());
     for (auto& i : nodes) {
       this->emplace_back(i);
+    }
+  }
+
+  /**
+   * @brief Parse the JSON Pointer string representation from RFC 6901.
+   * @param pointer an empty root pointer or slash-prefixed reference tokens
+   * @return true on success; false for an invalid prefix or '~' escape
+   * @note Parsed tokens are copied into StringType. JsonPointerView is excluded
+   *       because decoded '~0' and '~1' tokens require owned storage.
+   */
+  template <typename T = StringType,
+            typename std::enable_if<!std::is_same<T, StringView>::value,
+                                    int>::type = 0>
+  bool Parse(StringView pointer) {
+    this->clear();
+    if (pointer.empty()) {
+      return true;
+    }
+    if (pointer[0] != '/') {
+      return false;
+    }
+
+    size_t token_count = 1;
+    for (size_t i = 1; i < pointer.size(); ++i) {
+      token_count += pointer[i] == '/';
+    }
+    this->reserve(token_count);
+
+    std::string token;
+    size_t i = 1;
+    while (true) {
+      token.clear();
+      while (i < pointer.size() && pointer[i] != '/') {
+        if (pointer[i] != '~') {
+          token.push_back(pointer[i++]);
+          continue;
+        }
+        if (i + 1 >= pointer.size() ||
+            (pointer[i + 1] != '0' && pointer[i + 1] != '1')) {
+          this->clear();
+          return false;
+        }
+        token.push_back(pointer[i + 1] == '0' ? '~' : '/');
+        i += 2;
+      }
+      this->emplace_back(token);
+      if (i == pointer.size()) {
+        return true;
+      }
+      ++i;
     }
   }
 
