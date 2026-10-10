@@ -7,7 +7,9 @@ Examples of how to use Sonic-Cpp.
 
 ## Build with arch option
 Sonic-Cpp is a header-only library, you only need to add `-mavx2 -mpclmul -mbmi`
-or `-march=haswell` to support.
+or `-march=haswell` with GCC/Clang. With Visual Studio 2022, compile for x64
+with `/std:c++17 /arch:AVX2`; the repository CMake build adds these options
+automatically.
 
 ## Basic Usage
 ### Parse and Serialize

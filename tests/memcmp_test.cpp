@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <random>
 #include <string>
@@ -89,11 +91,12 @@ TEST(InlinedMemcmp, Basic) {
 TEST(InlinedMemcmp, CrossPage) {
   for (int i = 1; i <= 1024; ++i) {
     std::string str = random_string(i);
-    auto a_ptr = std::unique_ptr<char[], void (*)(char*)>(
-        static_cast<char*>(aligned_alloc(4096, 4096 * 2)),
-        [](char* ptr) { free(ptr); });
+    auto a_storage = std::make_unique<char[]>(4096 * 3);
     auto b_ptr = std::unique_ptr<char[]>(new char[i]);
-    char* a = a_ptr.get() + 4095;
+    const uintptr_t aligned =
+        (reinterpret_cast<uintptr_t>(a_storage.get()) + 4095) &
+        ~uintptr_t{4095};
+    char* a = reinterpret_cast<char*>(aligned) + 4095;
     char* b = b_ptr.get();
     for (int j = 0; j < i; ++j) {
       std::memcpy(a, str.data(), i);
@@ -143,11 +146,12 @@ TEST(InlinedMemcmpEq, CrossPage) {
   {
     std::string str = random_string(1024);
     for (size_t i = 1; i < 1024; ++i) {
-      auto a_ptr = std::unique_ptr<char[], void (*)(char*)>(
-          static_cast<char*>(aligned_alloc(4096, 4096 * 2)),
-          [](char* ptr) { free(ptr); });
+      auto a_storage = std::make_unique<char[]>(4096 * 3);
       auto b = std::unique_ptr<char[]>(new char[i]);
-      char* a = a_ptr.get() + 4095;
+      const uintptr_t aligned =
+          (reinterpret_cast<uintptr_t>(a_storage.get()) + 4095) &
+          ~uintptr_t{4095};
+      char* a = reinterpret_cast<char*>(aligned) + 4095;
       std::memcpy(a, str.data(), i);
       std::memcpy(b.get(), str.data(), i);
       success_helper(a, b.get(), i);

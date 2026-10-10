@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <dirent.h>
-
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -344,35 +343,18 @@ static std::string get_json(const std::string& file) {
 }
 
 static std::vector<std::string> get_all_jsons(const std::string& dirname) {
-  DIR* dir = opendir(dirname.c_str());
   std::vector<std::string> jsons;
-  EXPECT_TRUE(dir != nullptr) << "Error open directory: " + dirname;
-  if (nullptr == dir) return jsons;
-  struct dirent* ent = nullptr;
-  while (nullptr != (ent = readdir(dir))) {
-    struct stat st;
-    std::string filename = dirname + ent->d_name;
-    int ret = lstat(filename.c_str(), &st);
-    if (ret == -1) {
-      goto return_label;
-    }
-    if (S_ISDIR(st.st_mode)) {
-      if (ent->d_name[0] == '.') {
-        continue;
-      }
-      auto sub_jsons = get_all_jsons(filename + '/');
-      jsons.insert(jsons.end(), sub_jsons.begin(), sub_jsons.end());
-    } else {
-      auto const pos = filename.find_last_of('.');
-      const auto extension = filename.substr(pos + 1);
-      if (extension == "json") {
-        jsons.push_back(get_json(filename));
-      }
+  const std::filesystem::path root(dirname);
+  EXPECT_TRUE(std::filesystem::is_directory(root))
+      << "Error open directory: " + dirname;
+  if (!std::filesystem::is_directory(root)) return jsons;
+
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(
+           root, std::filesystem::directory_options::skip_permission_denied)) {
+    if (entry.is_regular_file() && entry.path().extension() == ".json") {
+      jsons.push_back(get_json(entry.path().string()));
     }
   }
-
-return_label:
-  closedir(dir);
   return jsons;
 }
 

@@ -1,0 +1,28 @@
+name: CI / Test (Windows)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  test-msvc:
+    name: Visual Studio 2022 / x64 / AVX2
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DENABLE_ASAN=OFF
+      - name: Build
+        run: cmake --build build --config Release --target unittest --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure

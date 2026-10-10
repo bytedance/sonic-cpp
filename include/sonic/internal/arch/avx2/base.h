@@ -63,12 +63,12 @@ sonic_force_inline int TrailingZeroes(uint64_t input_num) {
   // return (int)_tzcnt_u64(input_num);
   // but the generated code differs and might be less efficient?
   ////////
-  return __builtin_ctzll(input_num);
+  return CountTrailingZeros64(input_num);
 }
 
 /* result might be undefined when input_num is zero */
 sonic_force_inline uint64_t ClearLowestBit(uint64_t input_num) {
-#if __BMI__
+#if defined(__BMI__)
   return _blsr_u64(input_num);
 #else
   return input_num & (input_num - 1);
@@ -77,17 +77,17 @@ sonic_force_inline uint64_t ClearLowestBit(uint64_t input_num) {
 
 /* result might be undefined when input_num is zero */
 sonic_force_inline int LeadingZeroes(uint64_t input_num) {
-  return __builtin_clzll(input_num);
+  return CountLeadingZeros64(input_num);
 }
 
 sonic_force_inline long long int CountOnes(uint64_t input_num) {
-  return __builtin_popcountll(input_num);
+  return CountOnes64(input_num);
 }
 
 sonic_force_inline uint64_t PrefixXor(const uint64_t bitmask) {
   // There should be no such thing with a processor supporting avx2
   // but not clmul.
-#if __PCLMUL__
+#if defined(__PCLMUL__) || defined(_MSC_VER)
   __m128i all_ones = _mm_set1_epi8('\xFF');
   __m128i result =
       _mm_clmulepi64_si128(_mm_set_epi64x(0ULL, bitmask), all_ones, 0);
@@ -217,13 +217,10 @@ static sonic_force_inline int cmp_lt_32(const void* _l, const void* _r,
 #pragma GCC diagnostic pop
 #endif
     __m256i ans = _mm256_cmpeq_epi8(vec_l, vec_r);
-    int mask = _mm256_movemask_epi8(ans) + 1;
-    // mask = mask << (32 -s);
-    __asm__("bzhil  %1, %2, %[result]\n\t"
-            : [result] "=r"(mask)
-            : "r"((int)s), "r"(mask));
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1;
+    mask &= (uint32_t{1} << s) - 1;
     if (mask) {
-      int ne_idx = __builtin_ctz(mask);
+      int ne_idx = CountTrailingZeros32(mask);
       // if (lhs[ne_idx] < rhs[ne_idx]) return -1;
       // else return 1;
       return lhs[ne_idx] - rhs[ne_idx];
@@ -254,14 +251,14 @@ static inline bool is_eq_lt_32_cross_page(const void* _a, const void* _b,
   }
   // cross page
   if (s >= 8) {
-    return __builtin_memcmp(a, b, 8) == 0 &&
-           __builtin_memcmp(a + s - 8, b + s - 8, 8) == 0;
+    return std::memcmp(a, b, 8) == 0 &&
+           std::memcmp(a + s - 8, b + s - 8, 8) == 0;
   } else if (s >= 4) {
-    return __builtin_memcmp(a, b, 4) == 0 &&
-           __builtin_memcmp(a + s - 4, b + s - 4, 4) == 0;
+    return std::memcmp(a, b, 4) == 0 &&
+           std::memcmp(a + s - 4, b + s - 4, 4) == 0;
   } else if (s >= 2) {
-    return __builtin_memcmp(a, b, 2) == 0 &&
-           __builtin_memcmp(a + s - 2, b + s - 2, 2) == 0;
+    return std::memcmp(a, b, 2) == 0 &&
+           std::memcmp(a + s - 2, b + s - 2, 2) == 0;
   } else {
     return *a == *b;
   }
@@ -276,11 +273,8 @@ static sonic_force_inline bool is_eq_lt_32(const void* _a, const void* _b,
     __m256i vec_a = _mm256_loadu_si256((__m256i const*)a);
     __m256i vec_b = _mm256_loadu_si256((__m256i const*)b);
     __m256i ans = _mm256_cmpeq_epi8(vec_a, vec_b);
-    int mask = _mm256_movemask_epi8(ans) + 1;
-    // mask = mask << (32 -s);
-    __asm__("bzhil  %1, %2, %[result]\n\t"
-            : [result] "=r"(mask)
-            : "r"((int)s), "r"(mask));
+    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1;
+    mask &= (uint32_t{1} << s) - 1;
     return mask == 0;
   }
   return is_eq_lt_32_cross_page(a, b, s);
@@ -334,7 +328,7 @@ sonic_force_inline int InlinedMemcmp(const void* _l, const void* _r, size_t s) {
   __m256i ans_1 = _mm256_cmpeq_epi8(vec_l, vec_r);
   uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans_1)) + 1;
   if (mask) {
-    int ne_idx = __builtin_ctz(mask);
+    int ne_idx = CountTrailingZeros32(mask);
     // if (lhs[ne_idx] < rhs[ne_idx]) return -1;
     // else return 1;
     return lhs[ne_idx] - rhs[ne_idx];
@@ -346,7 +340,7 @@ sonic_force_inline int InlinedMemcmp(const void* _l, const void* _r, size_t s) {
     __m256i ans = _mm256_cmpeq_epi8(vec_l, vec_r);
     mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1;
     if (mask) {
-      int ne_idx = __builtin_ctz(mask);
+      int ne_idx = CountTrailingZeros32(mask);
       // if (lhs[i + ne_idx] < rhs[i + ne_idx]) return -1;
       // else return 1;
       return lhs[i + ne_idx] - rhs[i + ne_idx];
@@ -363,7 +357,7 @@ sonic_force_inline int InlinedMemcmp(const void* _l, const void* _r, size_t s) {
     // ans = _mm256_and_si256(ans, ans_1);
     unsigned int mask = static_cast<uint32_t>(_mm256_movemask_epi8(ans)) + 1;
     if (mask) {
-      int ne_idx = __builtin_ctz(mask);
+      int ne_idx = CountTrailingZeros32(mask);
       return lhs[offset + ne_idx] - rhs[offset + ne_idx];
     }
   }

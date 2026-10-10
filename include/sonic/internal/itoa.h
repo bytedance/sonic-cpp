@@ -27,7 +27,7 @@ namespace sonic_json {
 
 namespace internal {
 
-static const char kDigits[202] sonic_align(2) =
+sonic_align(2) static const char kDigits[202] =
     "00010203040506070809"
     "10111213141516171819"
     "20212223242526272829"

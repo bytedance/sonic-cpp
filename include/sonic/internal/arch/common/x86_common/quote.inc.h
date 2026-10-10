@@ -185,7 +185,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
     /* check for matches */
     // TODO: optimize: exploit the simd bitmask in the escape block.
     if ((mm = CopyAndGetEscapMask<EscapeEmoji>(src, dst)) != 0) {
-      cn = __builtin_ctz(mm);
+      cn = CountTrailingZeros32(mm);
       MOVE_N_CHARS(src, cn);
       DoEscape<serializeFlags>(src, dst, nb);
     } else {
@@ -212,7 +212,7 @@ sonic_static_inline char *Quote(const char *src, size_t nb, char *dst) {
       mm = CopyAndGetEscapMask<EscapeEmoji>(src_r, dst) &
            (VEC_FULL_MASK >> (VEC_LEN - nb));
       if (mm) {
-        cn = __builtin_ctz(mm);
+        cn = CountTrailingZeros32(mm);
         MOVE_N_CHARS(src_r, cn);
         DoEscape<serializeFlags>(src_r, dst, nb);
       } else {

@@ -18,6 +18,10 @@
 #include "../../macro.h"
 #include "sonic_cpu_feature.h"
 
+#if defined(_MSC_VER) && defined(SONIC_DYNAMIC_DISPATCH)
+#error "MSVC supports SONIC_STATIC_DISPATCH only; compile with /arch:AVX2"
+#endif
+
 #ifndef SONIC_DYNAMIC_DISPATCH
 #define SONIC_STATIC_DISPATCH
 #endif

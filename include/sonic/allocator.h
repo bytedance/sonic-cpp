@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <mutex>
@@ -88,14 +89,7 @@ class SpinLock {
         // use pause or yield instruction will slow down lock acquisition
         // on contended locks.
 #ifndef SONIC_SPINLOCK_NO_PAUSE
-
-#if defined(__x86_64__) || defined(_M_AMD64)
-        __builtin_ia32_pause();
-#elif defined(__aarch64__) || defined(_M_ARM64)
-        asm volatile("yield");
-#elif defined(__riscv)
-        __asm__ volatile("pause");
-#endif
+        internal::CpuRelax();
 #endif
       }
     }
@@ -157,7 +151,7 @@ class AdaptiveChunkPolicy {
     if (min_chunk_size_ < need_alloc_size &&
         min_chunk_size_ < SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY) {
       size_t p =
-          1ULL << (64 - __builtin_clzll(
+          1ULL << (64 - internal::CountLeadingZeros64(
                             need_alloc_size));  // size > 0 && never shift 64
       min_chunk_size_ = p < SONIC_ALLOCATOR_MAX_CHUNK_CAPACITY
                             ? p

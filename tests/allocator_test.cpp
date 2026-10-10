@@ -24,9 +24,11 @@
 
 // Let huge-allocation OOM tests return null under ASAN instead of aborting.
 // Dead code in non-ASAN builds; ASAN_OPTIONS still overrides it.
+#if defined(__GNUC__) || defined(__clang__)
 extern "C" __attribute__((used)) const char *__asan_default_options() {
   return "allocator_may_return_null=1";
 }
+#endif
 
 namespace {
 

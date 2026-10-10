@@ -15,7 +15,8 @@
  */
 
 #pragma once
-#if __cplusplus >= 201703L
+#if (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || \
+    (!defined(_MSVC_LANG) && __cplusplus >= 201703L)
 #include <string_view>
 namespace sonic_json {
 using StringView = std::string_view;

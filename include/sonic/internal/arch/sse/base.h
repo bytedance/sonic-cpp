@@ -36,12 +36,12 @@ sonic_force_inline int TrailingZeroes(uint64_t input_num) {
   // return (int)_tzcnt_u64(input_num);
   // but the generated code differs and might be less efficient?
   ////////
-  return __builtin_ctzll(input_num);
+  return CountTrailingZeros64(input_num);
 }
 
 /* result might be undefined when input_num is zero */
 sonic_force_inline uint64_t ClearLowestBit(uint64_t input_num) {
-#if __BMI__
+#if defined(__BMI__)
   return _blsr_u64(input_num);
 #else
   return input_num & (input_num - 1);
@@ -50,15 +50,15 @@ sonic_force_inline uint64_t ClearLowestBit(uint64_t input_num) {
 
 /* result might be undefined when input_num is zero */
 sonic_force_inline int LeadingZeroes(uint64_t input_num) {
-  return __builtin_clzll(input_num);
+  return CountLeadingZeros64(input_num);
 }
 
 sonic_force_inline long long int CountOnes(uint64_t input_num) {
-  return __builtin_popcountll(input_num);
+  return CountOnes64(input_num);
 }
 
 sonic_force_inline uint64_t PrefixXor(const uint64_t bitmask) {
-#if __PCLMUL__
+#if defined(__PCLMUL__) || defined(_MSC_VER)
   __m128i all_ones = _mm_set1_epi8('\xFF');
   __m128i result =
       _mm_clmulepi64_si128(_mm_set_epi64x(0ULL, bitmask), all_ones, 0);
