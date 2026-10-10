@@ -81,6 +81,12 @@ TEST(GetOnDemand, SuccessEscapeCharacters) {
                   R"("\"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"")");
   TestGetOnDemand(R"({"\"a\"":"\n\tHello,\nworld!\n"})", {"\"a\""},
                   R"("\n\tHello,\nworld!\n")");
+
+  std::string boundary_escape = "[[\"" + std::string(125, 'a');
+  boundary_escape += "\\\\";
+  boundary_escape += "\"],1]";
+  TestGetOnDemand(boundary_escape, {1}, "1");
+
   TestGetOnDemand(R"({"123456789012345\"123":"sse_string",
                       "1234567890123456789012345678901\"123":"avx2_string",
                       "obj\n\t\\":{"name\\\\\\\\":"string\\\\"},
