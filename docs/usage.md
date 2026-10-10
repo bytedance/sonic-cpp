@@ -37,6 +37,21 @@ sonic_json::WriteBuffer wb;
 doc.Serialize(wb);
 std::cout << wb.ToString() << std::endl;
 ```
+
+#### Pretty serialize to an indented string
+Use `PrettySerialize()` when human-readable output is preferred. It uses two
+spaces per indentation level by default; pass a different width as the second
+argument when needed.
+```c++
+#include "sonic/sonic.h"
+// ...
+sonic_json::WriteBuffer wb;
+doc.PrettySerialize(wb); // two spaces per level
+std::cout << wb.ToString() << std::endl;
+
+doc.PrettySerialize(wb, 4); // four spaces per level
+std::string json = doc.PrettyDump(4);
+```
 ### Node
 Node is the present for JSON value and supports all JSON value manipulation.
 

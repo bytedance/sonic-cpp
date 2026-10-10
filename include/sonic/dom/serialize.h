@@ -227,5 +227,102 @@ key_err:
   return kSerErrorInvalidObjKey;
 }
 
+inline void PushPrettyLine(WriteBuffer& wb, size_t depth, size_t indent_size) {
+  wb.Push('\n');
+  for (size_t i = 0; i < depth; ++i) {
+    for (size_t j = 0; j < indent_size; ++j) {
+      wb.Push(' ');
+    }
+  }
+}
+
+template <SerializeFlags serializeFlags, typename NodeType>
+SonicError PrettySerializeImpl(const NodeType* node, WriteBuffer& wb,
+                               size_t indent_size) {
+  struct ParentCtx {
+    const NodeType* node;
+    size_t index;
+  };
+
+  constexpr SerializeFlags append_flags =
+      serializeFlags | SerializeFlags::kSerializeAppendBuffer;
+  internal::Stack parents;
+  size_t depth = 0;
+  SonicError error = kErrorNone;
+
+  if constexpr ((serializeFlags & SerializeFlags::kSerializeAppendBuffer) ==
+                0) {
+    wb.Clear();
+  }
+  wb.Reserve(wb.Size() + 64);
+
+value_begin:
+  if (!node->IsContainer() || node->Empty()) {
+    error = SerializeImpl<append_flags>(node, wb);
+    if (sonic_unlikely(error != kErrorNone)) {
+      return error;
+    }
+    goto value_end;
+  }
+
+  wb.Push(node->IsObject() ? '{' : '[');
+  parents.Push(ParentCtx{node, 0});
+  ++depth;
+  PushPrettyLine(wb, depth, indent_size);
+
+  if (node->IsObject()) {
+    auto member = node->MemberBegin();
+    if (sonic_unlikely(!member->name.IsString())) {
+      return kSerErrorInvalidObjKey;
+    }
+    error = SerializeImpl<append_flags>(&(member->name), wb);
+    if (sonic_unlikely(error != kErrorNone)) {
+      return error;
+    }
+    wb.Push(':');
+    wb.Push(' ');
+    node = &(member->value);
+  } else {
+    node = &(*(node->Begin()));
+  }
+  goto value_begin;
+
+value_end:
+  if (parents.Empty()) {
+    return kErrorNone;
+  }
+
+  {
+    ParentCtx* parent = parents.Top<ParentCtx>();
+    ++parent->index;
+    if (parent->index < parent->node->Size()) {
+      wb.Push(',');
+      PushPrettyLine(wb, depth, indent_size);
+      if (parent->node->IsObject()) {
+        auto member = parent->node->MemberBegin() + parent->index;
+        if (sonic_unlikely(!member->name.IsString())) {
+          return kSerErrorInvalidObjKey;
+        }
+        error = SerializeImpl<append_flags>(&(member->name), wb);
+        if (sonic_unlikely(error != kErrorNone)) {
+          return error;
+        }
+        wb.Push(':');
+        wb.Push(' ');
+        node = &(member->value);
+      } else {
+        node = &(*(parent->node->Begin() + parent->index));
+      }
+      goto value_begin;
+    }
+
+    --depth;
+    PushPrettyLine(wb, depth, indent_size);
+    wb.Push(parent->node->IsObject() ? '}' : ']');
+    parents.Pop<ParentCtx>(1);
+  }
+  goto value_end;
+}
+
 }  // namespace internal
 }  // namespace sonic_json

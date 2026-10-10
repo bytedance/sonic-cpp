@@ -1070,6 +1070,19 @@ class GenericNode {
   }
 
   /**
+   * @brief serialize this node as an indented JSON string.
+   * @param serializeFlags combination of different SerializeFlag.
+   * @param wb write buffer where you want to store the JSON string.
+   * @param indentSize number of spaces to use for each indentation level.
+   * @return EndcodeError
+   */
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
+  SonicError PrettySerialize(WriteBuffer& wb, size_t indentSize = 2) const {
+    return downCast()->template prettySerializeImpl<serializeFlags>(wb,
+                                                                    indentSize);
+  }
+
+  /**
    * @brief dump this node as json string.
    * @param serializeFlags combination of different SerializeFlag.
    * @return empty string if there are errors when serializing.
@@ -1078,6 +1091,23 @@ class GenericNode {
   std::string Dump() const {
     WriteBuffer wb;
     SonicError err = Serialize<serializeFlags>(wb);
+    if (err != kErrorNone) {
+      return "";
+    }
+    auto sv = wb.ToStringView();
+    return std::string(sv.data(), sv.size());
+  }
+
+  /**
+   * @brief dump this node as an indented JSON string.
+   * @param serializeFlags combination of different SerializeFlag.
+   * @param indentSize number of spaces to use for each indentation level.
+   * @return empty string if there are errors when serializing.
+   */
+  template <SerializeFlags serializeFlags = SerializeFlags::kSerializeDefault>
+  std::string PrettyDump(size_t indentSize = 2) const {
+    WriteBuffer wb;
+    SonicError err = PrettySerialize<serializeFlags>(wb, indentSize);
     if (err != kErrorNone) {
       return "";
     }
