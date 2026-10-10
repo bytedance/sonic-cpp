@@ -87,6 +87,19 @@ Sonic-Cpp is a header-only library, you only need to include the directory of
 Sonic-Cpp header files, such as adding `-I/path/to/sonic/include/` to your
 compiler.
 
+### Building the examples
+
+The programs under [`example/`](example/) can be built together with CMake:
+
+```shell
+cmake -S . -B build-examples -DBUILD_UNITTEST=OFF -DBUILD_EXAMPLE=ON
+cmake --build build-examples
+```
+
+See [`example/document_api.cpp`](example/document_api.cpp) for a complete
+Document API example covering object and array construction, mutation, member
+removal, and serialization.
+
 ### Parsing and Serializing
 ```c++
 #include "sonic/sonic.h"
