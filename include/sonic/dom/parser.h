@@ -353,6 +353,7 @@ class Parser {
             man_nd++;
           } else {
             exp10++;
+            trunc = 1;  // digits beyond the 19 kept in man are dropped
           }
           i++;
         }
