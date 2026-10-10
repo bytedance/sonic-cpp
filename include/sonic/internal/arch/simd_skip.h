@@ -677,6 +677,16 @@ class SkipScanner2 {
       JsonGeneratorInterface<serializeFlags> *jsonGenerator,
       const JsonGeneratorFactory<serializeFlags> &jsonGeneratorFactory,
       const int64_t idx) {
+    // On-demand scanning is forward-only, so a negative index cannot be
+    // resolved without knowing the array length up front. Report that
+    // explicitly: the loop below compares `cur_idx == idx` with cur_idx >= 0,
+    // which a negative idx never satisfies, so without this check the scan
+    // walks the whole array and the caller receives kErrorNoneNoMatch -- the
+    // same result as a key that genuinely is not there.
+    if (idx < 0) {
+      setError(SonicError::kUnsupportedJsonPath);
+      return false;
+    }
     RETURN_FALSE_IF_PARSE_ERROR(consume('['));
     int64_t cur_idx = 0;
     bool dirty = false;
