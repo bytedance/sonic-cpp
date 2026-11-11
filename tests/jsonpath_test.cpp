@@ -554,6 +554,22 @@ TEST(JsonPath, JsonInfiniteLoop3) {
   EXPECT_EQ(std::get<0>(got), "");
 }
 
+TEST(JsonPath, IncompleteArrayIndex) {
+  auto got = GetByJsonPathOnDemand("[8", "$[0]");
+  EXPECT_EQ(std::get<1>(got), kParseErrorEof);
+  EXPECT_EQ(std::get<0>(got), "8");
+
+  TestFail("[8 ", "$[0]");
+  TestFail("[8,", "$[0]");
+  TestFail("[8, ", "$[0]");
+  TestFail("[8,9", "$[0]");
+  TestFail("[[8", "$[0][0]");
+
+  got = GetByJsonPathOnDemand("[8]", "$[0]");
+  EXPECT_EQ(std::get<1>(got), kErrorNone);
+  EXPECT_EQ(std::get<0>(got), "8");
+}
+
 TEST(JsonPath, JsonTuple) {
   auto json = R"({a:1, b:2c})";
   auto got = GetByJsonPathOnDemand(json, "$.b");

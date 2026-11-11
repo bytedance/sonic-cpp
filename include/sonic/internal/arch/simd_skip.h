@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -29,7 +30,7 @@
 
 #include INCLUDE_ARCH_FILE(skip.h)
 
-#include <sonic/dom/parser.h>
+#include "sonic/dom/parser.h"
 
 namespace sonic_json {
 namespace internal {
@@ -346,7 +347,16 @@ class SkipScanner2 {
   }
 
   sonic_force_inline uint8_t peek() {
+    if (sonic_unlikely(pos_ >= len_)) {
+      setError(SonicError::kParseErrorEof);
+      return 0;
+    }
     auto peek = scanner_.SkipSpaceSafe(data_, pos_, len_);
+    // SkipSpaceSafe returns the last space if no token remains.
+    if (sonic_unlikely(pos_ == len_ && IsSpace(peek))) {
+      setError(SonicError::kParseErrorEof);
+      return 0;
+    }
     pos_ -= 1;
     return peek;
   }
