@@ -399,6 +399,38 @@ TEST(ParserTest, ParseOverflowNumAsNumStr_InRangeIntegerKeepsType) {
   }
 }
 
+TEST(ParserTest, ParseNumAsStrUsesLegacyPolicy) {
+  const std::vector<std::string> string_numbers = {
+      "1.5", "1e10", "18446744073709551616", "1e400"};
+
+  for (const auto& input : string_numbers) {
+    SCOPED_TRACE(input);
+    Document doc;
+    doc.Parse<ParseFlags::kParseFloatAndOverflowNumAsNumStr>(input.data(),
+                                                             input.size());
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.IsStringNumber());
+    EXPECT_EQ(doc.GetStringView(), input);
+    EXPECT_EQ(doc.Dump(), input);
+  }
+
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseFloatAndOverflowNumAsNumStr>("42");
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.IsUint64());
+    EXPECT_EQ(doc.GetUint64(), 42U);
+  }
+
+  {
+    Document doc;
+    doc.Parse<ParseFlags::kParseFloatAndOverflowNumAsNumStr>("-42");
+    ASSERT_FALSE(doc.HasParseError());
+    ASSERT_TRUE(doc.IsInt64());
+    EXPECT_EQ(doc.GetInt64(), -42);
+  }
+}
+
 TEST(ParserTest, ParseStringNumber_ZeroExponentStaysDouble) {
   Document doc;
   std::string input = "0e+123";

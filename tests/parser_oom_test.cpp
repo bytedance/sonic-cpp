@@ -482,6 +482,16 @@ TEST(Parser, NumberOverflowAsNumStrRejectionReportsSaxTermination) {
   EXPECT_EQ(kSaxTermination, res.Error());
 }
 
+TEST(Parser, NumberAsNumStrRejectionReportsSaxTermination) {
+  const char* json = "1e10";
+  auto buf = pad_json_for_parser(json, std::strlen(json));
+  RejectingSAX sax;
+  sax.reject_numstr = true;
+  Parser<ParseFlags::kParseFloatAndOverflowNumAsNumStr> p;
+  auto res = p.Parse(buf.data(), std::strlen(json), sax);
+  EXPECT_EQ(kSaxTermination, res.Error());
+}
+
 TEST(Parser, NullRejectionReportsSaxTermination) {
   const char* json = "null";
   auto buf = pad_json_for_parser(json, std::strlen(json));

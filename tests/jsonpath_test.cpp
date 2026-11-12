@@ -893,4 +893,29 @@ TEST(JsonPathDump, SerializeAcceptsConstResult) {
   EXPECT_EQ(std::get<1>(dumped), kErrorNone);
   EXPECT_EQ(std::get<0>(dumped), "abc");
 }
+
+TEST(JsonPathDump, NumericValuesPreserveOriginalText) {
+  const std::vector<std::string> numbers = {
+      "221.5222225222225222",
+      "1e10",
+      "1e400",
+  };
+  for (const auto& number : numbers) {
+    SCOPED_TRACE(number);
+    Document doc;
+    doc.Parse<ParseFlags::kParseFloatAndOverflowNumAsNumStr>(
+        "{\"v\":" + number + "}");
+    ASSERT_FALSE(doc.HasParseError());
+
+    Document& cdoc = doc;
+    const auto result = cdoc.AtJsonPath("$.v");
+    ASSERT_EQ(result.error, kErrorNone);
+    ASSERT_EQ(result.nodes.size(), 1);
+
+    sonic_json::WriteBuffer wb;
+    const auto err = result.nodes[0]->Serialize(wb);
+    ASSERT_EQ(err, kErrorNone);
+    EXPECT_EQ(wb.ToStringView(), number);
+  }
+}
 }  // namespace
