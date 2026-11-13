@@ -7,10 +7,11 @@ A fast JSON serializing & deserializing library, accelerated by SIMD.
 [![codecov](https://codecov.io/gh/bytedance/sonic-cpp/branch/master/graph/badge.svg)](https://codecov.io/gh/bytedance/sonic-cpp)
 
 ## Requirement
-- c++11 or above
-- x86 platform with AVX2 instruction
-- GCC or LLVM compiler (not support MSVC compiler now)
-- Linux OS
+- C++17 or above
+- A supported SIMD target: x86-64 with SSE/AVX2, Arm64 with NEON/SVE2-128,
+  or RISC-V 64-bit
+- GCC or LLVM compiler (MSVC is not supported now)
+- Linux, macOS, or Android (`arm64-v8a`)
 
 ## Features
 - Complete APIs for JSON value manipulation
@@ -86,6 +87,37 @@ Sonic-cpp also supports ParseOnDemand if the user knows the target key at compil
 Sonic-Cpp is a header-only library, you only need to include the directory of
 Sonic-Cpp header files, such as adding `-I/path/to/sonic/include/` to your
 compiler.
+
+### Android
+
+Android `arm64-v8a` builds use the NEON implementation selected by NDK Clang.
+Add the Sonic-Cpp headers to the CMake target that backs your Android native
+library; no Sonic-Cpp library needs to be linked:
+
+```cmake
+add_library(native-lib SHARED native-lib.cpp)
+
+target_compile_features(native-lib PRIVATE cxx_std_17)
+target_include_directories(
+  native-lib PRIVATE
+  "${CMAKE_CURRENT_LIST_DIR}/third_party/sonic-cpp/include")
+```
+
+Do not copy the x86-only `-march=haswell` flag from the command-line examples
+below. The Android NDK toolchain supplies the appropriate Arm target flags.
+
+A minimal JNI example is available in [`example/android`](example/android). It
+exports `MainActivity.isValidJson(byte[])`; rename the JNI symbol to match your
+app's package and class. Cross-compile it from the repository root with an
+installed Android NDK:
+
+```shell
+cmake -S example/android -B build-android \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a \
+  -DANDROID_PLATFORM=android-21
+cmake --build build-android
+```
 
 ### Parsing and Serializing
 ```c++
