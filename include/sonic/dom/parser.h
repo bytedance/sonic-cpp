@@ -222,6 +222,10 @@ class Parser {
 
   template <typename SAX>
   sonic_force_inline bool parseNumber(SAX &sax) {
+    if constexpr (parseFlags & ParseFlags::kParseFloatAndOverflowNumAsNumStr) {
+      return parseNumberAsString(sax);
+    }
+
 // These helper macros are used only within this function.
 // Define/undefine them locally to avoid leaking into includers.
 #undef FLOATING_LONGEST_DIGITS

@@ -29,6 +29,9 @@ enum class ParseFlags : uint32_t {
   // native numeric representation. In-range floating-point numbers stay
   // double; in-range integers stay int64/uint64.
   kParseOverflowNumAsNumStr = 1 << 3,
+  // Use the legacy number-string policy: preserve floating-point and overflow
+  // numbers as NumStr while keeping in-range integers as int64/uint64.
+  kParseFloatAndOverflowNumAsNumStr = 1 << 4,
 };
 
 // Compatibility layer for downstream users.
